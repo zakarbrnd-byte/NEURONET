@@ -1,37 +1,36 @@
-# NEURONET Architecture — Version 0.1
+# NEURONET Architecture — Version 0.15
 
 ## Project Philosophy
 
-NEURONET explores whether cognition can emerge from a decentralized society of autonomous computational cells inspired by biological neurons.
+NEURONET is an experimental **Artificial Life Operating System (ALOS)**.
 
-This project is **not**:
+It is **not**:
 
 - another chatbot
-- another LLM
+- another Large Language Model
 - another conventional neural network
-- another AI assistant
 
-It is a new computing architecture inspired by biology rather than traditional CPU/RAM separation. Each computational cell both **computes** and **stores memory**. There is never a central brain. Every future capability must emerge from local interactions.
+Its purpose is to research whether cognition can emerge from a decentralized
+society of autonomous computational cells inspired by biology.
 
-### Absolute Rules
+Instead of simulating intelligence mathematically, NEURONET attempts to grow
+intelligence organically through local interactions.
 
-1. **No Central Controller** — no master scheduler, no master memory, every node autonomous.
-2. **Local Knowledge Only** — a cell knows itself, its memory, received messages, and (later) neighbors. Never the global graph.
-3. **Everything Evolves** — learning, forgetting, strengthening, weakening, creating, and pruning connections must be additive, not architectural rewrites.
-4. **Memory and Computation Live Together** — never separated into global stores and remote processors.
+## Foundational Laws
+
+1. **No Central Brain** — no master controller, no central reasoning engine, no global memory.
+2. **Local Knowledge Only** — each cell knows itself, its memories, received messages, and (later) neighbors.
+3. **Memory and Computation are inseparable** — every cell owns and executes both.
+4. **Everything Evolves** — learn, forget, strengthen, weaken, create, and remove relationships must be additive.
+5. **Intelligence Must Emerge** — never hardcode reasoning, planning, or cognition.
 
 ## Why Decentralized Architecture
 
-Centralized cognition recreates the same bottleneck biology abandoned: one point of failure, one scheduler of thought, one memory to corrupt.
+Centralized cognition recreates the bottleneck biology abandoned: one point of
+failure, one scheduler of thought, one memory to corrupt.
 
-A society of identical cells can:
-
-- survive partial failure
-- scale by replication rather than redesign
-- develop specialization through local interaction
-- evolve connection topology without a planner
-
-Version 0.1 proves the atom: one living cell. The molecule — millions of cells — must fit the same shape.
+A society of identical cells can survive partial failure, scale by replication,
+specialize through local interaction, and evolve topology without a planner.
 
 ## Digital Cell Lifecycle
 
@@ -50,92 +49,87 @@ Wake() → Receive() → Process() → Remember() → Sleep() → Tick++
 | Sleep | Rest and recover | +2 |
 | Tick | Advance local counter | — |
 
-Energy is clamped to `0..=100`. Costs saturate at zero; recovery saturates at 100. A solitary cell still forms a somatic memory each tick so experience continues without an external stimulus generator.
+Energy is clamped to `0..=100`.
 
-### States
+## Mission Control
 
-- `Sleeping`
-- `Awake`
-- `Processing`
+Mission Control is the permanent observatory console.
 
-## Crate Layout
+- Browser-based microscope into the organism
+- REST API in v0.15, WebSocket-ready client boundary
+- Sidebar module registry designed for lifelong expansion
+- Only the Digital Cell module is active in v0.15
+
+Mission Control may observe and apply experimenter interventions. It must never
+become the organism's brain.
+
+## Crate / Project Layout
 
 ```
 NEURONET/
-├── Cargo.toml              # workspace + CLI binary
-├── src/main.rs             # hosts the first living cell
-├── core/                   # reusable Cell Runtime library
-│   └── src/
-│       ├── node/           # Cell trait + DigitalCell
-│       ├── memory/         # local memory entries + store
-│       ├── energy/         # metabolic budget
-│       ├── messaging/      # envelope + per-cell inbox
-│       ├── scheduler/      # local tick clock (not a master)
-│       └── runtime/        # persistence + orchestration
-├── tests/                  # integration tests
-└── docs/architecture.md
+├── Cargo.toml                 # workspace
+├── core/                      # reusable Cell Runtime library
+├── backend/                   # Axum Mission Control host + API
+├── frontend/                  # React + TypeScript observatory UI
+├── shared/                    # API contract (TypeScript)
+├── docs/                      # architecture + Mission Control docs
+└── scripts/launch.sh          # one-command observatory launch
 ```
 
 ## Architecture Decisions
 
 ### Cell Runtime, not “a Node”
 
-The public contract is the object-safe `Cell` trait:
-
-- `wake`
-- `receive`
-- `process`
-- `remember`
-- `sleep`
-- `tick`
-
-`DigitalCell` is the first implementor. Future versions may hold `Vec<Box<dyn Cell>>` without redesign.
+The public contract is the object-safe `Cell` trait. `DigitalCell` is the first
+implementor. Future versions may hold `Vec<Box<dyn Cell>>`.
 
 ### Local Scheduler, not Master Scheduler
 
-`LocalScheduler` belongs to a runtime instance. It is a metabolic clock for the cells that runtime hosts. It is **not** a global authority over the NEURONET society. Multi-cell societies will compose many local clocks, never one omniscient ticker.
+`LocalScheduler` / the backend life loop is a metabolic clock for cells hosted
+in-process. It is not a global authority over NEURONET.
 
-### Persistence is Local Identity
+### Observatory is Instrumentation
 
-SQLite stores:
+`ActivityLog`, `CellStatus`, and control endpoints exist so researchers can see
+and perturb the organism. They do not grant cells global knowledge.
 
-- identity (UUID, creation time, tick count, state)
-- energy
-- memory fragments (UUID, timestamp, payload, confidence)
+### Transport Seam
 
-Restarting the process restores the same organism. The database may hold many cells keyed by identity so colony hosting remains a configuration change, not a rewrite.
-
-### Messaging without a Bus
-
-Each cell owns a FIFO inbox. Delivery is an explicit local `deliver` into that inbox. Neighbor discovery and transport attach later; the envelope (`id`, `sender`, `timestamp`, `payload`) stays stable.
+Frontend panels depend on `NeuronetClient`. REST polling is the first adapter.
+WebSockets can replace it without redesigning Mission Control.
 
 ### Evolution Seams
 
-- `MemoryStore::forget` exists so forgetting can activate without relocating ownership.
-- Confidence is first-class on every memory.
-- Energy costs are centralized constants for future adaptive metabolism.
-- Runtime already iterates a `Vec` of cells.
+- `MemoryStore::forget`
+- confidence on every memory
+- centralized energy constants
+- runtime iterates a `Vec` of cells
+- sidebar module registry with enable flags
 
 ## Running
 
 ```bash
-cargo run
+./scripts/launch.sh
 ```
 
 Environment:
 
-- `NEURONET_DB` — optional path to the SQLite file (default: `neuronet_cell.db`)
-- `RUST_LOG` — optional tracing filter (default: `info`)
-
-Graceful shutdown on `Ctrl+C` flushes persistence.
+| Variable | Meaning | Default |
+|----------|---------|---------|
+| `NEURONET_DB` | SQLite path | `neuronet_cell.db` |
+| `NEURONET_LISTEN` | API bind address | `127.0.0.1:8080` |
+| `NEURONET_FRONTEND_DIST` | Built UI directory | `frontend/dist` |
+| `RUST_LOG` | Tracing filter | `info` |
 
 ## Future Roadmap
 
-1. **v0.2 — Colony** — many cells in one process, still no central brain.
-2. **v0.3 — Neighborhood** — local addressing and neighbor sets.
-3. **v0.4 — Synapses** — weighted connections that strengthen and weaken.
-4. **v0.5 — Plasticity** — learn, forget, prune, sprout from local rules.
-5. **v0.6 — Metabolism** — adaptive energy strategies and dormancy.
-6. **v1.0 — Emergent Cognition** — behaviors arising solely from local interaction.
+1. **v0.2 — Colony** — many cells in one process, still no central brain
+2. **v0.3 — Neighborhood** — local addressing and neighbor sets
+3. **v0.4 — Synapses** — weighted connections that strengthen and weaken
+4. **v0.5 — Plasticity** — learn, forget, prune, sprout from local rules
+5. **v0.6 — Metabolism** — adaptive energy strategies and dormancy
+6. **Mission Control modules** — activate Network Map, Memory Explorer, and beyond
+7. **v1.0 — Emergent Cognition** — behaviors arising solely from local interaction
 
-No roadmap item may introduce a central controller, global memory, or omniscient scheduler.
+No roadmap item may introduce a central controller, global memory, omniscient
+scheduler, or hardcoded cognition.

@@ -1,49 +1,58 @@
 # NEURONET
 
-A decentralized adaptive cognitive network.
+An experimental **Artificial Life Operating System (ALOS)**.
 
-NEURONET explores whether cognition can emerge from a society of autonomous computational cells. This is not a chatbot, LLM, or conventional neural network. Each cell both computes and stores memory. There is never a central brain.
+NEURONET explores whether cognition can emerge from a decentralized society of
+autonomous computational cells. This is not a chatbot, LLM, or conventional
+neural network. Each cell both computes and stores memory. There is never a
+central brain.
 
-## Version 0.1 — Digital Cell
+## Version 0.15 — Mission Control
 
-The first autonomous computational organism.
+The browser is now the microscope.
 
 ```bash
-cargo run
+./scripts/launch.sh
 ```
 
-An autonomous `DigitalCell` will:
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
 
-- wake
-- receive local messages
-- process experience
-- store memory
-- sleep
-- persist identity, energy, and memory to SQLite
-- restore after restart
+Mission Control lets you:
 
-Stop with `Ctrl+C`.
+- observe a live Digital Cell
+- watch lifecycle events
+- view energy and memory statistics
+- inject messages
+- wake / sleep / step one tick
 
-### Configuration
+No terminal interaction is required after launch.
 
-| Variable | Meaning | Default |
-|----------|---------|---------|
-| `NEURONET_DB` | SQLite path for cell persistence | `neuronet_cell.db` |
-| `RUST_LOG` | Tracing filter | `info` |
+### Development
+
+```bash
+# Terminal 1 — organism host + API
+cargo run -p neuronet-backend
+
+# Terminal 2 — Vite observatory
+cd frontend && npm install && npm run dev
+```
 
 ### Tests
 
 ```bash
-cargo test
+cargo test --workspace
+cd frontend && npm run build
 ```
 
 ### Documentation
 
-See [`docs/architecture.md`](docs/architecture.md) for philosophy, lifecycle, decisions, and roadmap.
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/mission-control.md`](docs/mission-control.md)
 
-## Principles
+## Foundational Laws
 
-1. No central controller
+1. No central brain
 2. Local knowledge only
-3. Everything evolves
-4. Memory and computation live together
+3. Memory and computation are inseparable
+4. Everything evolves
+5. Intelligence must emerge

@@ -1,31 +1,26 @@
 [workspace]
 resolver = "2"
-members = ["core"]
+members = ["core", "backend"]
+default-members = ["backend"]
 
-[package]
-name = "neuronet"
-version = "0.1.0"
+[workspace.package]
+version = "0.15.0"
 edition = "2021"
-description = "NEURONET — decentralized society of autonomous computational cells"
 license = "MIT"
 authors = ["Project NEURONET"]
-readme = "README.md"
 
-[[bin]]
-name = "neuronet"
-path = "src/main.rs"
-
-[dependencies]
+[workspace.dependencies]
+anyhow = "1"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
 neuronet-core = { path = "core" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "net", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-anyhow = "1"
-
-[dev-dependencies]
-neuronet-core = { path = "core" }
-tempfile = "3"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
-chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-serde_json = "1"

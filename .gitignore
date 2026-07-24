@@ -1,5 +1,7 @@
 /target
 **/target
+**/node_modules
+frontend/dist
 **/*.db
 **/*.db-*
 .DS_Store
@@ -7,3 +9,5 @@
 *.swo
 .idea/
 .vscode/
+.env
+.env.*
