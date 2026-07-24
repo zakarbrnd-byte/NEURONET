@@ -1,0 +1,24 @@
+[package]
+name = "neuronet-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "NEURONET backend workspace member — organism host and observatory API (scaffolding)"
+publish = false
+
+[lib]
+name = "neuronet_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "neuronet"
+path = "src/main.rs"
+
+[dependencies]
+# Intentionally empty at foundation stage.
+# Future versions introduce Tokio, Axum, Serde, SQLite, Tracing, and related crates
+# only when the corresponding module is implemented.
+
+[dev-dependencies]
+# Test-only dependencies arrive with the first module implementations.
