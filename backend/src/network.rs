@@ -6,8 +6,9 @@ use uuid::Uuid;
 
 use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
 use crate::structural::{
-    evaluate_growth_candidates, evaluate_pruning_risk, record_coactivations, GrowthCandidate,
-    PairActivity, StructuralPlasticityConfig, StructuralSnapshot,
+    evaluate_growth_candidates, evaluate_pruning_risk, plan_structural_mutations,
+    record_coactivations, GrowthCandidate, PairActivity, StructuralHistoryEntry,
+    StructuralPlasticityConfig, StructuralSnapshot, TopologySummary, MAX_STRUCTURAL_HISTORY,
 };
 use crate::synapse::{Synapse, SynapseType};
 
@@ -41,6 +42,16 @@ pub struct NetworkEvent {
     pub readiness_or_risk: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason_codes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synapse_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_type: Option<SynapseType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synapse_count_before: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synapse_count_after: Option<usize>,
     pub message: String,
 }
 
@@ -99,10 +110,15 @@ pub struct NeuralNetwork {
     growth_candidates: Vec<GrowthCandidate>,
     previous_fired: Vec<String>,
     latest_structural_evaluation_tick: Option<u64>,
+    /// Next deterministic synapse number (SYNAPSE-0006 …). Reset restores 6.
+    next_synapse_number: u64,
+    structural_history: Vec<StructuralHistoryEntry>,
+    created_this_session: u64,
+    pruned_this_session: u64,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron tissue with living synapses + structural observation (0.6C).
+    /// Deterministic five-neuron tissue with living synapses + structural mutations (0.6D).
     pub fn initial() -> Self {
         Self::initial_with_age(0)
     }
@@ -120,6 +136,10 @@ impl NeuralNetwork {
             growth_candidates: Vec::new(),
             previous_fired: Vec::new(),
             latest_structural_evaluation_tick: None,
+            next_synapse_number: 6,
+            structural_history: Vec::new(),
+            created_this_session: 0,
+            pruned_this_session: 0,
         };
 
         let seeds = [
@@ -194,19 +214,36 @@ impl NeuralNetwork {
             network.neurons.push(Neuron::with_tissue(id, seed));
         }
 
+        // Backbone protection: SYNAPSE-001 / SYNAPSE-002 keep the primary cascade
+        // intact for the observatory demonstration. SYNAPSE-003/004/005 may prune
+        // after sustained evidence if topology constraints still hold.
         let excitatory = [
-            ("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0),
-            ("SYNAPSE-002", "NEURON-002", "NEURON-003", 16.0),
-            ("SYNAPSE-003", "NEURON-002", "NEURON-004", 16.0),
-            ("SYNAPSE-004", "NEURON-003", "NEURON-005", 8.0),
+            (
+                "SYNAPSE-001",
+                "NEURON-001",
+                "NEURON-002",
+                16.0,
+                Some("backbone_input_pathway"),
+            ),
+            (
+                "SYNAPSE-002",
+                "NEURON-002",
+                "NEURON-003",
+                16.0,
+                Some("backbone_cascade"),
+            ),
+            ("SYNAPSE-003", "NEURON-002", "NEURON-004", 16.0, None),
+            ("SYNAPSE-004", "NEURON-003", "NEURON-005", 8.0, None),
         ];
 
-        for (id, source, target, weight) in excitatory {
+        for (id, source, target, weight, protection) in excitatory {
+            let mut synapse =
+                Synapse::excitatory(id, source, target, weight, 0).expect("valid initial synapse");
+            if let Some(reason) = protection {
+                synapse = synapse.with_structural_protection(reason);
+            }
             network
-                .add_synapse_unchecked(
-                    Synapse::excitatory(id, source, target, weight, 0)
-                        .expect("valid initial synapse"),
-                )
+                .add_synapse_unchecked(synapse)
                 .expect("valid initial synapse");
         }
 
@@ -223,7 +260,7 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Deterministic artificial neural tissue with living synapses ready",
+            "Deterministic artificial neural tissue with structural birth/pruning ready",
         );
 
         network
@@ -288,6 +325,17 @@ impl NeuralNetwork {
                 latest_evaluation_tick: self.latest_structural_evaluation_tick,
                 candidate_count: self.growth_candidates.len(),
                 at_risk_synapse_count: at_risk,
+                topology: TopologySummary {
+                    cell_count: neurons.len(),
+                    synapse_count: synapses.len(),
+                    candidate_count: self.growth_candidates.len(),
+                    at_risk_synapse_count: at_risk,
+                    created_this_session: self.created_this_session,
+                    pruned_this_session: self.pruned_this_session,
+                    max_synapse_capacity: self.structural_config.max_total_synapses,
+                    min_synapse_floor: self.structural_config.min_total_synapses,
+                },
+                history: self.structural_history.clone(),
             },
             neurons,
             synapses,
@@ -419,13 +467,16 @@ impl NeuralNetwork {
             ));
         }
 
+        let current_tick = self.tick;
         let deliveries: Vec<(String, String, String, f64)> = fired_ids
             .iter()
             .flat_map(|source_id| {
                 let mut outs: Vec<_> = self
                     .synapses
                     .iter()
-                    .filter(|s| s.source_neuron_id == *source_id)
+                    .filter(|s| {
+                        s.source_neuron_id == *source_id && s.is_propagation_eligible(current_tick)
+                    })
                     .map(|s| {
                         (
                             s.id.clone(),
@@ -502,14 +553,16 @@ impl NeuralNetwork {
             ));
         }
 
-        // Structural plasticity foundations (0.6C): observe only — no create/delete.
+        // Structural plasticity (0.6D): evaluate, plan mutations, then commit.
+        // Semantics: births are eligible only from the *next* tick; prunes that
+        // already propagated this tick remain valid for this completed delivery,
+        // then are removed in the commit phase below.
         let previous = std::mem::take(&mut self.previous_fired);
         record_coactivations(&mut self.pair_activity, &previous, &fired_ids, self.tick);
         self.previous_fired = fired_ids.clone();
 
         let interval = self.structural_config.evaluation_interval_ticks.max(1);
         if self.structural_config.enabled && self.tick % interval == 0 {
-            let synapse_count_before = self.synapses.len();
             let growth_events = evaluate_growth_candidates(
                 &self.structural_config,
                 &self.neurons,
@@ -526,8 +579,19 @@ impl NeuralNetwork {
                 event_ids.push(self.push_structural_event(event));
             }
 
-            // Hard invariant for 0.6C: structure observation never mutates topology.
-            debug_assert_eq!(self.synapses.len(), synapse_count_before);
+            let planned = plan_structural_mutations(
+                &self.structural_config,
+                &self.neurons,
+                &self.synapses,
+                &self.growth_candidates,
+                self.tick,
+                self.next_synapse_number,
+            );
+            let planned_events = planned.events.clone();
+            for event in planned_events {
+                event_ids.push(self.push_structural_event(event));
+            }
+            event_ids.extend(self.commit_structural_mutations(planned));
         }
 
         NetworkStepTrace {
@@ -537,6 +601,180 @@ impl NeuralNetwork {
             event_ids,
             network: self.snapshot(),
         }
+    }
+
+    fn commit_structural_mutations(
+        &mut self,
+        planned: crate::structural::PlannedMutations,
+    ) -> Vec<String> {
+        let mut event_ids = Vec::new();
+        self.next_synapse_number = planned.next_synapse_number;
+
+        // Commit births first (stable ID order already applied).
+        for birth in planned.births {
+            let before = self.synapses.len();
+            let synapse_id = birth.synapse.id.clone();
+            let source = birth.synapse.source_neuron_id.clone();
+            let target = birth.synapse.target_neuron_id.clone();
+            let connection_type = birth.synapse.synapse_type;
+            let weight = birth.synapse.weight;
+            let candidate_id = birth.candidate_id.clone();
+
+            if let Err(err) = self.add_synapse_unchecked(birth.synapse) {
+                event_ids.push(self.push_structural_mutation_event(
+                    "candidate_creation_blocked",
+                    Some(synapse_id),
+                    Some(candidate_id),
+                    Some(source),
+                    Some(target),
+                    Some(connection_type),
+                    None,
+                    before,
+                    before,
+                    vec!["commit_validation_failed".into()],
+                    format!("Birth commit failed: {err}"),
+                ));
+                continue;
+            }
+
+            self.growth_candidates.retain(|c| {
+                c.id != candidate_id
+                    && !(c.source_neuron_id == source && c.target_neuron_id == target)
+            });
+            self.created_this_session = self.created_this_session.saturating_add(1);
+            let after = self.synapses.len();
+            self.push_history(StructuralHistoryEntry {
+                tick: self.tick,
+                kind: "created".into(),
+                synapse_id: Some(synapse_id.clone()),
+                candidate_id: Some(candidate_id.clone()),
+                source_neuron_id: Some(source.clone()),
+                target_neuron_id: Some(target.clone()),
+                connection_type: Some(connection_type),
+                weight: Some(weight),
+                reason_codes: vec![
+                    "repeated_coactivation".into(),
+                    "within_structural_reach".into(),
+                    "maturation_complete".into(),
+                ],
+                synapse_count_before: before,
+                synapse_count_after: after,
+            });
+            event_ids.push(self.push_structural_mutation_event(
+                "synapse_created",
+                Some(synapse_id),
+                Some(candidate_id),
+                Some(source.clone()),
+                Some(target.clone()),
+                Some(connection_type),
+                Some(weight),
+                before,
+                after,
+                vec![
+                    "repeated_coactivation".into(),
+                    "within_structural_reach".into(),
+                    "maturation_complete".into(),
+                ],
+                format!("Synapse born {source} → {target}"),
+            ));
+        }
+
+        // Then prunes in stable ID order.
+        for prune in planned.prunes {
+            let before = self.synapses.len();
+            let existed = self.synapses.iter().any(|s| s.id == prune.synapse_id);
+            if !existed {
+                continue;
+            }
+            self.synapses.retain(|s| s.id != prune.synapse_id);
+            self.pending_hebbian.retain(|id| id != &prune.synapse_id);
+            self.pruned_this_session = self.pruned_this_session.saturating_add(1);
+            let after = self.synapses.len();
+            let reasons: Vec<String> = prune
+                .reason_codes
+                .iter()
+                .map(|r| (*r).to_string())
+                .collect();
+            self.push_history(StructuralHistoryEntry {
+                tick: self.tick,
+                kind: "pruned".into(),
+                synapse_id: Some(prune.synapse_id.clone()),
+                candidate_id: None,
+                source_neuron_id: Some(prune.source_neuron_id.clone()),
+                target_neuron_id: Some(prune.target_neuron_id.clone()),
+                connection_type: Some(prune.synapse_type),
+                weight: Some(prune.final_weight),
+                reason_codes: reasons.clone(),
+                synapse_count_before: before,
+                synapse_count_after: after,
+            });
+            event_ids.push(self.push_structural_mutation_event(
+                "synapse_pruned",
+                Some(prune.synapse_id),
+                None,
+                Some(prune.source_neuron_id),
+                Some(prune.target_neuron_id),
+                Some(prune.synapse_type),
+                Some(prune.final_weight),
+                before,
+                after,
+                reasons,
+                "Synapse pruned after sustained pruning evidence",
+            ));
+        }
+
+        self.synapses.sort_by(|a, b| a.id.cmp(&b.id));
+        event_ids
+    }
+
+    fn push_history(&mut self, entry: StructuralHistoryEntry) {
+        self.structural_history.push(entry);
+        while self.structural_history.len() > MAX_STRUCTURAL_HISTORY {
+            self.structural_history.remove(0);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_structural_mutation_event(
+        &mut self,
+        event_type: &str,
+        synapse_id: Option<String>,
+        candidate_id: Option<String>,
+        source_neuron_id: Option<String>,
+        target_neuron_id: Option<String>,
+        connection_type: Option<SynapseType>,
+        weight: Option<f64>,
+        synapse_count_before: usize,
+        synapse_count_after: usize,
+        reason_codes: Vec<String>,
+        message: impl Into<String>,
+    ) -> String {
+        let id = Uuid::new_v4().to_string();
+        self.events.push(NetworkEvent {
+            id: id.clone(),
+            timestamp: Utc::now().to_rfc3339(),
+            network_tick: self.tick,
+            event_type: event_type.to_string(),
+            neuron_id: None,
+            source_neuron_id,
+            target_neuron_id,
+            amount_mv: weight,
+            entity_id: synapse_id.clone().or_else(|| candidate_id.clone()),
+            previous_status: None,
+            new_status: Some(event_type.to_string()),
+            readiness_or_risk: weight,
+            reason_codes: Some(reason_codes),
+            synapse_id,
+            candidate_id,
+            connection_type,
+            synapse_count_before: Some(synapse_count_before),
+            synapse_count_after: Some(synapse_count_after),
+            message: message.into(),
+        });
+        while self.events.len() > MAX_EVENTS {
+            self.events.remove(0);
+        }
+        id
     }
 
     fn add_synapse_unchecked(&mut self, synapse: Synapse) -> Result<(), String> {
@@ -665,6 +903,11 @@ impl NeuralNetwork {
             new_status,
             readiness_or_risk,
             reason_codes,
+            synapse_id: None,
+            candidate_id: None,
+            connection_type: None,
+            synapse_count_before: None,
+            synapse_count_after: None,
             message: message.into(),
         });
 
@@ -677,6 +920,39 @@ impl NeuralNetwork {
 
     pub fn event_count(&self) -> usize {
         self.events.len()
+    }
+
+    #[cfg(test)]
+    pub fn next_synapse_number_for_test(&self) -> u64 {
+        self.next_synapse_number
+    }
+
+    #[cfg(test)]
+    pub fn set_structural_config_for_test(&mut self, config: StructuralPlasticityConfig) {
+        self.structural_config = config;
+    }
+
+    #[cfg(test)]
+    pub fn force_growth_candidates_for_test(&mut self, candidates: Vec<GrowthCandidate>) {
+        self.growth_candidates = candidates;
+    }
+
+    #[cfg(test)]
+    pub fn commit_structural_mutations_for_test(
+        &mut self,
+        planned: crate::structural::PlannedMutations,
+    ) {
+        let _ = self.commit_structural_mutations(planned);
+    }
+
+    #[cfg(test)]
+    pub fn set_tick_for_test(&mut self, tick: u64) {
+        self.tick = tick;
+    }
+
+    #[cfg(test)]
+    pub fn synapses_mut_for_test(&mut self) -> &mut Vec<Synapse> {
+        &mut self.synapses
     }
 }
 
@@ -921,30 +1197,355 @@ mod tests {
         assert!(network.event_count() <= 200);
     }
 
+    fn maturing_candidate(
+        source: &str,
+        target: &str,
+        readiness: f64,
+        maturation: u64,
+    ) -> GrowthCandidate {
+        GrowthCandidate {
+            id: format!("CANDIDATE-{source}-{target}"),
+            source_neuron_id: source.into(),
+            target_neuron_id: target.into(),
+            proposed_connection_type: SynapseType::Excitatory,
+            distance: 0.2,
+            coactivation_score: 8.0,
+            structural_compatibility: 0.8,
+            readiness,
+            status: crate::structural::CandidateStatus::Maturing,
+            created_tick: 1,
+            last_evaluated_tick: 10,
+            maturation_ticks: maturation,
+            supporting_reasons: vec!["repeated_coactivation", "within_structural_reach"],
+            blocking_reasons: vec![],
+        }
+    }
+
     #[test]
-    fn structural_evaluation_never_creates_or_deletes_synapses() {
+    fn candidate_cannot_create_before_maturation() {
         let mut network = NeuralNetwork::initial();
-        let before = network.snapshot().synapses.len();
-        for _ in 0..40 {
-            network.inject_signal("NEURON-001", 20.0).unwrap();
-            network.step();
-            network.step();
-            network.step();
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.95,
+            1, // below required maturation + hold
+        )];
+        network.force_growth_candidates_for_test(candidates.clone());
+        let snap = network.snapshot();
+        let planned = crate::structural::plan_structural_mutations(
+            &StructuralPlasticityConfig::default(),
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            5,
+            6,
+        );
+        assert!(planned.births.is_empty());
+        assert!(planned
+            .events
+            .iter()
+            .any(|e| e.event_type == "candidate_creation_blocked"));
+    }
+
+    #[test]
+    fn matured_candidate_creates_exactly_one_deterministic_synapse() {
+        let mut network = NeuralNetwork::initial();
+        let config = StructuralPlasticityConfig::default();
+        let required = config.candidate_maturation_ticks + config.creation_hold_evals;
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.95,
+            required,
+        )];
+        network.force_growth_candidates_for_test(candidates.clone());
+        let snap = network.snapshot();
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            10,
+            network.next_synapse_number_for_test(),
+        );
+        assert_eq!(planned.births.len(), 1);
+        assert_eq!(planned.births[0].synapse.id, "SYNAPSE-0006");
+        network.set_tick_for_test(10);
+        network.commit_structural_mutations_for_test(planned);
+        assert_eq!(network.snapshot().synapses.len(), 6);
+        let born = synapse(&network, "SYNAPSE-0006");
+        assert_eq!(born.source_neuron_id, "NEURON-002");
+        assert_eq!(born.target_neuron_id, "NEURON-001");
+        assert_eq!(born.weight, crate::structural::BIRTH_INITIAL_WEIGHT);
+        assert_eq!(born.usage_count, 0);
+        assert_eq!(born.eligible_from_tick, 11);
+        assert_eq!(
+            born.origin_candidate_id.as_deref(),
+            Some("CANDIDATE-NEURON-002-NEURON-001")
+        );
+        // Duplicate birth impossible.
+        let dup = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.99,
+            required,
+        )];
+        network.force_growth_candidates_for_test(dup.clone());
+        let snap2 = network.snapshot();
+        let planned2 = crate::structural::plan_structural_mutations(
+            &config,
+            &snap2.neurons,
+            &snap2.synapses,
+            &dup,
+            15,
+            network.next_synapse_number_for_test(),
+        );
+        assert!(planned2.births.is_empty());
+    }
+
+    #[test]
+    fn new_synapse_active_only_on_next_tick() {
+        let mut network = NeuralNetwork::initial();
+        let config = StructuralPlasticityConfig::default();
+        let required = config.candidate_maturation_ticks + config.creation_hold_evals;
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.95,
+            required,
+        )];
+        let snap = network.snapshot();
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            10,
+            6,
+        );
+        network.set_tick_for_test(10);
+        network.commit_structural_mutations_for_test(planned);
+        assert!(!synapse(&network, "SYNAPSE-0006").is_propagation_eligible(10));
+        assert!(synapse(&network, "SYNAPSE-0006").is_propagation_eligible(11));
+    }
+
+    #[test]
+    fn global_max_and_degree_limits_block_birth() {
+        let mut network = NeuralNetwork::initial();
+        let mut config = StructuralPlasticityConfig::default();
+        config.max_total_synapses = 5;
+        let required = config.candidate_maturation_ticks + config.creation_hold_evals;
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.99,
+            required,
+        )];
+        let snap = network.snapshot();
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            20,
+            6,
+        );
+        assert!(planned.births.is_empty());
+        assert!(planned
+            .events
+            .iter()
+            .any(|e| e.reason_codes.iter().any(|r| *r == "max_total_synapses")));
+
+        config.max_total_synapses = 12;
+        config.max_outgoing_per_neuron = 2; // N-002 already has 2 outgoing
+        let planned2 = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            20,
+            6,
+        );
+        assert!(planned2.births.is_empty());
+        assert!(planned2
+            .events
+            .iter()
+            .any(|e| e.reason_codes.iter().any(|r| *r == "max_outgoing")));
+        let _ = network;
+    }
+
+    #[test]
+    fn one_low_quality_tick_never_prunes_but_sustained_evidence_can() {
+        let config = StructuralPlasticityConfig {
+            pruning_grace_ticks: 1,
+            pruning_sustained_at_risk_evals: 2,
+            pruning_commit_risk_threshold: 0.55,
+            pruning_low_weight_duration: 2,
+            pruning_low_health_duration: 2,
+            pruning_inactivity_ticks: 2,
+            preserve_demo_path: false,
+            min_total_synapses: 1,
+            ..StructuralPlasticityConfig::default()
+        };
+        let mut network = NeuralNetwork::initial();
+        network.set_structural_config_for_test(config.clone());
+        // Prepare SYNAPSE-005 as a weak idle synapse past grace.
+        {
+            let s = network
+                .synapses_mut_for_test()
+                .iter_mut()
+                .find(|s| s.id == "SYNAPSE-005")
+                .unwrap();
+            s.structurally_protected = false;
+            s.age = 20;
+            s.weight = 4.0;
+            s.health = 0.2;
+            s.stability = 0.1;
+            s.last_activated_tick = Some(1);
+            s.low_weight_ticks = 1;
+            s.low_health_ticks = 1;
+            s.inactivity_ticks = 10;
+            s.pruning_status = crate::synapse::PruningStatus::AtRisk;
+            s.pruning_risk = 0.8;
+            s.at_risk_evals = 1; // only one eval — not enough
+            s.pruning_reasons = vec!["low_weight", "low_health", "prolonged_inactivity"];
         }
         let snap = network.snapshot();
-        assert_eq!(snap.synapses.len(), before);
-        assert_eq!(
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &[],
+            25,
+            6,
+        );
+        assert!(planned.prunes.is_empty());
+
+        {
+            let s = network
+                .synapses_mut_for_test()
+                .iter_mut()
+                .find(|s| s.id == "SYNAPSE-005")
+                .unwrap();
+            s.at_risk_evals = 2;
+            s.low_weight_ticks = 4;
+            s.low_health_ticks = 4;
+        }
+        let snap2 = network.snapshot();
+        let planned2 = crate::structural::plan_structural_mutations(
+            &config,
+            &snap2.neurons,
+            &snap2.synapses,
+            &[],
+            30,
+            6,
+        );
+        assert_eq!(planned2.prunes.len(), 1);
+        assert_eq!(planned2.prunes[0].synapse_id, "SYNAPSE-005");
+        network.commit_structural_mutations_for_test(planned2);
+        assert!(!network
+            .snapshot()
+            .synapses
+            .iter()
+            .any(|s| s.id == "SYNAPSE-005"));
+    }
+
+    #[test]
+    fn protected_backbone_and_grace_block_pruning() {
+        let config = StructuralPlasticityConfig {
+            pruning_grace_ticks: 1,
+            pruning_sustained_at_risk_evals: 1,
+            pruning_commit_risk_threshold: 0.5,
+            pruning_low_weight_duration: 1,
+            pruning_low_health_duration: 1,
+            pruning_inactivity_ticks: 1,
+            preserve_demo_path: false,
+            min_total_synapses: 1,
+            ..StructuralPlasticityConfig::default()
+        };
+        let network = NeuralNetwork::initial();
+        let snap = network.snapshot();
+        assert!(
             snap.synapses
                 .iter()
-                .map(|s| s.id.clone())
-                .collect::<Vec<_>>(),
-            vec![
-                "SYNAPSE-001",
-                "SYNAPSE-002",
-                "SYNAPSE-003",
-                "SYNAPSE-004",
-                "SYNAPSE-005"
-            ]
+                .find(|s| s.id == "SYNAPSE-001")
+                .unwrap()
+                .structurally_protected
+        );
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &[],
+            50,
+            6,
+        );
+        assert!(!planned.prunes.iter().any(|p| p.synapse_id == "SYNAPSE-001"));
+        assert!(!planned.prunes.iter().any(|p| p.synapse_id == "SYNAPSE-002"));
+    }
+
+    #[test]
+    fn reset_restores_topology_and_id_counter() {
+        let mut network = NeuralNetwork::initial();
+        let config = StructuralPlasticityConfig::default();
+        let required = config.candidate_maturation_ticks + config.creation_hold_evals;
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.95,
+            required,
+        )];
+        let snap = network.snapshot();
+        let planned = crate::structural::plan_structural_mutations(
+            &config,
+            &snap.neurons,
+            &snap.synapses,
+            &candidates,
+            10,
+            6,
+        );
+        network.commit_structural_mutations_for_test(planned);
+        assert_eq!(network.next_synapse_number_for_test(), 7);
+        assert_eq!(network.snapshot().synapses.len(), 6);
+        network.reset();
+        let snap = network.snapshot();
+        assert_eq!(snap.synapses.len(), 5);
+        assert_eq!(network.next_synapse_number_for_test(), 6);
+        assert_eq!(snap.structural.topology.created_this_session, 0);
+        assert_eq!(snap.structural.topology.pruned_this_session, 0);
+        assert!(snap.structural.history.is_empty());
+        assert!(snap.structural.growth_candidates.is_empty());
+    }
+
+    #[test]
+    fn identical_sequences_yield_identical_topology_after_birth() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        let config = StructuralPlasticityConfig::default();
+        let required = config.candidate_maturation_ticks + config.creation_hold_evals;
+        let candidates = vec![maturing_candidate(
+            "NEURON-002",
+            "NEURON-001",
+            0.95,
+            required,
+        )];
+        for network in [&mut a, &mut b] {
+            let snap = network.snapshot();
+            let planned = crate::structural::plan_structural_mutations(
+                &config,
+                &snap.neurons,
+                &snap.synapses,
+                &candidates,
+                10,
+                6,
+            );
+            network.set_tick_for_test(10);
+            network.commit_structural_mutations_for_test(planned);
+        }
+        assert_eq!(a.snapshot().synapses, b.snapshot().synapses);
+        assert_eq!(
+            a.snapshot().structural.topology,
+            b.snapshot().structural.topology
         );
     }
 
