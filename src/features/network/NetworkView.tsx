@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   ConnectionSnapshot,
   NeuronSnapshot,
@@ -14,6 +14,7 @@ interface NetworkViewProps {
   reducedMotion: boolean;
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
+  flashedNeuronId: string | null;
   onSelectNeuron: (neuronId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
@@ -24,8 +25,8 @@ interface Point {
   y: number;
 }
 
-const LONG_PRESS_MS = 500;
-const MOVE_TOLERANCE_PX = 12;
+export const LONG_PRESS_MS = 500;
+export const MOVE_TOLERANCE_PX = 12;
 
 const CANONICAL_LAYOUT: Record<string, Point> = {
   "NEURON-001": { x: 36, y: 120 },
@@ -67,9 +68,12 @@ interface PressSession {
   pointerId: number;
   startX: number;
   startY: number;
-  timer: number;
-  stimulated: boolean;
+  /** True once the long-press timer fired; suppresses tap/selection. */
+  consumedByLongPress: boolean;
+  /** True when movement/leave/cancel invalidated the press. */
   cancelled: boolean;
+  /** Guards against duplicate stimulate calls for one press. */
+  stimulateRequested: boolean;
 }
 
 export function NetworkView({
@@ -80,6 +84,7 @@ export function NetworkView({
   reducedMotion,
   interactionDisabled,
   pressingNeuronId,
+  flashedNeuronId,
   onSelectNeuron,
   onLongPressStimulate,
   onPressVisualChange,
@@ -88,6 +93,9 @@ export function NetworkView({
   const height = 240;
   const positions = layoutFor(neurons, width, height);
   const pressRef = useRef<PressSession | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  /** Survives session cleanup so the synthetic click after pointerup is suppressed. */
+  const suppressNextClickRef = useRef(false);
   const [localPressingId, setLocalPressingId] = useState<string | null>(null);
 
   const activePressId = pressingNeuronId ?? localPressingId;
@@ -99,10 +107,10 @@ export function NetworkView({
     ]),
   );
 
-  function clearPressTimer() {
-    const session = pressRef.current;
-    if (session) {
-      window.clearTimeout(session.timer);
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
     }
   }
 
@@ -111,32 +119,57 @@ export function NetworkView({
     onPressVisualChange(null);
   }
 
+  function resetPressSession() {
+    clearLongPressTimer();
+    pressRef.current = null;
+    endPressVisual();
+  }
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+      pressRef.current = null;
+    };
+  }, []);
+
   function beginPress(neuronId: string, event: ReactPointerEvent<SVGCircleElement>) {
     if (interactionDisabled) {
       return;
     }
 
-    clearPressTimer();
+    event.preventDefault();
+    event.stopPropagation();
+    clearLongPressTimer();
+    suppressNextClickRef.current = false;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-
-    const timer = window.setTimeout(() => {
-      const session = pressRef.current;
-      if (!session || session.cancelled || session.neuronId !== neuronId) {
-        return;
-      }
-      session.stimulated = true;
-      onLongPressStimulate(neuronId);
-    }, LONG_PRESS_MS);
 
     pressRef.current = {
       neuronId,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      timer,
-      stimulated: false,
+      consumedByLongPress: false,
       cancelled: false,
+      stimulateRequested: false,
     };
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      const session = pressRef.current;
+      if (
+        !session ||
+        session.cancelled ||
+        session.neuronId !== neuronId ||
+        session.stimulateRequested
+      ) {
+        return;
+      }
+
+      // Mark consumed before stimulating so any later pointer/click path cannot select.
+      session.consumedByLongPress = true;
+      session.stimulateRequested = true;
+      suppressNextClickRef.current = true;
+      onLongPressStimulate(neuronId);
+    }, LONG_PRESS_MS);
 
     setLocalPressingId(neuronId);
     onPressVisualChange(neuronId);
@@ -148,11 +181,16 @@ export function NetworkView({
       return;
     }
 
+    // Once long-press has already stimulated, ignore later movement.
+    if (session.consumedByLongPress) {
+      return;
+    }
+
     const dx = event.clientX - session.startX;
     const dy = event.clientY - session.startY;
     if (Math.hypot(dx, dy) > MOVE_TOLERANCE_PX) {
       session.cancelled = true;
-      clearPressTimer();
+      clearLongPressTimer();
       endPressVisual();
     }
   }
@@ -163,14 +201,30 @@ export function NetworkView({
       return;
     }
 
-    clearPressTimer();
+    const { consumedByLongPress, cancelled, neuronId } = session;
+    clearLongPressTimer();
     pressRef.current = null;
     endPressVisual();
 
-    // Normal tap: select only. Never inject on tap.
-    if (!session.stimulated && !session.cancelled) {
-      onSelectNeuron(session.neuronId);
+    // Long press already handled stimulation — never select/open inspector.
+    if (consumedByLongPress) {
+      suppressNextClickRef.current = true;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
     }
+
+    // Movement / leave cancel: not a tap (does not satisfy normal tap conditions).
+    if (cancelled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    // Short press without cancel = normal tap.
+    onSelectNeuron(neuronId);
   }
 
   function cancelPress(event: ReactPointerEvent<SVGCircleElement>) {
@@ -178,10 +232,51 @@ export function NetworkView({
     if (!session || session.pointerId !== event.pointerId) {
       return;
     }
+    event.preventDefault();
+    event.stopPropagation();
+    // Pointer cancel always clears the pending timer and drops the interaction.
     session.cancelled = true;
-    clearPressTimer();
-    pressRef.current = null;
-    endPressVisual();
+    if (session.consumedByLongPress) {
+      suppressNextClickRef.current = true;
+    }
+    resetPressSession();
+  }
+
+  function leavePress(event: ReactPointerEvent<SVGCircleElement>) {
+    const session = pressRef.current;
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+    // With capture, leave can still fire; cancel pending long press before it completes.
+    if (!session.consumedByLongPress) {
+      session.cancelled = true;
+      clearLongPressTimer();
+      endPressVisual();
+    }
+  }
+
+  function handleClick(event: React.MouseEvent<SVGCircleElement>, neuronId: string) {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const session = pressRef.current;
+    if (session?.consumedByLongPress) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    // Fallback for environments that deliver click without a prior pointerup selection.
+    // Only select when there is no active cancelled/consumed press for this neuron.
+    if (session && session.neuronId === neuronId && session.cancelled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
   }
 
   return (
@@ -274,14 +369,26 @@ export function NetworkView({
             const state = electricalState(neuron);
             const selected = neuron.id === selectedNeuronId;
             const pressing = neuron.id === activePressId;
+            const flashed = neuron.id === flashedNeuronId;
 
             return (
               <g key={neuron.id} className="network-node-group">
+                {pressing ? (
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={30}
+                    className="network-hold-ring"
+                    style={{
+                      animationDuration: reducedMotion ? "0ms" : `${LONG_PRESS_MS}ms`,
+                    }}
+                  />
+                ) : null}
                 <circle
                   cx={point.x}
                   cy={point.y}
                   r={pressing ? 26 : selected ? 24 : 22}
-                  className={`network-node state-${state.toLowerCase()} ${selected ? "selected" : ""} ${pressing ? "pressing" : ""}`}
+                  className={`network-node state-${state.toLowerCase()} ${selected ? "selected" : ""} ${pressing ? "pressing" : ""} ${flashed ? "flashed" : ""}`}
                   role="button"
                   tabIndex={0}
                   aria-label={`Select ${neuron.id}, ${state}, ${neuron.membranePotentialMv.toFixed(0)} mV. Long press to stimulate +5 mV.`}
@@ -290,9 +397,13 @@ export function NetworkView({
                   onPointerMove={movePress}
                   onPointerUp={finishPress}
                   onPointerCancel={cancelPress}
+                  onPointerLeave={leavePress}
+                  onClick={(event) => handleClick(event, neuron.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
+                      event.stopPropagation();
+                      // Keyboard selects only — never stimulates.
                       onSelectNeuron(neuron.id);
                     }
                   }}

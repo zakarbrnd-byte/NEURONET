@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NetworkView } from "./NetworkView";
+import { LONG_PRESS_MS, MOVE_TOLERANCE_PX, NetworkView } from "./NetworkView";
 import type { ConnectionSnapshot, NeuronSnapshot, PropagationTrace } from "../../types/neural";
 
 const neurons: NeuronSnapshot[] = [
@@ -64,8 +64,10 @@ function renderView(
     onSelectNeuron: (id: string) => void;
     onLongPressStimulate: (id: string) => void;
     onPressVisualChange: (id: string | null) => void;
+    selectedNeuronId: string | null;
     activePropagations: PropagationTrace[];
     reducedMotion: boolean;
+    flashedNeuronId: string | null;
   }> = {},
 ) {
   const onSelectNeuron = overrides.onSelectNeuron ?? vi.fn();
@@ -76,11 +78,12 @@ function renderView(
     <NetworkView
       neurons={neurons}
       connections={connections}
-      selectedNeuronId="NEURON-001"
+      selectedNeuronId={overrides.selectedNeuronId ?? "NEURON-001"}
       activePropagations={overrides.activePropagations ?? []}
       reducedMotion={overrides.reducedMotion ?? false}
       interactionDisabled={false}
       pressingNeuronId={null}
+      flashedNeuronId={overrides.flashedNeuronId ?? null}
       onSelectNeuron={onSelectNeuron}
       onLongPressStimulate={onLongPressStimulate}
       onPressVisualChange={onPressVisualChange}
@@ -88,6 +91,10 @@ function renderView(
   );
 
   return { ...result, onSelectNeuron, onLongPressStimulate, onPressVisualChange };
+}
+
+function nodeFor(container: HTMLElement, id: string) {
+  return container.querySelector(`[aria-label^="Select ${id}"]`) as Element;
 }
 
 describe("NetworkView", () => {
@@ -107,42 +114,137 @@ describe("NetworkView", () => {
 
   it("selects on short tap without stimulating", () => {
     const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = container.querySelector('[aria-label^="Select NEURON-003"]') as Element;
+    const node = nodeFor(container, "NEURON-003");
 
     fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
     fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(node);
 
+    expect(onSelectNeuron).toHaveBeenCalledTimes(1);
     expect(onSelectNeuron).toHaveBeenCalledWith("NEURON-003");
     expect(onLongPressStimulate).not.toHaveBeenCalled();
   });
 
-  it("stimulates on long press after 500ms", () => {
+  it("stimulates exactly once on completed long press and does not select", () => {
     const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+    const node = nodeFor(container, "NEURON-002");
 
     fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(LONG_PRESS_MS);
     });
     fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(node);
 
+    expect(onLongPressStimulate).toHaveBeenCalledTimes(1);
     expect(onLongPressStimulate).toHaveBeenCalledWith("NEURON-002");
     expect(onSelectNeuron).not.toHaveBeenCalled();
   });
 
-  it("cancels long press when the pointer moves too far", () => {
+  it("releasing after a long press does not trigger selection", () => {
     const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = container.querySelector('[aria-label^="Select NEURON-001"]') as Element;
+    const node = nodeFor(container, "NEURON-004");
 
     fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(node, { pointerId: 1, clientX: 40, clientY: 10 });
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(LONG_PRESS_MS);
     });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 40, clientY: 10 });
+    expect(onLongPressStimulate).toHaveBeenCalledTimes(1);
+
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(node);
+
+    expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("cancels long press when pointer movement exceeds tolerance", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = nodeFor(container, "NEURON-001");
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(node, {
+      pointerId: 1,
+      clientX: 10 + MOVE_TOLERANCE_PX + 1,
+      clientY: 10,
+    });
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+    });
+    fireEvent.pointerUp(node, {
+      pointerId: 1,
+      clientX: 10 + MOVE_TOLERANCE_PX + 1,
+      clientY: 10,
+    });
+    fireEvent.click(node);
 
     expect(onLongPressStimulate).not.toHaveBeenCalled();
     expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("small movement within tolerance still allows a normal tap", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = nodeFor(container, "NEURON-003");
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(node, {
+      pointerId: 1,
+      clientX: 10 + MOVE_TOLERANCE_PX - 1,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(node, {
+      pointerId: 1,
+      clientX: 10 + MOVE_TOLERANCE_PX - 1,
+      clientY: 10,
+    });
+
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+    expect(onSelectNeuron).toHaveBeenCalledWith("NEURON-003");
+  });
+
+  it("pointer cancel clears the pending long-press timer", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = nodeFor(container, "NEURON-002");
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerCancel(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+    });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(node);
+
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+    expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("Enter and Space select without stimulating", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = nodeFor(container, "NEURON-005");
+
+    fireEvent.keyDown(node, { key: "Enter" });
+    fireEvent.keyDown(node, { key: " " });
+
+    expect(onSelectNeuron).toHaveBeenCalledTimes(2);
+    expect(onSelectNeuron).toHaveBeenNthCalledWith(1, "NEURON-005");
+    expect(onSelectNeuron).toHaveBeenNthCalledWith(2, "NEURON-005");
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+  });
+
+  it("shows a hold ring while pressing", () => {
+    const { container } = renderView();
+    const node = nodeFor(container, "NEURON-001");
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    expect(container.querySelector(".network-hold-ring")).toBeTruthy();
+
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    expect(container.querySelector(".network-hold-ring")).toBeNull();
+  });
+
+  it("marks flashed neurons for visual confirmation", () => {
+    const { container } = renderView({ flashedNeuronId: "NEURON-003" });
+    const node = nodeFor(container, "NEURON-003");
+    expect(node.classList.contains("flashed")).toBe(true);
   });
 
   it("animates only a matching real propagation", () => {

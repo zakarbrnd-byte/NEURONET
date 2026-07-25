@@ -306,6 +306,65 @@ body {
   filter: brightness(1.25);
 }
 
+.network-hold-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 190;
+  stroke-dashoffset: 190;
+  opacity: 0.9;
+  pointer-events: none;
+  animation-name: hold-ring-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes hold-ring-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.network-node.flashed {
+  stroke: var(--fired);
+  stroke-width: 4;
+  filter: brightness(1.35);
+  animation: neuron-stim-flash 0.45s ease-out 1;
+}
+
+@keyframes neuron-stim-flash {
+  0% {
+    fill: #5a4a20;
+  }
+  100% {
+    /* restore fill via class cascade after animation */
+  }
+}
+
+.stim-toast {
+  margin: 0 0 var(--space);
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--fired) 55%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--fired) 18%, var(--bg-elevated));
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .network-hold-ring {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 0.75;
+  }
+
+  .network-node.flashed {
+    animation: none;
+  }
+}
+
 .network-label,
 .network-node-id,
 .network-node-mv,
