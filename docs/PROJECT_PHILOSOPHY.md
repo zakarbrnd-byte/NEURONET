@@ -1,8 +1,10 @@
 # NEURONET Project Philosophy
 
-This is the central design document for Project NEURONET.
+**NEURONET — A Digital Nervous System.**
 
-Every future design decision should answer one question before implementation:
+This document expands the project constitution ([`../NEURONET.md`](../NEURONET.md)).
+
+Every design decision should answer:
 
 > Does this make NEURONET behave more like a living nervous system?
 
@@ -12,36 +14,27 @@ If the answer is no, do not implement it.
 
 ## Why NEURONET Exists
 
-NEURONET exists to investigate a scientific question:
+NEURONET exists to investigate whether cognition can emerge from a digital system organized like a nervous system — built from local electrical dynamics, tissue structure, embodiment, experience, and learning — rather than from a centrally programmed intelligence.
 
-Can cognition emerge from a digital system organized like a nervous system —
-built from local electrical dynamics, tissue structure, embodiment, experience,
-and learning — rather than from a centrally programmed intelligence?
+The repository is a research laboratory. It is an experimental **Artificial Nervous System** project.
 
-NEURONET is a research laboratory in repository form.
-
-It is an experimental **Artificial Nervous System** project.
-
-It is not a product whose success metric is “answers user questions.”
+It is not a product whose success metric is answering user questions.
 
 ---
 
-## Why This Is Not an LLM
+## Why This Is Not Another AI Project
 
-NEURONET is **not**:
+NEURONET is not:
 
 - another chatbot
 - another large language model
 - a text prediction system
-- an LLM wrapper with biological metaphors
+- an LLM wrapper decorated with biological metaphors
 - a hardcoded reasoning engine behind a neural skin
 
-Those systems optimize for language performance by training on vast text corpora
-and serving centralized inference.
+Typical AI products optimize for language performance and centralized inference.
 
-NEURONET optimizes for a different question: whether a biologically-inspired
-digital nervous system can develop meaningful organization and, eventually,
-cognitive-like behavior through its own dynamics.
+NEURONET optimizes for a different question: whether a biologically-inspired digital nervous system can develop meaningful organization through its own dynamics.
 
 The goal is not to imitate existing AI.
 
@@ -49,14 +42,12 @@ The goal is to investigate whether cognition can emerge from a biologically-insp
 
 ---
 
-## Biological Development Strategy
+## Biological Inspiration
 
-Software feature lists are secondary.
-
-Biological development order is primary:
+Biology develops nervous systems in stages. NEURONET mirrors that order as an engineering discipline:
 
 ```text
-Single Cell
+Digital Cell
 ↓
 Neuron
 ↓
@@ -74,70 +65,50 @@ Memory
 ↓
 Learning
 ↓
-Cognition
+Emergent Cognition
 ```
 
-Or, in organism terms used by the project principles:
+Inspiration is **methodological**, not a claim of biophysical completeness.
 
-```text
-Cells → Neurons → Tissue → Body → Experience → Learning → Cognition
-```
-
-We do not jump to cognition because it is fashionable.
-We climb the ladder only when the lower rungs are real and observable.
+Current neuron dynamics use educational millivolt approximations. They make resting potential, depolarization, firing, and recovery visible. They are not Hodgkin–Huxley models, and must not be described as such.
 
 ---
 
 ## Scientific Assumptions
 
-Working assumptions (to be tested, not treated as proven truths):
+Working assumptions (to be tested, not treated as proven):
 
 1. **Local dynamics matter.** Membrane potential, threshold, firing, and recovery are first-class.
-2. **Structure matters.** Positions, regions, layers, and cell types shape what activity can mean.
-3. **Adaptation matters.** Synaptic and structural plasticity change the tissue over time.
+2. **Structure matters.** Positions, regions, layers, and cell types constrain what activity can mean.
+3. **Adaptation matters.** Synaptic and structural plasticity change tissue over time.
 4. **Embodiment matters.** Without a body and environment, “experience” remains abstract.
-5. **Closed loops matter.** Perception, action, and feedback create the conditions for prediction and learning.
+5. **Closed loops matter.** Perception, action, and feedback create conditions for prediction and learning.
 6. **Emergence is optional.** Cognition may appear late, weakly, or not at all. That outcome is still science.
 
-Current shipped stage (0.5) models deterministic excitatory neural tissue with observable ticks.
-It does not yet model memory, learning, structural plasticity, embodiment, or cognition.
+Always label work as **Implemented**, **Approximation**, or **Future work**.
 
 ---
 
-## Core Principles
+## Development Strategy
 
-1. **The backend owns reality. The frontend only observes.**  
-   Mission Control may inspect and inject stimuli. It may never become the organism’s mind.
+Software feature lists are secondary. Biological development order is primary.
 
-2. **Every new feature should become more biologically realistic. Never more computer-like.**  
-   Reject designs that make NEURONET feel like a conventional app brain.
+Never skip stages to chase demos.
 
-3. **Everything must be observable.**  
-   Unobservable “intelligence” cannot be validated. Prefer structured events and traces.
+| Stage | Roadmap |
+| --- | --- |
+| Neural Tissue | 0.6 (current development target) |
+| Plasticity | 0.7–0.8 |
+| Body | 0.9 |
+| Sensorimotor Loop | 1.0 |
+| Prediction | 1.1 |
+| Memory | 1.2 |
+| Learning | 1.3 |
+| Emergent Cognition | 1.4 (observe; do not hard-code) |
 
-4. **Development follows biological development.**  
-   Do not skip tissue for chat. Do not skip body for memory slogans.
+Shipped observatory runtime remains **0.5** until later milestones land.
 
-5. **Intelligence is never programmed directly.**  
-   No master controller. No global mind memory. No hardcoded cognition theater.
-
----
-
-## Long-term Vision
-
-Build a digital nervous system that can:
-
-- organize as tissue
-- adapt its connections and structure
-- inhabit a body (beginning with a smartphone)
-- close sensorimotor loops
-- form predictions and memories through experience
-- be observed honestly as it develops
-
-Then ask — without marketing claims — whether cognition emerges.
-
-Success is not “NEURONET talks like a person.”  
-Success is a coherent, testable artificial nervous system that can be studied.
+Do not implement learning, memory, plasticity, body, prediction, or cognition in documentation-only foundation commits — or ahead of their milestones.
 
 ---
 
@@ -156,44 +127,46 @@ Never collapse engineering completion into scientific confirmation.
 
 ---
 
-## Development Strategy
+## Long-Term Vision
 
-Every milestone follows biological development instead of software feature lists.
+Build a digital nervous system that can:
 
-```text
-Single Cell
-↓
-Neuron
-↓
-Neural Tissue          ← Version 0.6 (current development target)
-↓
-Plasticity             ← Versions 0.7–0.8
-↓
-Body                   ← Version 0.9
-↓
-Sensorimotor Loop      ← Version 1.0
-↓
-Prediction             ← Version 1.1
-↓
-Memory                 ← Version 1.2
-↓
-Learning               ← Version 1.3
-↓
-Cognition              ← Version 1.4 (observe; do not hard-code)
-```
+- organize as tissue
+- adapt connections and structure
+- inhabit a body (beginning with a smartphone)
+- close sensorimotor loops
+- form predictions and memories through experience
+- be observed honestly as it develops
 
-See [`../ROADMAP.md`](../ROADMAP.md) for milestone detail and [`ARCHITECTURE.md`](ARCHITECTURE.md) for ownership boundaries.
+Then ask — without marketing claims — whether cognition emerges.
+
+The objective is not high benchmark scores.  
+The objective is to study the emergence of cognition.
 
 ---
 
-## Absolute Don’ts
+## Limitations
 
-- Do not replace the architecture with an LLM application.
-- Do not introduce a central cognitive service.
-- Do not create global mutable “brain state” owned by the UI.
-- Do not fake emergence with hardcoded cleverness.
-- Do not mark cognition as achieved without evidence.
-- Do not implement memory, learning, body, or cognition ahead of their milestones.
+**Implemented (0.5):** deterministic excitatory network; discrete ticks; educational membrane model; Mission Control observatory.
+
+**Approximations:** millivolt units; fixed refractory period; simplified fatigue/energy; instantaneous discrete propagation; electrode-style stimulation as a stand-in for sensory input.
+
+**Not implemented:** inhibition; spatial tissue; plasticity; body; prediction; memory; learning; cognition.
+
+Honesty about these limits is part of the science.
+
+---
+
+## Future Research
+
+Future work should deepen biological plausibility while remaining testable and observable:
+
+- excitatory / inhibitory tissue organization
+- measurable plasticity rules with inspectable histories
+- smartphone-as-body sensorimotor pathways
+- criteria for detecting prediction, memory, and learning without anthropomorphic theater
+
+Related: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md), [`../ROADMAP.md`](../ROADMAP.md).
 
 ---
 

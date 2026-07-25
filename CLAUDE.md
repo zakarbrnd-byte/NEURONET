@@ -1,14 +1,16 @@
 # CLAUDE.md — Guidance for coding agents
 
-NEURONET is an experimental **Artificial Nervous System** project.
+**NEURONET — A Digital Nervous System.**
 
-Read [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md) before implementing features.
+Read [`NEURONET.md`](NEURONET.md) first. It is the project constitution.
+
+Then read [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md).
 
 ## What this project is
 
-NEURONET is not a chatbot, not an LLM, and not a text prediction system.
+NEURONET is an experimental Artificial Nervous System project.
 
-Its purpose is to construct a digital nervous system that develops through biological principles and to observe whether cognition can eventually emerge.
+It is not a chatbot, not an LLM, and not a text prediction system.
 
 We are not programming intelligence.  
 We are cultivating the conditions from which intelligence may emerge.
@@ -21,10 +23,10 @@ We are cultivating the conditions from which intelligence may emerge.
 4. Animate a connection only from a structured backend propagation event.
 5. Do not introduce AI or cognition claims without evidence.
 6. Preserve mobile Chrome compatibility and the Render + GitHub Pages deployment path.
-7. Prefer simple, readable code.
-8. Every new feature should become more biologically realistic — never more computer-like.
-9. Before implementing, answer: “Does this make NEURONET behave more like a living nervous system?” If no, do not implement it.
-10. Do not implement memory, learning, body, or cognition ahead of their roadmap milestones.
+7. Prefer simple, readable code that increases biological plausibility.
+8. Before implementing, answer: “Does this make NEURONET behave more like a living nervous system?” If no, do not implement it.
+9. Do not implement memory, learning, plasticity, body, prediction, or cognition ahead of their roadmap milestones.
+10. Distinguish Implemented / Approximation / Future work in docs and comments.
 
 ## Current milestone
 
@@ -32,13 +34,14 @@ We are cultivating the conditions from which intelligence may emerge.
 
 **Current development target: 0.6 Artificial Neural Tissue**
 
-Physical organization, neuron positions, regions, layers, cell types, developmental identity parameters, excitatory and inhibitory neurons.
-
 Do not implement 0.6 application logic unless the user explicitly requests that engineering work.
 
 ## Canonical docs
 
-- [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`ROADMAP.md`](ROADMAP.md)
-- [`README.md`](README.md)
+1. [`NEURONET.md`](NEURONET.md) — Constitution (read first)
+2. [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md)
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+4. [`docs/SCIENTIFIC_MODEL.md`](docs/SCIENTIFIC_MODEL.md)
+5. [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md)
+6. [`ROADMAP.md`](ROADMAP.md)
+7. [`README.md`](README.md)

@@ -1,8 +1,12 @@
 # NEURONET Backend (0.5 shipped)
 
+**NEURONET — A Digital Nervous System.**
+
 Rust neural core. Source of truth for neurons, connections, stepping, and events.
 
-Project philosophy and ownership: [`../docs/PROJECT_PHILOSOPHY.md`](../docs/PROJECT_PHILOSOPHY.md), [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+Read first: [`../NEURONET.md`](../NEURONET.md).
+
+Architecture and model: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), [`../docs/SCIENTIFIC_MODEL.md`](../docs/SCIENTIFIC_MODEL.md).
 
 **Current development target (planning):** Version 0.6 — Artificial Neural Tissue.  
 This package still exposes health version `0.5` until that milestone is implemented.

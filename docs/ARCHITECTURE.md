@@ -1,11 +1,18 @@
 # NEURONET Architecture
 
-This document describes ownership boundaries for the Artificial Nervous System observatory.
+**NEURONET — A Digital Nervous System.**
 
-Canonical philosophy: [`PROJECT_PHILOSOPHY.md`](PROJECT_PHILOSOPHY.md).
+Ownership and deployment boundaries for the Artificial Nervous System observatory.
 
-**Shipped runtime:** Version 0.5 (deterministic network + Mission Control)  
-**Current development target:** Version 0.6 (Artificial Neural Tissue)
+| Document | Role |
+| --- | --- |
+| [`../NEURONET.md`](../NEURONET.md) | Constitution |
+| [`PROJECT_PHILOSOPHY.md`](PROJECT_PHILOSOPHY.md) | Philosophy |
+| [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md) | Model assumptions |
+| [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) | Contributor rules |
+
+**Shipped runtime:** Version 0.5  
+**Current development target:** Version 0.6 Artificial Neural Tissue
 
 ---
 
@@ -15,129 +22,176 @@ Canonical philosophy: [`PROJECT_PHILOSOPHY.md`](PROJECT_PHILOSOPHY.md).
 ┌─────────────────────────────────────────────────────────┐
 │  Mission Control (React / TypeScript / Vite)            │
 │  visualization · interaction · inspection · commands    │
+│  RENDERING + OBSERVATION OWNERSHIP                      │
 └───────────────────────────┬─────────────────────────────┘
-                            │ HTTP (REST today)
+                            │ HTTP (REST)
                             │ snapshots, step traces, signals
 ┌───────────────────────────▼─────────────────────────────┐
 │  Neural Core (Rust / Axum)                              │
 │  neurons · connections · membrane · tissue · simulation │
-│  SOURCE OF TRUTH                                        │
+│  SIMULATION OWNERSHIP — SOURCE OF TRUTH                 │
 └─────────────────────────────────────────────────────────┘
 ```
 
-The backend owns reality.  
-The frontend only observes (and issues explicit commands that the backend executes).
+Backend owns reality.  
+Frontend observes reality and issues explicit commands that the backend executes.
 
 ---
 
-## Backend ownership
+## Backend
 
 The Rust backend owns:
 
 | Concern | Notes |
 | --- | --- |
-| **Neurons** | Identity, electrical parameters, refractory / fatigue / energy fields as defined by the model |
-| **Connections** | Directed links and weights (excitatory today; inhibition planned in 0.6) |
-| **Membrane potential** | Accumulation, threshold, firing decisions |
-| **Tissue** | Network topology and, in 0.6+, physical/organizational structure |
-| **Simulation** | Discrete ticks, propagation, event logs, step traces |
-| **Authority** | All neural state mutations happen here |
+| Neurons | Identity and electrical fields defined by the scientific model |
+| Connections | Directed links and weights (excitatory in 0.5; E/I planned in 0.6) |
+| Membrane potential | Accumulation, threshold, firing decisions |
+| Tissue | Topology now; physical/organizational structure in 0.6+ |
+| Simulation | Discrete ticks, propagation, event logs, step traces |
+| Authority | All neural state mutations |
 
-Public API surface (0.5):
+Location: `backend/` (`neuron`, `connection`, `network`, `api`).
 
-- `GET /api/health`
-- `GET /api/network`
-- `GET /api/events`
-- `POST /api/neurons/:id/signals`
-- `POST /api/network/step` → structured step trace
-- `POST /api/network/reset`
-
-The frontend must never invent neuron state, connection paths, or firing decisions.
+Frontend must never invent neurons, connections, signals, propagation, membrane potentials, learning, or simulation state.
 
 ---
 
-## Frontend ownership
+## Frontend
 
-The React frontend (Mission Control) owns:
+The React frontend owns:
 
 | Concern | Notes |
 | --- | --- |
-| **Visualization** | SVG network graph, pulses driven by backend propagation traces |
-| **Interaction** | Tap to inspect, long-press to request stimulation, Step / Run / Pause / Reset |
-| **Inspection** | Node / Timeline / Controls sheets and metric explanations |
-| **Mission Control** | One-screen shell: status, graph, strip, quick actions, bottom navigation |
-| **State synchronization** | Fetching snapshots/traces; local UI state only (selection, open panel, run loop scheduling) |
+| Visualization | SVG graph; pulses from backend propagation traces only |
+| Interaction | Tap inspect, long-press stimulate command, Step / Run / Pause / Reset |
+| Inspection | Node / Timeline / Controls sheets |
+| UI state | Selection, open panel, auto-step scheduling, gesture feedback |
 
-Frontend local state may include:
+Frontend local state must not include a parallel neural reality.
 
-- selected neuron id
-- open sheet / sub-tab
-- whether an auto-step sequence is requesting ticks
-- transient gesture feedback
-
-Frontend local state must **not** include a parallel neural reality.
+Location: `src/` (Mission Control page, features, services).
 
 ---
 
-## Why backend authority is essential
+## Mission Control
 
-1. **Scientific honesty** — Claims about firing and propagation must refer to one simulator.
-2. **Observability** — Structured events and step traces can be logged, tested, and replayed.
-3. **Scale** — One authoritative tissue model can grow toward many neurons without UI inventing dynamics.
-4. **Philosophy** — Mission Control is a microscope. If the UI becomes the mind, the experiment collapses into a conventional app.
-
-Stimuli (tap-hold +5 mV, inspector +5 / +20 mV, reset, step) are commands.  
-The backend decides whether and how the tissue responds.
-
----
-
-## Mission Control shell (frontend)
+Mission Control is the observatory shell — a microscope, not a mind.
 
 Regions:
 
 1. `mission-control-header` — brand, version, connection, tick, run/paused
 2. `mission-control-main` — primary column
 3. `network-viewport` — largest area; backend neurons and connections
-4. `selected-neuron-strip` — compact summary; opens Node sheet
+4. `selected-neuron-strip` — compact summary
 5. `quick-action-bar` — Step, Run/Pause, Reset
 6. `bottom-navigation` — Network, Node, Timeline, Controls
-7. `overlay-panel-layer` — detail sheets (mobile bottom sheets / desktop side panel)
+7. `overlay-panel-layer` — detail sheets
 
-Document body remains viewport-locked (`100dvh`, `overflow: hidden`) during normal operation.
-Only detail sheets scroll internally.
+Viewport-locked layout (`100dvh`, document `overflow: hidden`). Only sheets scroll internally.
+
+Stimuli are commands. The backend decides tissue response.
 
 ---
 
-## Deployment topology
+## API
+
+Current REST surface (0.5):
+
+| Method | Path | Role |
+| --- | --- | --- |
+| `GET` | `/api/health` | Liveness; reports version `0.5` |
+| `GET` | `/api/network` | Full network snapshot |
+| `GET` | `/api/events` | Recent structured events |
+| `POST` | `/api/neurons/:id/signals` | Inject stimulus (mV) |
+| `POST` | `/api/network/step` | Advance one tick; return step trace |
+| `POST` | `/api/network/reset` | Reset tissue to initial observatory state |
+
+Step traces include `tick`, `firedNeuronIds`, `propagations`, `eventIds`, and `network`.
+
+Visual connection pulses must map to structured `propagations`, not client-side guesses.
+
+Prefer additive API evolution. Do not move authority into the browser for convenience.
+
+---
+
+## Simulation ownership
+
+| Owner | Responsibility |
+| --- | --- |
+| Backend | Tick advancement, fire decisions, weight application, refractory, event emission |
+| Frontend | Request steps on a timer when “Run” is active; never simulate membrane locally |
+
+If the backend is unavailable, Mission Control shows connection state. It does not invent a fake network.
+
+---
+
+## Rendering ownership
+
+| Owner | Responsibility |
+| --- | --- |
+| Frontend | Layout, SVG placement, sheets, accessibility, gesture UX |
+| Backend | Which neurons exist, which edges exist, which mV values are true |
+
+Graph layout heuristics (positioning unknown nodes) are presentation only. They must not create neural entities.
+
+---
+
+## Testing philosophy
+
+- Backend tests lock electrical and network rules.
+- Frontend tests lock observatory behavior (shell regions, sheets, gestures, API calls).
+- Tests should prove observability contracts: structured events, no invented firings.
+- Do not add “fake progress” scaffolds that claim unimplemented biology.
+
+Definition of done includes observability: if it cannot be inspected, it is incomplete.
+
+---
+
+## Deployment architecture
 
 | Surface | Host | Role |
 | --- | --- | --- |
 | Frontend | GitHub Pages | Static Mission Control build |
 | Backend | Render | Neural core API |
 
-`VITE_API_BASE_URL` points the Pages build at the public backend.
+- GitHub Actions builds with `VITE_API_BASE_URL` pointing at the public backend.
+- Render may cold-start; in-memory tissue resets on restart.
+- CORS allow-lists explicit origins (including the Pages host).
 
-Render free tiers may cold-start; in-memory tissue resets on host restart.
-
-Do not move neural authority into the browser to “fix” latency.
+Do not relocate simulation to the browser to mask latency.
 
 ---
 
-## Version boundaries
+## GitHub Pages
 
-| Version | Architectural meaning |
-| --- | --- |
-| 0.5 (shipped) | Deterministic excitatory network; Mission Control observatory |
-| 0.6 (target) | Artificial neural tissue: positions, regions, layers, cell types, E/I |
-| 0.7–0.8 | Plasticity (synaptic, then structural) — still backend-owned |
-| 0.9–1.0 | Body + sensorimotor loop — sensors/actuators feed the same backend tissue |
-| 1.1+ | Prediction, memory, learning — only as tissue dynamics, not UI intelligence |
+- Serves the Vite production build under `/NEURONET/`.
+- Contains no neural authority.
+- Must remain a pure observatory client.
+
+---
+
+## Render
+
+- Hosts the Rust API process.
+- Owns the live tissue process memory for that instance.
+- Blueprint/Dockerfile live under `backend/` and `render.yaml`.
+
+---
+
+## Future scaling
+
+As the project grows toward tissue, plasticity, and body:
+
+1. Keep simulation ownership in the backend (or later, explicitly distributed tissue processes — never in Mission Control).
+2. Grow APIs additively with structured traces for every new biological mechanism.
+3. Scale Mission Control as an instrument panel: more inspectors, not more invented dynamics.
+4. Body sensors/actuators should enter as typed events into the same authority boundary.
+5. Prefer designs that remain meaningful if neuron counts grow large.
 
 ---
 
 ## Design gate
-
-Before adding a module, API, or UI surface:
 
 > Does this make NEURONET behave more like a living nervous system?
 
