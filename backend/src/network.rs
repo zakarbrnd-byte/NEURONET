@@ -7,7 +7,10 @@ use uuid::Uuid;
 use crate::development::{
     build_summary, evaluate_development, DevelopmentConfig, DevelopmentSummary,
 };
-use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
+use crate::environment::{
+    EnvironmentPreset, EnvironmentSnapshot, EnvironmentTrace, SensoryEnvironment,
+};
+use crate::neuron::{CellType, LifecycleState, Neuron, NeuronStepResult, Position, TissueSeed};
 use crate::structural::{
     evaluate_growth_candidates, evaluate_pruning_risk, plan_structural_mutations,
     record_coactivations, GrowthCandidate, PairActivity, StructuralHistoryEntry,
@@ -78,6 +81,7 @@ pub struct NetworkSnapshot {
     pub tissue: TissueInfo,
     pub structural: StructuralSnapshot,
     pub development: DevelopmentSummary,
+    pub environment: EnvironmentSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -97,6 +101,7 @@ pub struct NetworkStepTrace {
     pub fired_neuron_ids: Vec<String>,
     pub propagations: Vec<PropagationTrace>,
     pub event_ids: Vec<String>,
+    pub environment_trace: EnvironmentTrace,
     pub network: NetworkSnapshot,
 }
 
@@ -124,10 +129,11 @@ pub struct NeuralNetwork {
     latest_birth_tick: Option<u64>,
     latest_development_evaluation_tick: Option<u64>,
     birth_count: u32,
+    environment: SensoryEnvironment,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron tissue with living synapses + development (0.7).
+    /// Deterministic five-neuron tissue with development + sensory environment (0.8).
     pub fn initial() -> Self {
         Self::initial_with_age(0)
     }
@@ -154,6 +160,7 @@ impl NeuralNetwork {
             latest_birth_tick: None,
             latest_development_evaluation_tick: None,
             birth_count: 0,
+            environment: SensoryEnvironment::initial(),
         };
 
         let seeds = [
@@ -274,7 +281,7 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Deterministic artificial neural tissue with developmental lifecycle ready",
+            "Deterministic artificial neural tissue with autonomous sensory environment ready",
         );
 
         network
@@ -357,6 +364,7 @@ impl NeuralNetwork {
                 self.latest_birth_tick,
                 self.latest_development_evaluation_tick,
             ),
+            environment: self.environment.snapshot(synapses.len()),
             neurons,
             synapses,
         }
@@ -389,19 +397,94 @@ impl NeuralNetwork {
 
         neuron.receive_signal(amount_mv);
 
+        // Laboratory electrode — distinct from receptor_input_delivered.
         self.push_event(
-            "signal_injected",
+            "laboratory_stimulus",
             Some(neuron_id.to_string()),
             None,
             None,
             Some(amount_mv),
-            format!("Injected +{amount_mv} mV into {neuron_id}"),
+            format!("Laboratory electrode +{amount_mv} mV into {neuron_id}"),
         );
 
         Ok(())
     }
 
-    /// Advance the whole network by exactly one tick using two-phase updates.
+    /// Update environment toggles / preset (backend-owned).
+    pub fn set_environment_controls(
+        &mut self,
+        enabled: Option<bool>,
+        background_enabled: Option<bool>,
+        pattern_a_enabled: Option<bool>,
+        pattern_b_enabled: Option<bool>,
+        preset: Option<EnvironmentPreset>,
+    ) -> Result<(), String> {
+        if let Some(p) = preset {
+            self.environment.apply_preset(p);
+        }
+        if let Some(v) = enabled {
+            self.environment.config.enabled = v;
+        }
+        if let Some(v) = background_enabled {
+            self.environment.config.background_enabled = v;
+        }
+        if let Some(v) = pattern_a_enabled {
+            self.environment.config.pattern_a_enabled = v;
+            if let Some(p) = self
+                .environment
+                .patterns
+                .iter_mut()
+                .find(|p| p.id == "PATTERN-A")
+            {
+                p.enabled = v;
+                if !v {
+                    p.active = false;
+                    p.active_started_tick = None;
+                }
+            }
+        }
+        if let Some(v) = pattern_b_enabled {
+            self.environment.config.pattern_b_enabled = v;
+            if let Some(p) = self
+                .environment
+                .patterns
+                .iter_mut()
+                .find(|p| p.id == "PATTERN-B")
+            {
+                p.enabled = v;
+                if !v {
+                    p.active = false;
+                    p.active_started_tick = None;
+                }
+            }
+        }
+        let msg = format!(
+            "Environment controls updated (enabled={}, background={}, A={}, B={}, preset={:?})",
+            self.environment.config.enabled,
+            self.environment.config.background_enabled,
+            self.environment.config.pattern_a_enabled,
+            self.environment.config.pattern_b_enabled,
+            self.environment.config.preset
+        );
+        self.push_event("environment_resumed", None, None, None, None, msg);
+        Ok(())
+    }
+
+    /// Advance the whole network by exactly one tick.
+    ///
+    /// Tick order (Version 0.8):
+    /// 1. Generate scheduled environment events
+    /// 2. Activate receptors
+    /// 3. Deliver receptor input to eligible settled neurons
+    /// 4. Determine neuron firing
+    /// 5. Synaptic propagation
+    /// 6. Recovery (within neuron step / refractory path)
+    /// 7. Synaptic plasticity
+    /// 8. Coactivation update
+    /// 9. Structural evaluation and commit
+    /// 10. Developmental lifecycle and migration
+    /// 11. Emit structured events
+    /// 12. Return snapshot and trace
     pub fn step(&mut self) -> NetworkStepTrace {
         self.tick = self.tick.saturating_add(1);
         let mut event_ids: Vec<String> = Vec::new();
@@ -410,11 +493,33 @@ impl NeuralNetwork {
             synapse.advance_age();
         }
 
+        // 1–3. Environment → receptors → sensory delivery (before firing).
+        let env_result = self.environment.evaluate_tick(self.tick);
+        let environment_trace = env_result.trace.clone();
+        for delivery in &env_result.deliveries {
+            if let Some(neuron) = self
+                .neurons
+                .iter_mut()
+                .find(|n| n.id == delivery.target_neuron_id)
+            {
+                // Option A: only electrically eligible settled neurons receive sensory input.
+                if neuron.is_electrically_eligible(self.tick)
+                    && neuron.lifecycle == LifecycleState::Settled
+                {
+                    neuron.receive_signal(delivery.magnitude_mv);
+                }
+            }
+        }
+        for event in env_result.events {
+            event_ids.push(self.push_environment_event(event));
+        }
+
         let mut ordered_indexes: Vec<usize> = (0..self.neurons.len()).collect();
         ordered_indexes.sort_by(|&a, &b| self.neurons[a].id.cmp(&self.neurons[b].id));
 
         let mut fired_ids: Vec<String> = Vec::new();
 
+        // 4. Firing decisions (sensory input already on membrane).
         for index in ordered_indexes {
             let neuron_id = self.neurons[index].id.clone();
             let electrically_active = self.neurons[index].is_electrically_eligible(self.tick);
@@ -637,8 +742,61 @@ impl NeuralNetwork {
             fired_neuron_ids: fired_ids,
             propagations,
             event_ids,
+            environment_trace,
             network: self.snapshot(),
         }
+    }
+
+    fn push_environment_event(&mut self, event: serde_json::Value) -> String {
+        let event_type = event
+            .get("eventType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("environment_event");
+        let neuron_id = event
+            .get("targetNeuronId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let message = event
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Environment update")
+            .to_string();
+        let amount = event.get("magnitudeMv").and_then(|v| v.as_f64());
+        let reason_codes = event.get("reasonCodes").and_then(|v| {
+            v.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>()
+            })
+        });
+        let entity_id = event
+            .get("environmentEventId")
+            .or_else(|| event.get("receptorId"))
+            .or_else(|| event.get("patternId"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        self.push_event_full(
+            event_type,
+            neuron_id,
+            event
+                .get("receptorId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            event
+                .get("targetNeuronId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            amount,
+            entity_id,
+            event
+                .get("patternId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            event.get("sequenceStep").map(|v| v.to_string()),
+            event.get("sequenceStep").and_then(|v| v.as_f64()),
+            reason_codes,
+            message,
+        )
     }
 
     fn run_development_phase(&mut self) -> Vec<String> {
@@ -2116,6 +2274,181 @@ mod tests {
             .collect();
         assert_eq!(dev_a, dev_b);
         assert!(a.events_newest_first().len() <= 200);
+    }
+
+    #[test]
+    fn environment_reset_is_identical_and_tick_driven() {
+        let a = NeuralNetwork::initial();
+        let b = NeuralNetwork::initial();
+        assert_eq!(a.snapshot().environment, b.snapshot().environment);
+        assert_eq!(a.snapshot().environment.seed, 20260801);
+        assert_eq!(a.snapshot().environment.preset, EnvironmentPreset::Balanced);
+        assert_eq!(a.snapshot().environment.receptors.len(), 3);
+        assert_eq!(a.snapshot().environment.sensory_connections.len(), 5);
+
+        let mut network = NeuralNetwork::initial();
+        assert_eq!(network.snapshot().environment.event_count, 0);
+        network.step();
+        assert!(network.snapshot().environment.age_ticks >= 1);
+        // No wall-clock: only steps advance environment age.
+        assert_eq!(
+            network.snapshot().environment.age_ticks,
+            network.snapshot().tick
+        );
+    }
+
+    #[test]
+    fn environment_disabled_means_no_sensory_deliveries() {
+        let mut network = NeuralNetwork::initial();
+        network
+            .set_environment_controls(Some(false), None, None, None, None)
+            .unwrap();
+        for _ in 0..30 {
+            let trace = network.step();
+            assert!(trace.environment_trace.sensory_deliveries.is_empty());
+        }
+    }
+
+    #[test]
+    fn background_and_patterns_are_deterministic_and_ordered() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        let mut deliveries_a = Vec::new();
+        let mut deliveries_b = Vec::new();
+        for _ in 0..40 {
+            let ta = a.step();
+            let tb = b.step();
+            deliveries_a.extend(ta.environment_trace.sensory_deliveries);
+            deliveries_b.extend(tb.environment_trace.sensory_deliveries);
+        }
+        assert_eq!(deliveries_a, deliveries_b);
+        assert_eq!(
+            a.snapshot().environment.statistics,
+            b.snapshot().environment.statistics
+        );
+        // PATTERN-A first tick 16
+        assert!(a.snapshot().environment.statistics.pattern_a_starts >= 1);
+        // Pattern steps: A then optional B neighbor
+        let pattern_events: Vec<_> = a
+            .events_newest_first()
+            .into_iter()
+            .filter(|e| e.event_type == "sensory_pattern_started")
+            .collect();
+        assert!(!pattern_events.is_empty());
+    }
+
+    #[test]
+    fn receptor_input_only_configured_neurons_and_not_developing() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 16);
+        let snap = network.snapshot();
+        let targets: Vec<_> = snap
+            .environment
+            .recent_events
+            .iter()
+            .filter_map(|e| e.target_neuron_id.clone())
+            .collect();
+        for t in &targets {
+            assert!(["NEURON-001", "NEURON-002", "NEURON-003"].contains(&t.as_str()));
+        }
+        // After birth at 30, developing cell must not receive sensory wiring (Option A).
+        step_n(&mut network, 20);
+        let conns = &network.snapshot().environment.sensory_connections;
+        assert!(conns.iter().all(|c| c.target_neuron_id != "NEURON-006"));
+    }
+
+    #[test]
+    fn sensory_connections_are_not_neural_synapses() {
+        let network = NeuralNetwork::initial();
+        let snap = network.snapshot();
+        assert_eq!(snap.synapses.len(), 5);
+        assert_eq!(snap.environment.sensory_input_count, 5);
+        assert_eq!(snap.environment.neural_synapse_count, 5);
+        for s in &snap.synapses {
+            assert!(!s.id.starts_with("SENSORY-"));
+        }
+    }
+
+    #[test]
+    fn laboratory_stimulus_distinct_from_receptor_delivery() {
+        let mut network = NeuralNetwork::initial();
+        network.inject_signal("NEURON-001", 5.0).unwrap();
+        let lab = network
+            .events_newest_first()
+            .into_iter()
+            .any(|e| e.event_type == "laboratory_stimulus");
+        assert!(lab);
+        step_n(&mut network, 16);
+        let sensory = network
+            .events_newest_first()
+            .into_iter()
+            .any(|e| e.event_type == "receptor_input_delivered");
+        assert!(sensory);
+    }
+
+    #[test]
+    fn pattern_and_background_toggles_respected() {
+        let mut network = NeuralNetwork::initial();
+        network
+            .set_environment_controls(Some(true), Some(false), Some(true), Some(false), None)
+            .unwrap();
+        step_n(&mut network, 40);
+        let stats = network.snapshot().environment.statistics;
+        assert_eq!(stats.background_events, 0);
+        assert!(stats.pattern_a_starts >= 1);
+        assert_eq!(stats.pattern_b_starts, 0);
+    }
+
+    #[test]
+    fn environment_reset_restores_counters_and_ids() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 50);
+        assert!(network.snapshot().environment.event_count > 0);
+        network.reset();
+        let snap = network.snapshot();
+        assert_eq!(snap.environment.event_count, 0);
+        assert_eq!(snap.environment.age_ticks, 0);
+        assert!(snap.environment.recent_events.is_empty());
+        assert_eq!(snap.environment.statistics.pattern_a_starts, 0);
+        // Event IDs restart
+        step_n(&mut network, 16);
+        let ids: Vec<_> = network
+            .events_newest_first()
+            .into_iter()
+            .filter_map(|e| e.entity_id)
+            .filter(|id| id.starts_with("ENV-"))
+            .collect();
+        assert!(ids
+            .iter()
+            .any(|id| id == "ENV-0001" || id.starts_with("ENV-000")));
+    }
+
+    #[test]
+    fn identical_tick_sequences_match_with_environment() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        for _ in 0..60 {
+            a.step();
+            b.step();
+        }
+        assert_eq!(a.snapshot().neurons, b.snapshot().neurons);
+        assert_eq!(a.snapshot().synapses, b.snapshot().synapses);
+        assert_eq!(
+            a.snapshot().environment.statistics,
+            b.snapshot().environment.statistics
+        );
+        assert_eq!(
+            a.snapshot().environment.recent_events,
+            b.snapshot().environment.recent_events
+        );
+    }
+
+    #[test]
+    fn environment_history_bounded() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 200);
+        assert!(network.snapshot().environment.recent_events.len() <= 80);
+        assert!(network.events_newest_first().len() <= 200);
     }
 }
 
