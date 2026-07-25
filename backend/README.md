@@ -1,6 +1,11 @@
-# NEURONET Backend (0.5)
+# NEURONET Backend (0.5 shipped)
 
 Rust neural core. Source of truth for neurons, connections, stepping, and events.
+
+Project philosophy and ownership: [`../docs/PROJECT_PHILOSOPHY.md`](../docs/PROJECT_PHILOSOPHY.md), [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
+**Current development target (planning):** Version 0.6 — Artificial Neural Tissue.  
+This package still exposes health version `0.5` until that milestone is implemented.
 
 ## Local
 

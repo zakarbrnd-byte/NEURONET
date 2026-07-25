@@ -1,12 +1,17 @@
 # CLAUDE.md — Guidance for coding agents
 
-NEURONET is early. Keep it beginner-friendly.
+NEURONET is an experimental **Artificial Nervous System** project.
+
+Read [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md) before implementing features.
 
 ## What this project is
 
-NEURONET is not a chatbot and not an LLM wrapper.
+NEURONET is not a chatbot, not an LLM, and not a text prediction system.
 
-It explores whether cognition can emerge from biologically-inspired computational principles.
+Its purpose is to construct a digital nervous system that develops through biological principles and to observe whether cognition can eventually emerge.
+
+We are not programming intelligence.  
+We are cultivating the conditions from which intelligence may emerge.
 
 ## Rules
 
@@ -17,9 +22,23 @@ It explores whether cognition can emerge from biologically-inspired computationa
 5. Do not introduce AI or cognition claims without evidence.
 6. Preserve mobile Chrome compatibility and the Render + GitHub Pages deployment path.
 7. Prefer simple, readable code.
+8. Every new feature should become more biologically realistic — never more computer-like.
+9. Before implementing, answer: “Does this make NEURONET behave more like a living nervous system?” If no, do not implement it.
+10. Do not implement memory, learning, body, or cognition ahead of their roadmap milestones.
 
 ## Current milestone
 
-**0.5 Network Dynamics Observatory**
+**Shipped:** 0.5 Network Dynamics + Mission Control  
 
-Rust neural core with a five-neuron branching/convergence network. React observatory with tick traces.
+**Current development target: 0.6 Artificial Neural Tissue**
+
+Physical organization, neuron positions, regions, layers, cell types, developmental identity parameters, excitatory and inhibitory neurons.
+
+Do not implement 0.6 application logic unless the user explicitly requests that engineering work.
+
+## Canonical docs
+
+- [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`ROADMAP.md`](ROADMAP.md)
+- [`README.md`](README.md)
