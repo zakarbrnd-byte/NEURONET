@@ -6,5 +6,5 @@
 fn main() {
     println!("NEURONET — Artificial Life Operating System");
     println!("Repository foundation ready. No organism logic loaded.");
-    println!("See ROADMAP.md for version 0.1 and beyond.");
+    println!("See ENGINEERING_ROADMAP.md and RESEARCH_ROADMAP.md.");
 }
