@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Header } from "./components/Header";
-import { ConnectionBanner } from "./components/ConnectionBanner";
-import { Controls } from "./components/Controls";
-import { ActivityFeed } from "./components/ActivityFeed";
+import { StatusBar } from "./components/StatusBar";
+import { BottomNav } from "./components/BottomNav";
+import { QuickActions } from "./components/QuickActions";
+import { SelectedNeuronStrip } from "./components/SelectedNeuronStrip";
+import { ContextPanel } from "./components/ContextPanel";
 import { NetworkView } from "./features/network/NetworkView";
-import { Timeline } from "./features/network/Timeline";
-import { CausalPanel } from "./features/network/CausalPanel";
-import { NetworkSummary } from "./features/network/NetworkSummary";
-import { NeuronInspector } from "./features/neuron/NeuronInspector";
+import { NodePanel } from "./features/mission/NodePanel";
+import { TimelinePanel } from "./features/mission/TimelinePanel";
+import { ControlsPanel } from "./features/mission/ControlsPanel";
 import { ApiError, neuralApi } from "./services/neuralApi";
 import type {
   ConnectionStatus,
@@ -23,6 +23,7 @@ import {
   shortNeuronId,
   timelineSummary,
 } from "./types/neural";
+import type { MissionPanel } from "./types/ui";
 
 const WEAK_SIGNAL_MV = 5;
 const STRONG_SIGNAL_MV = 20;
@@ -32,11 +33,8 @@ const MAX_TIMELINE = 20;
 const STIM_FEEDBACK_MS = 1600;
 
 type StimulateOptions = {
-  /** When false, keep the current selection (long-press path). Default true. */
   selectNeuron?: boolean;
-  /** When false, do not open the inspector (long-press path). Default true. */
-  openInspector?: boolean;
-  /** Show brief toast + neuron flash after a successful inject. */
+  openPanel?: boolean;
   showStimFeedback?: boolean;
 };
 
@@ -46,7 +44,7 @@ export default function App() {
   const [network, setNetwork] = useState<NetworkSnapshot | null>(null);
   const [events, setEvents] = useState<NetworkEvent[]>([]);
   const [selectedNeuronId, setSelectedNeuronId] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<MissionPanel>("network");
   const [pressingNeuronId, setPressingNeuronId] = useState<string | null>(null);
   const [flashedNeuronId, setFlashedNeuronId] = useState<string | null>(null);
   const [stimToast, setStimToast] = useState<string | null>(null);
@@ -225,7 +223,7 @@ export default function App() {
     options: StimulateOptions = {},
   ) {
     const selectNeuron = options.selectNeuron !== false;
-    const openInspector = options.openInspector !== false;
+    const openPanel = options.openPanel !== false;
     const showStimFeedback = options.showStimFeedback === true;
 
     if (
@@ -245,8 +243,8 @@ export default function App() {
     if (selectNeuron) {
       setSelectedNeuronId(neuronId);
     }
-    if (openInspector) {
-      setInspectorOpen(true);
+    if (openPanel) {
+      setActivePanel("node");
     }
 
     try {
@@ -275,7 +273,7 @@ export default function App() {
   function handleLongPressStimulate(neuronId: string) {
     void stimulateNeuron(neuronId, WEAK_SIGNAL_MV, {
       selectNeuron: false,
-      openInspector: false,
+      openPanel: false,
       showStimFeedback: true,
     });
   }
@@ -366,7 +364,15 @@ export default function App() {
 
   function handleSelectNeuron(neuronId: string) {
     setSelectedNeuronId(neuronId);
-    setInspectorOpen(true);
+    setActivePanel("node");
+  }
+
+  function handleNavChange(panel: MissionPanel) {
+    setActivePanel(panel);
+  }
+
+  function closeToNetwork() {
+    setActivePanel("network");
   }
 
   const selectedNeuron =
@@ -374,40 +380,60 @@ export default function App() {
       ? network?.neurons.find((neuron) => neuron.id === selectedNeuronId)
       : null) ?? null;
 
-  const sequenceStatus = running
-    ? `running (${autoStep}/${MAX_AUTO_STEPS})`
-    : autoStep > 0
-      ? `paused/stopped at ${autoStep}/${MAX_AUTO_STEPS}`
-      : "idle";
+  const panelOpen = activePanel !== "network";
+  const panelTitle =
+    activePanel === "node"
+      ? "Node"
+      : activePanel === "timeline"
+        ? "Timeline"
+        : activePanel === "controls"
+          ? "Controls"
+          : "Network";
 
   return (
-    <div className="page">
-      <Header version="0.5" mode="Network Dynamics Observatory" />
-      <ConnectionBanner status={status} error={error} onRetry={() => void loadFromBackend()} />
+    <div
+      className="mission-shell"
+      data-testid="mission-shell"
+      data-panel={activePanel}
+      data-layout="viewport-locked"
+      data-safe-area="true"
+    >
+      <StatusBar
+        version="0.5"
+        status={status}
+        networkTick={network?.tick ?? 0}
+        running={running}
+        error={error}
+        onRetry={() => void loadFromBackend()}
+      />
 
-      <main className="main">
-        {network ? (
-          <NetworkView
-            neurons={network.neurons}
-            connections={network.connections}
-            selectedNeuronId={selectedNeuronId}
-            activePropagations={activePropagations}
-            reducedMotion={reducedMotion}
-            interactionDisabled={status !== "connected" || busy || running}
-            pressingNeuronId={pressingNeuronId}
-            flashedNeuronId={flashedNeuronId}
-            onSelectNeuron={handleSelectNeuron}
-            onLongPressStimulate={handleLongPressStimulate}
-            onPressVisualChange={setPressingNeuronId}
-          />
-        ) : (
-          <section className="card">
-            <h2 className="card-title">Network View</h2>
-            <p className="hint">
-              Waiting for a backend network snapshot. The UI will not invent neurons or connections.
-            </p>
-          </section>
-        )}
+      <main className="mission-main" data-testid="mission-main">
+        <div className="mission-canvas-area" data-testid="network-canvas-area">
+          {network ? (
+            <NetworkView
+              compact
+              neurons={network.neurons}
+              connections={network.connections}
+              selectedNeuronId={selectedNeuronId}
+              activePropagations={activePropagations}
+              reducedMotion={reducedMotion}
+              interactionDisabled={status !== "connected" || busy || running}
+              pressingNeuronId={pressingNeuronId}
+              flashedNeuronId={flashedNeuronId}
+              onSelectNeuron={handleSelectNeuron}
+              onLongPressStimulate={handleLongPressStimulate}
+              onPressVisualChange={setPressingNeuronId}
+            />
+          ) : (
+            <div className="network-canvas network-canvas-empty" role="status">
+              <p>
+                {status === "unavailable"
+                  ? "Backend unavailable. Core status stays visible here — retry from the top bar."
+                  : "Waiting for a backend network snapshot."}
+              </p>
+            </div>
+          )}
+        </div>
 
         {stimToast ? (
           <p className="stim-toast" role="status" aria-live="polite">
@@ -415,56 +441,70 @@ export default function App() {
           </p>
         ) : null}
 
-        <NetworkSummary
-          network={network}
-          lastTrace={lastTrace}
-          status={status}
-          sequenceStatus={sequenceStatus}
-        />
-
-        <CausalPanel lastTrace={lastTrace} />
-        <Timeline entries={timeline} />
-        <ActivityFeed events={events} />
-
-        <Controls
-          disabled={status !== "connected"}
-          busy={busy}
-          running={running}
-          autoStep={autoStep}
-          maxAutoSteps={MAX_AUTO_STEPS}
-          onStep={() => void runStepRequest()}
-          onRun={handleRunSequence}
-          onPause={handlePauseSequence}
-          onReset={() => void handleReset()}
-        />
-
         {error && status === "connected" ? (
-          <p className="inline-error" role="alert">
+          <p className="inline-error mission-inline-error" role="alert">
             {error}
           </p>
         ) : null}
+
+        <SelectedNeuronStrip
+          neuron={selectedNeuron}
+          onOpenNode={() => setActivePanel("node")}
+        />
       </main>
 
-      <NeuronInspector
-        open={inspectorOpen}
-        neuron={selectedNeuron}
-        networkTick={network?.tick ?? 0}
-        connections={network?.connections ?? []}
-        events={events}
+      <QuickActions
+        disabled={status !== "connected"}
         busy={busy}
-        stimulateDisabled={status !== "connected" || running}
-        onStimulateWeak={() => {
-          if (selectedNeuronId) {
-            void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV);
-          }
-        }}
-        onStimulateStrong={() => {
-          if (selectedNeuronId) {
-            void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV);
-          }
-        }}
-        onClose={() => setInspectorOpen(false)}
+        running={running}
+        onStep={() => void runStepRequest()}
+        onRun={handleRunSequence}
+        onPause={handlePauseSequence}
       />
+
+      <BottomNav active={activePanel} onChange={handleNavChange} />
+
+      <ContextPanel open={panelOpen} title={panelTitle} onClose={closeToNetwork}>
+        {activePanel === "node" ? (
+          <NodePanel
+            neuron={selectedNeuron}
+            networkTick={network?.tick ?? 0}
+            connections={network?.connections ?? []}
+            events={events}
+          />
+        ) : null}
+        {activePanel === "timeline" ? <TimelinePanel entries={timeline} /> : null}
+        {activePanel === "controls" ? (
+          <ControlsPanel
+            selectedNeuronId={selectedNeuronId}
+            disabled={status !== "connected"}
+            busy={busy}
+            running={running}
+            autoStep={autoStep}
+            maxAutoSteps={MAX_AUTO_STEPS}
+            onStimulateWeak={() => {
+              if (selectedNeuronId) {
+                void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV, {
+                  selectNeuron: false,
+                  openPanel: false,
+                });
+              }
+            }}
+            onStimulateStrong={() => {
+              if (selectedNeuronId) {
+                void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV, {
+                  selectNeuron: false,
+                  openPanel: false,
+                });
+              }
+            }}
+            onStep={() => void runStepRequest()}
+            onRun={handleRunSequence}
+            onPause={handlePauseSequence}
+            onReset={() => void handleReset()}
+          />
+        ) : null}
+      </ContextPanel>
     </div>
   );
 }

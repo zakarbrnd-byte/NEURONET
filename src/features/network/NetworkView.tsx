@@ -20,6 +20,8 @@ interface NetworkViewProps {
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
   flashedNeuronId: string | null;
+  /** Compact canvas mode for Mission Control (no card chrome). */
+  compact?: boolean;
   onSelectNeuron: (neuronId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
@@ -94,6 +96,7 @@ export function NetworkView({
   interactionDisabled,
   pressingNeuronId,
   flashedNeuronId,
+  compact = false,
   onSelectNeuron,
   onLongPressStimulate,
   onPressVisualChange,
@@ -284,13 +287,25 @@ export function NetworkView({
   }
 
   return (
-    <section className="card" aria-labelledby="network-heading">
-      <h2 id="network-heading" className="card-title">
-        Network View
-      </h2>
-      <p className="hint">
-        Tap a neuron to inspect it. Long-press (~0.5s) for direct electrode-style +5 mV stimulation.
-      </p>
+    <section
+      className={compact ? "network-canvas" : "card"}
+      aria-labelledby="network-heading"
+    >
+      {compact ? (
+        <h2 id="network-heading" className="sr-only">
+          Network View
+        </h2>
+      ) : (
+        <>
+          <h2 id="network-heading" className="card-title">
+            Network View
+          </h2>
+          <p className="hint">
+            Tap a neuron to inspect it. Long-press (~0.5s) for direct electrode-style +5 mV
+            stimulation.
+          </p>
+        </>
+      )}
 
       <div className="network-svg-wrap">
         <svg
@@ -298,6 +313,7 @@ export function NetworkView({
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-label="Backend neural network graph"
+          preserveAspectRatio="xMidYMid meet"
         >
           <defs>
             <marker
