@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | **0.8 Autonomous Sensory Environment** |
+| **Current version** | **0.8.1 Autonomous Observation Stabilization** |
 | **Next** | **0.8B Homeostatic Regulation** or **0.9 Embodied Sensory Surface** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
@@ -30,7 +30,7 @@ Tissue positions, synaptic plasticity, structural observation, synapse birth/pru
 
 Deterministic progenitor birth → settlement at demo scale.
 
-### 0.8 Autonomous Sensory Environment ✅ ← CURRENT
+### 0.8 Autonomous Sensory Environment ✅
 
 | | |
 | --- | --- |
@@ -39,6 +39,16 @@ Deterministic progenitor birth → settlement at demo scale.
 | **Observable outcome** | Background pulses, PATTERN-A/B, receptor deliveries, plasticity under experience. |
 
 Experiment: [`docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md).
+
+### 0.8.1 Autonomous Observation Stabilization ✅ ← CURRENT
+
+| | |
+| --- | --- |
+| **Purpose** | Stabilization: Continuous Run through quiet ticks; Balanced birth/pruning calibration. |
+| **Not a new scientific milestone** | Demonstration calibration only. |
+| **Observable outcome** | Pause reasons; Observer Status; synapse birth within 300 ticks under Balanced. |
+
+Experiment: [`docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md`](docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md).
 
 ---
 

@@ -8,6 +8,7 @@ import type {
 } from "../../types/neural";
 import { shortNeuronId } from "../../types/neural";
 import type { ControlsCategory } from "../../types/ui";
+import type { PauseReason, RunMode } from "./runLoop";
 
 interface ControlsPanelProps {
   selectedNeuronId: string | null;
@@ -15,7 +16,10 @@ interface ControlsPanelProps {
   busy: boolean;
   running: boolean;
   autoStep: number;
-  maxAutoSteps: number;
+  runMode: RunMode;
+  pauseReason: PauseReason;
+  observationLimit: number;
+  onObservationLimitChange: (limit: number) => void;
   structural: StructuralSnapshot | null;
   development?: DevelopmentSummary | null;
   environment?: EnvironmentSnapshot | null;
@@ -23,7 +27,8 @@ interface ControlsPanelProps {
   onStimulateWeak: () => void;
   onStimulateStrong: () => void;
   onStep: () => void;
-  onRun: () => void;
+  onContinuousRun: () => void;
+  onObservationRun: () => void;
   onPause: () => void;
   onReset: () => void;
   onEnvironmentControls: (controls: EnvironmentControlsRequest) => void;
@@ -49,7 +54,10 @@ export function ControlsPanel({
   busy,
   running,
   autoStep,
-  maxAutoSteps,
+  runMode,
+  pauseReason,
+  observationLimit,
+  onObservationLimitChange,
   structural,
   development = null,
   environment = null,
@@ -57,7 +65,8 @@ export function ControlsPanel({
   onStimulateWeak,
   onStimulateStrong,
   onStep,
-  onRun,
+  onContinuousRun,
+  onObservationRun,
   onPause,
   onReset,
   onEnvironmentControls,
@@ -81,8 +90,11 @@ export function ControlsPanel({
         </strong>
       </p>
       <p className="hint">
-        Long-press a neuron on the graph for Laboratory Electrode +5 mV. Sequence:{" "}
-        {running ? "running" : "paused"} · {autoStep}/{maxAutoSteps}
+        Long-press a neuron on the graph for Laboratory Electrode +5 mV. Run:{" "}
+        {running ? "running" : "paused"} · mode {runMode}
+        {runMode === "observation" ? ` · ${autoStep}/${observationLimit}` : ` · ${autoStep} steps`}
+        {" · "}
+        pause reason: {pauseReason}
         {stimulateDisabled
           ? " · Developing cells are not electrically eligible for stimulation."
           : ""}
@@ -131,6 +143,10 @@ export function ControlsPanel({
 
         {category === "time" ? (
           <>
+            <p className="hint">
+              Quiet ticks are valid simulation time. Run never stops because the network is
+              inactive.
+            </p>
             <button
               type="button"
               className="btn btn-secondary"
@@ -143,17 +159,46 @@ export function ControlsPanel({
               type="button"
               className="btn btn-secondary"
               disabled={runLocked}
-              onClick={onRun}
+              onClick={onContinuousRun}
+              aria-label="Continuous run"
             >
-              Run Sequence
+              Continuous Run
             </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={runLocked}
+              onClick={onObservationRun}
+              aria-label="Observation run"
+            >
+              Observation Run ({observationLimit})
+            </button>
+            <label className="hint" htmlFor="observation-limit">
+              Observation limit
+              <input
+                id="observation-limit"
+                data-testid="observation-limit-input"
+                type="number"
+                min={1}
+                max={2000}
+                value={observationLimit}
+                disabled={running || disabled}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (Number.isFinite(next) && next >= 1) {
+                    onObservationLimitChange(Math.floor(next));
+                  }
+                }}
+              />
+            </label>
             <button
               type="button"
               className="btn btn-secondary"
               disabled={pauseLocked}
               onClick={onPause}
+              aria-label="Pause sequence"
             >
-              Pause Sequence
+              Pause
             </button>
           </>
         ) : null}
@@ -460,7 +505,7 @@ export function ControlsPanel({
               </dl>
               <p className="hint">
                 Tap a neuron to inspect. Hold ~0.5s for Laboratory Electrode +5 mV (settled cells
-                only). Autonomous Sensory Environment · Version 0.8
+                only). Autonomous Observation Stabilization · Version 0.8.1
               </p>
             </section>
           </>

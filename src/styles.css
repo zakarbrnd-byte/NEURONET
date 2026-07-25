@@ -656,6 +656,29 @@ body {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.observer-status-panel {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.observer-status-panel .help-heading {
+  margin-top: 0;
+}
+
+#observation-limit {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
 .segmented-item {
   min-height: 40px;
   padding: 6px 4px;

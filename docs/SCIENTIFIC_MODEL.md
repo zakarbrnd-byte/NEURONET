@@ -187,6 +187,7 @@ It is **not** sensory transduction through receptors.
 | 0.6D Synapse birth and pruning | Implemented — deterministic create/delete under limits |
 | 0.7 Developmental neural tissue | Implemented — simplified progenitor → settlement lifecycle |
 | 0.8 Autonomous sensory environment | Implemented — virtual receptors + scheduled patterns |
+| 0.8.1 Autonomous observation stabilization | Implemented — continuous run + Balanced birth/pruning calibration |
 
 Plasticity, development, and environment must remain backend-owned and Mission Control–observable.  
 Do not “learn” by silently editing UI state.

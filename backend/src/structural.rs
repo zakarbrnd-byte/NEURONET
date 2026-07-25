@@ -53,22 +53,24 @@ pub struct StructuralPlasticityConfig {
 
 impl Default for StructuralPlasticityConfig {
     fn default() -> Self {
+        // Version 0.8.1 Balanced calibration defaults.
+        // Birth threshold lowered from 0.90→0.65; pruning grace extended 10→48.
         Self {
             enabled: true,
-            evaluation_interval_ticks: 5,
+            evaluation_interval_ticks: 4,
             max_candidate_distance: 0.55,
-            minimum_coactivation_score: 2.0,
-            candidate_maturation_ticks: 3,
-            creation_readiness_threshold: 0.90,
+            minimum_coactivation_score: 1.0,
+            candidate_maturation_ticks: 2,
+            creation_readiness_threshold: 0.65,
             creation_hold_evals: 1,
-            pruning_weight_threshold: 6.0,
-            pruning_health_threshold: 0.55,
-            pruning_inactivity_ticks: 12,
-            pruning_grace_ticks: 10,
-            pruning_commit_risk_threshold: 0.70,
-            pruning_low_weight_duration: 4,
-            pruning_low_health_duration: 4,
-            pruning_sustained_at_risk_evals: 2,
+            pruning_weight_threshold: 5.5,
+            pruning_health_threshold: 0.50,
+            pruning_inactivity_ticks: 28,
+            pruning_grace_ticks: 48,
+            pruning_commit_risk_threshold: 0.78,
+            pruning_low_weight_duration: 6,
+            pruning_low_health_duration: 6,
+            pruning_sustained_at_risk_evals: 3,
             max_candidates: 8,
             min_total_synapses: 3,
             max_total_synapses: 12,
@@ -78,6 +80,11 @@ impl Default for StructuralPlasticityConfig {
         }
     }
 }
+
+/// Coactivation score below which a maturing/eligible candidate begins exit countdown.
+pub const MATURATION_EXIT_COACTIVATION: f64 = 0.75;
+/// Consecutive weak evaluations required before leaving maturation / resetting.
+pub const MATURATION_EXIT_EVALS: u64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,6 +124,22 @@ pub struct GrowthCandidate {
     pub maturation_ticks: u64,
     pub supporting_reasons: Vec<&'static str>,
     pub blocking_reasons: Vec<&'static str>,
+    // --- 0.8.1 diagnostics ---
+    pub max_readiness: f64,
+    pub readiness_delta: f64,
+    pub consecutive_eligible_evals: u64,
+    pub consecutive_below_exit_evals: u64,
+    pub last_evidence_tick: Option<u64>,
+    pub creation_threshold: f64,
+    pub required_maturation_evals: u64,
+    pub within_structural_reach: bool,
+    pub source_outgoing_count: usize,
+    pub target_incoming_count: usize,
+    pub total_synapse_count: usize,
+    pub max_outgoing_limit: usize,
+    pub max_incoming_limit: usize,
+    pub max_total_synapses_limit: usize,
+    pub why_not_created: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -186,6 +209,31 @@ pub struct TopologySummary {
     pub min_synapse_floor: usize,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StructuralBalance {
+    Growing,
+    Stable,
+    Shrinking,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StructuralMetrics {
+    pub synapses_created_total: u64,
+    pub synapses_pruned_total: u64,
+    pub candidates_observed: usize,
+    pub candidates_maturing: usize,
+    pub birth_blocked_total: u64,
+    pub pruning_blocked_total: u64,
+    pub last_synapse_created_tick: Option<u64>,
+    pub last_synapse_pruned_tick: Option<u64>,
+    pub structural_balance: StructuralBalance,
+    pub recent_births: u64,
+    pub recent_prunes: u64,
+    pub balance_window_ticks: u64,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StructuralHistoryEntry {
@@ -212,6 +260,7 @@ pub struct StructuralSnapshot {
     pub at_risk_synapse_count: usize,
     pub topology: TopologySummary,
     pub history: Vec<StructuralHistoryEntry>,
+    pub metrics: StructuralMetrics,
 }
 
 /// Discrete coactivation rule (documented):
@@ -247,7 +296,7 @@ fn bump_pair(pairs: &mut Vec<PairActivity>, source: &str, target: &str, tick: u6
         .find(|p| p.source_neuron_id == source && p.target_neuron_id == target)
     {
         pair.coactivation_count = pair.coactivation_count.saturating_add(1);
-        pair.recent_coactivation_score = (pair.recent_coactivation_score + 1.0).min(20.0);
+        pair.recent_coactivation_score = (pair.recent_coactivation_score + 1.5).min(20.0);
         pair.last_coactivated_tick = Some(tick);
         return;
     }
@@ -255,7 +304,7 @@ fn bump_pair(pairs: &mut Vec<PairActivity>, source: &str, target: &str, tick: u6
         source_neuron_id: source.to_string(),
         target_neuron_id: target.to_string(),
         coactivation_count: 1,
-        recent_coactivation_score: 1.0,
+        recent_coactivation_score: 1.5,
         last_coactivated_tick: Some(tick),
         evaluation_count: 0,
     });
@@ -323,8 +372,9 @@ fn readiness_from_evidence(coactivation: f64, compatibility: f64, min_score: f64
     if coactivation < min_score || compatibility <= 0.0 {
         return (coactivation / (min_score * 2.0)).clamp(0.0, 0.49) * compatibility;
     }
-    let coact_norm = ((coactivation - min_score) / 8.0).clamp(0.0, 1.0);
-    (0.55 + 0.45 * coact_norm * compatibility).clamp(0.0, 1.0)
+    // 0.8.1: two moderate coactivation bumps can clear the Balanced birth threshold.
+    let coact_norm = ((coactivation - min_score) / 3.0).clamp(0.0, 1.0);
+    (0.62 + 0.38 * coact_norm * compatibility).clamp(0.0, 1.0)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -356,16 +406,16 @@ pub fn evaluate_growth_candidates(
     let mut neuron_ids: Vec<&str> = neurons.iter().map(|n| n.id.as_str()).collect();
     neuron_ids.sort();
 
-    // Decay unused pair scores slightly each evaluation.
+    // Slow decay of unused pair scores (0.8.1: softer so pattern gaps do not erase evidence).
     for pair in pairs.iter_mut() {
         pair.evaluation_count = pair.evaluation_count.saturating_add(1);
         if pair
             .last_coactivated_tick
             .map(|t| tick.saturating_sub(t))
             .unwrap_or(tick)
-            > 5
+            > 8
         {
-            pair.recent_coactivation_score = (pair.recent_coactivation_score * 0.85).max(0.0);
+            pair.recent_coactivation_score = (pair.recent_coactivation_score * 0.92).max(0.0);
         }
     }
 
@@ -420,29 +470,23 @@ pub fn evaluate_growth_candidates(
 
             let mut maturation_ticks = prior.map(|c| c.maturation_ticks).unwrap_or(0);
             let created_tick = prior.map(|c| c.created_tick).unwrap_or(tick);
+            let mut consecutive_eligible = prior.map(|c| c.consecutive_eligible_evals).unwrap_or(0);
+            let mut consecutive_below_exit =
+                prior.map(|c| c.consecutive_below_exit_evals).unwrap_or(0);
+            let prior_status = prior.map(|c| c.status);
+            let reach_ok = distance <= config.max_candidate_distance
+                && within_structural_reach(source, target, distance);
+            let evidence_ok = coactivation >= config.minimum_coactivation_score;
 
-            let status = if !blocking.is_empty() && coactivation < config.minimum_coactivation_score
-            {
-                // Evidence fell: reset maturation.
-                if prior
-                    .map(|c| {
-                        matches!(
-                            c.status,
-                            CandidateStatus::Eligible | CandidateStatus::Maturing
-                        )
-                    })
-                    .unwrap_or(false)
-                {
-                    maturation_ticks = 0;
-                }
-                if distance > config.max_candidate_distance
-                    || !within_structural_reach(source, target, distance)
-                {
-                    CandidateStatus::Blocked
-                } else {
-                    CandidateStatus::Observing
-                }
-            } else if blocking.is_empty() {
+            // Hysteresis (0.8.1): one quiet evaluation does not erase maturation.
+            let status = if !reach_ok {
+                consecutive_eligible = 0;
+                consecutive_below_exit = 0;
+                maturation_ticks = 0;
+                CandidateStatus::Blocked
+            } else if evidence_ok {
+                consecutive_below_exit = 0;
+                consecutive_eligible = consecutive_eligible.saturating_add(1);
                 maturation_ticks = maturation_ticks.saturating_add(1);
                 if maturation_ticks >= config.candidate_maturation_ticks {
                     CandidateStatus::Maturing
@@ -450,8 +494,32 @@ pub fn evaluate_growth_candidates(
                     CandidateStatus::Eligible
                 }
             } else {
-                maturation_ticks = 0;
-                CandidateStatus::Blocked
+                // Weak evidence: hold status unless sustained below exit threshold.
+                consecutive_eligible = 0;
+                if coactivation < MATURATION_EXIT_COACTIVATION {
+                    consecutive_below_exit = consecutive_below_exit.saturating_add(1);
+                } else {
+                    consecutive_below_exit = 0;
+                }
+                match prior_status {
+                    Some(CandidateStatus::Maturing) | Some(CandidateStatus::Eligible)
+                        if consecutive_below_exit < MATURATION_EXIT_EVALS =>
+                    {
+                        // Retain prior progressive status; do not increment maturation.
+                        prior_status.unwrap()
+                    }
+                    Some(CandidateStatus::Maturing) | Some(CandidateStatus::Eligible) => {
+                        maturation_ticks = 0;
+                        consecutive_below_exit = 0;
+                        CandidateStatus::Observing
+                    }
+                    _ => {
+                        if consecutive_below_exit >= MATURATION_EXIT_EVALS {
+                            maturation_ticks = 0;
+                        }
+                        CandidateStatus::Observing
+                    }
+                }
             };
 
             // Skip cold pairs with no history and no prior candidate.
@@ -467,6 +535,20 @@ pub fn evaluate_growth_candidates(
                 compatibility,
                 config.minimum_coactivation_score,
             );
+            let prior_readiness = prior.map(|c| c.readiness).unwrap_or(0.0);
+            let max_readiness = prior
+                .map(|c| c.max_readiness.max(readiness))
+                .unwrap_or(readiness);
+            let last_evidence_tick = if coactivation > 0.0 {
+                pair.and_then(|p| p.last_coactivated_tick).or(Some(tick))
+            } else {
+                prior.and_then(|c| c.last_evidence_tick)
+            };
+            let required_maturation = config
+                .candidate_maturation_ticks
+                .saturating_add(config.creation_hold_evals);
+            let source_out = count_outgoing(synapses, source_id);
+            let target_in = count_incoming(synapses, target_id);
 
             let id = prior
                 .map(|c| c.id.clone())
@@ -519,7 +601,7 @@ pub fn evaluate_growth_candidates(
                 });
             }
 
-            next_candidates.push(GrowthCandidate {
+            let mut draft = GrowthCandidate {
                 id,
                 source_neuron_id: source_id.to_string(),
                 target_neuron_id: target_id.to_string(),
@@ -534,7 +616,27 @@ pub fn evaluate_growth_candidates(
                 maturation_ticks,
                 supporting_reasons: supporting,
                 blocking_reasons: blocking,
-            });
+                max_readiness: (max_readiness * 1000.0).round() / 1000.0,
+                readiness_delta: ((readiness - prior_readiness) * 1000.0).round() / 1000.0,
+                consecutive_eligible_evals: consecutive_eligible,
+                consecutive_below_exit_evals: consecutive_below_exit,
+                last_evidence_tick,
+                creation_threshold: config.creation_readiness_threshold,
+                required_maturation_evals: required_maturation,
+                within_structural_reach: reach_ok,
+                source_outgoing_count: source_out,
+                target_incoming_count: target_in,
+                total_synapse_count: synapses.len(),
+                max_outgoing_limit: config.max_outgoing_per_neuron,
+                max_incoming_limit: config.max_incoming_per_neuron,
+                max_total_synapses_limit: config.max_total_synapses,
+                why_not_created: Vec::new(),
+            };
+            draft.why_not_created = birth_block_reasons(config, neurons, synapses, &draft, 0)
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect();
+            next_candidates.push(draft);
         }
     }
 
@@ -1054,7 +1156,8 @@ impl Synapse {
         };
         synapse.origin_candidate_id = Some(origin_candidate_id.to_string());
         synapse.eligible_from_tick = eligible_from_tick;
-        synapse.protected_until_tick = creation_tick.saturating_add(10);
+        // Align newborn grace with Balanced pruning_grace_ticks (48).
+        synapse.protected_until_tick = creation_tick.saturating_add(48);
         synapse
     }
 }
@@ -1274,9 +1377,12 @@ mod tests {
         assert_eq!(candidates[0].status, CandidateStatus::Eligible);
         evaluate_growth_candidates(&config, &neurons, &[], &mut pairs, &mut candidates, 10);
         assert_eq!(candidates[0].status, CandidateStatus::Maturing);
-        // Evidence collapse → observing/blocked and maturation reset.
+        // One quiet evaluation retains maturation (hysteresis).
         pairs[0].recent_coactivation_score = 0.0;
         evaluate_growth_candidates(&config, &neurons, &[], &mut pairs, &mut candidates, 15);
+        assert_eq!(candidates[0].status, CandidateStatus::Maturing);
+        // Sustained collapse exits maturation.
+        evaluate_growth_candidates(&config, &neurons, &[], &mut pairs, &mut candidates, 20);
         assert!(matches!(
             candidates[0].status,
             CandidateStatus::Observing | CandidateStatus::Blocked

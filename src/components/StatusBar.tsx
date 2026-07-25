@@ -1,11 +1,13 @@
 import type { ConnectionStatus, TissueInfo } from "../types/neural";
 import { formatAge } from "../types/neural";
+import type { PauseReason } from "../features/mission/runLoop";
 
 interface StatusBarProps {
   version: string;
   status: ConnectionStatus;
   networkTick: number;
   running: boolean;
+  pauseReason?: PauseReason;
   error: string | null;
   tissue: TissueInfo | null;
   onRetry: () => void;
@@ -22,6 +24,7 @@ export function StatusBar({
   status,
   networkTick,
   running,
+  pauseReason = "None",
   error,
   tissue,
   onRetry,
@@ -72,6 +75,16 @@ export function StatusBar({
           ·
         </span>
         <span className="status-bar-item">{running ? "Running" : "Paused"}</span>
+        {!running ? (
+          <>
+            <span className="status-bar-sep" aria-hidden="true">
+              ·
+            </span>
+            <span className="status-bar-item" data-testid="status-pause-reason">
+              {pauseReason}
+            </span>
+          </>
+        ) : null}
         {status === "unavailable" ? (
           <button
             type="button"

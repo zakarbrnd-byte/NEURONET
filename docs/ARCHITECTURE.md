@@ -11,7 +11,7 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
 | [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md) | Model assumptions |
 | [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) | Contributor rules |
 
-**Shipped runtime target:** Version **0.8 Autonomous Sensory Environment**  
+**Shipped runtime target:** Version **0.8.1 Autonomous Observation Stabilization**  
 (Virtual sensory environment + receptors + preserved development/plasticity.)
 
 ---
@@ -103,11 +103,11 @@ Stimuli are commands. The backend decides tissue response.
 
 ## API
 
-Current REST surface (0.8):
+Current REST surface (0.8.1):
 
 | Method | Path | Role |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness; reports version `0.8` |
+| `GET` | `/api/health` | Liveness; reports version `0.8.1` |
 | `GET` | `/api/network` | Full snapshot (`development`, `environment`) |
 | `GET` | `/api/events` | Recent structured events |
 | `POST` | `/api/neurons/:id/signals` | Laboratory electrode (mV); rejects ineligible cells |

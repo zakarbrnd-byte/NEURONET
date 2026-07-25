@@ -128,8 +128,9 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.8 Autonomous Sensory Environment**
+**Shipped runtime:** **0.8.1 Autonomous Observation Stabilization**
 
-Sensory input enters through backend receptors. Laboratory electrodes stay distinct.  
+Sensory input enters through backend receptors. Continuous Run survives quiet ticks.
+Balanced calibration can birth synapses without early pruning collapse.
 Do not implement real device sensors, homeostasis, or cognition unless explicitly asked.
 Next candidates: **0.8B Homeostatic Regulation** or **0.9 Embodied Sensory Surface** (neither started).

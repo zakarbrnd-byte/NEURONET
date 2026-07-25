@@ -13,8 +13,9 @@ use crate::environment::{
 use crate::neuron::{CellType, LifecycleState, Neuron, NeuronStepResult, Position, TissueSeed};
 use crate::structural::{
     evaluate_growth_candidates, evaluate_pruning_risk, plan_structural_mutations,
-    record_coactivations, GrowthCandidate, PairActivity, StructuralHistoryEntry,
-    StructuralPlasticityConfig, StructuralSnapshot, TopologySummary, MAX_STRUCTURAL_HISTORY,
+    record_coactivations, GrowthCandidate, PairActivity, StructuralBalance, StructuralHistoryEntry,
+    StructuralMetrics, StructuralPlasticityConfig, StructuralSnapshot, TopologySummary,
+    MAX_STRUCTURAL_HISTORY,
 };
 use crate::synapse::{Synapse, SynapseType};
 
@@ -124,6 +125,11 @@ pub struct NeuralNetwork {
     structural_history: Vec<StructuralHistoryEntry>,
     created_this_session: u64,
     pruned_this_session: u64,
+    birth_blocked_total: u64,
+    pruning_blocked_total: u64,
+    last_synapse_created_tick: Option<u64>,
+    last_synapse_pruned_tick: Option<u64>,
+    recent_structural_events: Vec<(u64, &'static str)>,
     development_config: DevelopmentConfig,
     next_neuron_number: u32,
     latest_birth_tick: Option<u64>,
@@ -155,6 +161,11 @@ impl NeuralNetwork {
             structural_history: Vec::new(),
             created_this_session: 0,
             pruned_this_session: 0,
+            birth_blocked_total: 0,
+            pruning_blocked_total: 0,
+            last_synapse_created_tick: None,
+            last_synapse_pruned_tick: None,
+            recent_structural_events: Vec::new(),
             development_config: DevelopmentConfig::default(),
             next_neuron_number: 6,
             latest_birth_tick: None,
@@ -357,6 +368,7 @@ impl NeuralNetwork {
                     min_synapse_floor: self.structural_config.min_total_synapses,
                 },
                 history: self.structural_history.clone(),
+                metrics: self.structural_metrics(),
             },
             development: build_summary(
                 &self.development_config,
@@ -897,12 +909,66 @@ impl NeuralNetwork {
         self.development_config = config;
     }
 
+    fn trim_recent_structural_events(&mut self) {
+        let window = 80u64;
+        let min_tick = self.tick.saturating_sub(window);
+        self.recent_structural_events
+            .retain(|(t, _)| *t >= min_tick);
+    }
+
+    fn structural_metrics(&self) -> StructuralMetrics {
+        const WINDOW: u64 = 80;
+        let recent_births = self
+            .recent_structural_events
+            .iter()
+            .filter(|(t, k)| *k == "birth" && *t + WINDOW > self.tick)
+            .count() as u64;
+        let recent_prunes = self
+            .recent_structural_events
+            .iter()
+            .filter(|(t, k)| *k == "prune" && *t + WINDOW > self.tick)
+            .count() as u64;
+        let balance = if recent_births > recent_prunes {
+            StructuralBalance::Growing
+        } else if recent_prunes > recent_births {
+            StructuralBalance::Shrinking
+        } else {
+            StructuralBalance::Stable
+        };
+        StructuralMetrics {
+            synapses_created_total: self.created_this_session,
+            synapses_pruned_total: self.pruned_this_session,
+            candidates_observed: self.growth_candidates.len(),
+            candidates_maturing: self
+                .growth_candidates
+                .iter()
+                .filter(|c| c.status == crate::structural::CandidateStatus::Maturing)
+                .count(),
+            birth_blocked_total: self.birth_blocked_total,
+            pruning_blocked_total: self.pruning_blocked_total,
+            last_synapse_created_tick: self.last_synapse_created_tick,
+            last_synapse_pruned_tick: self.last_synapse_pruned_tick,
+            structural_balance: balance,
+            recent_births,
+            recent_prunes,
+            balance_window_ticks: WINDOW,
+        }
+    }
+
     fn commit_structural_mutations(
         &mut self,
         planned: crate::structural::PlannedMutations,
     ) -> Vec<String> {
         let mut event_ids = Vec::new();
         self.next_synapse_number = planned.next_synapse_number;
+        for event in &planned.events {
+            if event.event_type == "candidate_creation_blocked" {
+                self.birth_blocked_total = self.birth_blocked_total.saturating_add(1);
+            }
+            if event.event_type == "pruning_blocked" {
+                self.pruning_blocked_total = self.pruning_blocked_total.saturating_add(1);
+            }
+        }
 
         // Commit births first (stable ID order already applied).
         for birth in planned.births {
@@ -936,6 +1002,9 @@ impl NeuralNetwork {
                     && !(c.source_neuron_id == source && c.target_neuron_id == target)
             });
             self.created_this_session = self.created_this_session.saturating_add(1);
+            self.last_synapse_created_tick = Some(self.tick);
+            self.recent_structural_events.push((self.tick, "birth"));
+            self.trim_recent_structural_events();
             let after = self.synapses.len();
             self.push_history(StructuralHistoryEntry {
                 tick: self.tick,
@@ -983,6 +1052,9 @@ impl NeuralNetwork {
             self.synapses.retain(|s| s.id != prune.synapse_id);
             self.pending_hebbian.retain(|id| id != &prune.synapse_id);
             self.pruned_this_session = self.pruned_this_session.saturating_add(1);
+            self.last_synapse_pruned_tick = Some(self.tick);
+            self.recent_structural_events.push((self.tick, "prune"));
+            self.trim_recent_structural_events();
             let after = self.synapses.len();
             let reasons: Vec<String> = prune
                 .reason_codes
@@ -1515,6 +1587,21 @@ mod tests {
             maturation_ticks: maturation,
             supporting_reasons: vec!["repeated_coactivation", "within_structural_reach"],
             blocking_reasons: vec![],
+            max_readiness: readiness,
+            readiness_delta: 0.0,
+            consecutive_eligible_evals: maturation,
+            consecutive_below_exit_evals: 0,
+            last_evidence_tick: Some(10),
+            creation_threshold: 0.65,
+            required_maturation_evals: 3,
+            within_structural_reach: true,
+            source_outgoing_count: 0,
+            target_incoming_count: 0,
+            total_synapse_count: 5,
+            max_outgoing_limit: 3,
+            max_incoming_limit: 3,
+            max_total_synapses_limit: 12,
+            why_not_created: Vec::new(),
         }
     }
 
@@ -1920,6 +2007,11 @@ mod tests {
         network
             .set_environment_controls(Some(false), None, None, None, None)
             .unwrap();
+        // Shorten grace for this unit test while keeping Balanced production defaults.
+        let mut config = StructuralPlasticityConfig::default();
+        config.pruning_grace_ticks = 8;
+        config.pruning_inactivity_ticks = 10;
+        network.set_structural_config_for_test(config);
         for _ in 0..40 {
             network.step();
         }
@@ -2456,6 +2548,170 @@ mod tests {
         step_n(&mut network, 200);
         assert!(network.snapshot().environment.recent_events.len() <= 80);
         assert!(network.events_newest_first().len() <= 200);
+    }
+
+    /// Version 0.8.1 Balanced calibration: birth within 300 ticks, no early collapse.
+    #[test]
+    fn balanced_preset_structural_balance_within_300_ticks() {
+        let mut network = NeuralNetwork::initial();
+        network
+            .set_environment_controls(
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(crate::environment::EnvironmentPreset::Balanced),
+            )
+            .unwrap();
+
+        let mut first_env = None;
+        let mut first_fire = None;
+        let mut first_candidate = None;
+        let mut first_eligible = None;
+        let mut first_maturing = None;
+        let mut first_birth = None;
+        let mut max_readiness = 0.0_f64;
+        let mut saw_repeated_coactivation = false;
+        let initial_synapses = network.snapshot().synapses.len();
+
+        for _ in 0..300 {
+            let trace = network.step();
+            let snap = network.snapshot();
+            let tick = snap.tick;
+
+            if first_env.is_none()
+                && (!trace.environment_trace.events_generated.is_empty()
+                    || !trace.environment_trace.sensory_deliveries.is_empty())
+            {
+                first_env = Some(tick);
+            }
+            if first_fire.is_none() && !trace.fired_neuron_ids.is_empty() {
+                first_fire = Some(tick);
+            }
+            for c in &snap.structural.growth_candidates {
+                max_readiness = max_readiness.max(c.max_readiness);
+                if first_candidate.is_none() {
+                    first_candidate = Some(tick);
+                }
+                if c.status == crate::structural::CandidateStatus::Eligible
+                    && first_eligible.is_none()
+                {
+                    first_eligible = Some(tick);
+                }
+                if c.status == crate::structural::CandidateStatus::Maturing
+                    && first_maturing.is_none()
+                {
+                    first_maturing = Some(tick);
+                }
+                if c.coactivation_score >= 2.0 {
+                    saw_repeated_coactivation = true;
+                }
+            }
+            if first_birth.is_none() {
+                if let Some(t) = snap.structural.metrics.last_synapse_created_tick {
+                    first_birth = Some(t);
+                }
+            }
+        }
+
+        let snap = network.snapshot();
+        let metrics = &snap.structural.metrics;
+
+        assert!(first_env.is_some(), "expected recurring receptor events");
+        assert!(first_fire.is_some(), "expected neuronal firing");
+        assert!(first_candidate.is_some(), "expected growth candidate");
+        assert!(
+            saw_repeated_coactivation || max_readiness >= 0.65,
+            "expected repeated coactivation evidence (max_readiness={max_readiness})"
+        );
+        assert!(
+            metrics.synapses_created_total >= 1,
+            "expected ≥1 synapse birth within 300 ticks"
+        );
+        assert_eq!(first_birth, Some(120));
+        assert!(
+            snap.synapses.iter().any(|s| s.id == "SYNAPSE-0006"
+                && s.source_neuron_id == "NEURON-002"
+                && s.target_neuron_id == "NEURON-001"),
+            "expected deterministic SYNAPSE-0006 NEURON-002→NEURON-001"
+        );
+        let newborn = snap
+            .synapses
+            .iter()
+            .find(|s| s.id == "SYNAPSE-0006")
+            .unwrap();
+        assert_eq!(newborn.creation_tick, 120);
+        assert_eq!(newborn.eligible_from_tick, 121);
+        // Initial protected backbone must not collapse below floor.
+        assert!(snap.synapses.len() >= snap.structural.config.min_total_synapses);
+        assert!(snap.synapses.len() >= initial_synapses);
+        assert!(snap.synapses.len() <= snap.structural.config.max_total_synapses);
+        // Early pruning must not dominate birth under Balanced.
+        assert!(
+            metrics.synapses_pruned_total <= metrics.synapses_created_total,
+            "pruning must not exceed births in 300-tick Balanced window"
+        );
+
+        // Determinism: identical run births the same synapse at the same tick.
+        let mut network_b = NeuralNetwork::initial();
+        network_b
+            .set_environment_controls(
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(true),
+                Some(crate::environment::EnvironmentPreset::Balanced),
+            )
+            .unwrap();
+        step_n(&mut network_b, 300);
+        let snap_b = network_b.snapshot();
+        assert_eq!(
+            snap.structural.metrics.last_synapse_created_tick,
+            snap_b.structural.metrics.last_synapse_created_tick
+        );
+        assert_eq!(
+            snap.structural.metrics.synapses_created_total,
+            snap_b.structural.metrics.synapses_created_total
+        );
+        assert_eq!(snap.synapses.len(), snap_b.synapses.len());
+        let ids_a: Vec<_> = snap.synapses.iter().map(|s| s.id.clone()).collect();
+        let ids_b: Vec<_> = snap_b.synapses.iter().map(|s| s.id.clone()).collect();
+        assert_eq!(ids_a, ids_b);
+    }
+
+    #[test]
+    fn quiet_ticks_still_deliver_future_scheduled_environment_events() {
+        let mut network = NeuralNetwork::initial();
+        // Steps 1..7 are quiet before first background at tick 8.
+        for _ in 0..7 {
+            let trace = network.step();
+            assert!(trace.environment_trace.events_generated.is_empty());
+            assert!(trace.fired_neuron_ids.is_empty());
+        }
+        let before = network.snapshot().environment.next_scheduled_event_tick;
+        assert_eq!(before, Some(8));
+        let trace = network.step();
+        assert_eq!(network.snapshot().tick, 8);
+        assert!(!trace.environment_trace.events_generated.is_empty());
+    }
+
+    #[test]
+    fn one_inactive_interval_does_not_prune_after_grace() {
+        let mut network = NeuralNetwork::initial();
+        // Advance past grace with normal Balanced activity, then confirm unprotected
+        // synapses are not instantly pruned by a short idle gap.
+        step_n(&mut network, 60);
+        let before = network.snapshot().synapses.len();
+        // Disable environment so activity pauses.
+        network
+            .set_environment_controls(Some(false), None, None, None, None)
+            .unwrap();
+        step_n(&mut network, 10);
+        let after = network.snapshot().synapses.len();
+        assert_eq!(
+            before, after,
+            "one short inactive interval must not prune"
+        );
     }
 }
 

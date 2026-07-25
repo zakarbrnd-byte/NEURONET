@@ -4,6 +4,7 @@ import { shortNeuronId } from "../../types/neural";
 interface GrowthCandidatePanelProps {
   candidate: GrowthCandidate | null;
   maturationTicksRequired: number;
+  creationThreshold?: number;
 }
 
 function pct(value: number): string {
@@ -17,6 +18,7 @@ function reasonLabel(code: string): string {
 export function GrowthCandidatePanel({
   candidate,
   maturationTicksRequired,
+  creationThreshold = 0.65,
 }: GrowthCandidatePanelProps) {
   if (!candidate) {
     return (
@@ -27,9 +29,17 @@ export function GrowthCandidatePanel({
     );
   }
 
+  const requiredMaturation =
+    candidate.requiredMaturationEvals ?? maturationTicksRequired;
+  const threshold = candidate.creationThreshold ?? creationThreshold;
+  const maxReadiness = candidate.maxReadiness ?? candidate.readiness;
+  const whyNot =
+    candidate.whyNotCreated && candidate.whyNotCreated.length > 0
+      ? candidate.whyNotCreated
+      : candidate.blockingReasons;
   const maturationProgress = Math.min(
     1,
-    candidate.maturationTicks / Math.max(1, maturationTicksRequired),
+    candidate.maturationTicks / Math.max(1, requiredMaturation),
   );
 
   return (
@@ -43,6 +53,21 @@ export function GrowthCandidatePanel({
         {shortNeuronId(candidate.targetNeuronId)} · not a real synapse
       </p>
 
+      <section aria-label="Why not created yet" data-testid="candidate-why-not-created">
+        <h3 className="help-heading">Why not created yet?</h3>
+        {whyNot.length === 0 ? (
+          <p className="hint">
+            No blocking reasons — waiting for the next structural commit evaluation.
+          </p>
+        ) : (
+          <ul className="reason-code-list">
+            {whyNot.map((reason) => (
+              <li key={reason}>{reasonLabel(reason)}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <dl className="status-list panel-metrics">
         <div className="status-row">
           <dt>Proposed type</dt>
@@ -53,14 +78,39 @@ export function GrowthCandidatePanel({
           <dd className="capitalize">{candidate.status}</dd>
         </div>
         <div className="status-row">
-          <dt>Readiness</dt>
-          <dd data-testid="candidate-readiness">{pct(candidate.readiness)}</dd>
+          <dt>Readiness / threshold</dt>
+          <dd data-testid="candidate-readiness">
+            {pct(candidate.readiness)} / {pct(threshold)}
+            {candidate.readinessDelta != null
+              ? ` (Δ ${candidate.readinessDelta >= 0 ? "+" : ""}${candidate.readinessDelta.toFixed(3)})`
+              : ""}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Max readiness</dt>
+          <dd data-testid="candidate-max-readiness">{pct(maxReadiness)}</dd>
         </div>
         <div className="status-row">
           <dt>Maturation</dt>
-          <dd>
-            {candidate.maturationTicks}/{maturationTicksRequired} (
+          <dd data-testid="candidate-maturation">
+            {candidate.maturationTicks}/{requiredMaturation} (
             {pct(maturationProgress)})
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Coactivation evidence</dt>
+          <dd data-testid="candidate-coactivation">
+            {candidate.coactivationScore.toFixed(2)}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Consecutive eligible</dt>
+          <dd>{candidate.consecutiveEligibleEvals ?? "—"}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Last evidence tick</dt>
+          <dd>
+            {candidate.lastEvidenceTick != null ? `Tick ${candidate.lastEvidenceTick}` : "—"}
           </dd>
         </div>
         <div className="status-row">
@@ -72,8 +122,32 @@ export function GrowthCandidatePanel({
           <dd>{pct(candidate.structuralCompatibility)}</dd>
         </div>
         <div className="status-row">
-          <dt>Coactivation</dt>
-          <dd>{candidate.coactivationScore.toFixed(2)}</dd>
+          <dt>Structural reach</dt>
+          <dd>
+            {candidate.withinStructuralReach == null
+              ? "—"
+              : candidate.withinStructuralReach
+                ? "Yes"
+                : "No"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Source out / limit</dt>
+          <dd>
+            {candidate.sourceOutgoingCount ?? "—"} / {candidate.maxOutgoingLimit ?? "—"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Target in / limit</dt>
+          <dd>
+            {candidate.targetIncomingCount ?? "—"} / {candidate.maxIncomingLimit ?? "—"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Total synapses / limit</dt>
+          <dd>
+            {candidate.totalSynapseCount ?? "—"} / {candidate.maxTotalSynapsesLimit ?? "—"}
+          </dd>
         </div>
         <div className="status-row">
           <dt>Created</dt>

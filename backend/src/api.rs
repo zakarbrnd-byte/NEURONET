@@ -99,7 +99,7 @@ async fn refresh_age(state: &AppState) {
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.8",
+        version: "0.8.1",
         age_seconds: state.started_at.elapsed().as_secs(),
     })
 }
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint_reports_version_0_8() {
+    async fn health_endpoint_reports_version_0_8_1() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.8");
+        assert_eq!(json["version"], "0.8.1");
         assert!(json["ageSeconds"].as_u64().is_some());
     }
 

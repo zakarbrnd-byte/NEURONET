@@ -5,29 +5,33 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.8 — Autonomous Sensory Environment** |
+| **Current version** | **0.8.1 — Autonomous Observation Stabilization** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.8 Autonomous Sensory Environment
+## Current Version — 0.8.1 Autonomous Observation Stabilization
 
-**Version 0.8 supplies continuous, backend-owned sensory input** so ordinary
-tissue activity does not require repetitive manual electrode stimulation.
+**Stabilization patch on 0.8.** Continuous Run no longer pauses on quiet ticks.
+Balanced sensory patterns can produce evidence-based synapse birth within a
+documented 300-tick calibration window without early pruning collapse.
 
-Flow:
+Verification marker: **Autonomous Observation Stabilization · Version 0.8.1**  
+Health: **0.8.1**
+
+See [`docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md`](docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md).
+
+### Prior: 0.8 Autonomous Sensory Environment
+
+Continuous backend-owned sensory input:
 
 ```text
 Environment → Sensory Event → Receptor → Neural Network
 ```
 
-Manual long-press / inspector stimulation remains available as a **Laboratory
-Electrode** tool and is labeled separately from receptor input.
-
-This is a deterministic virtual environment — not real vision, hearing, touch,
-perception, or cognition.
+Laboratory Electrode remains distinct from receptor input.
 
 See [`docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md).
 
@@ -99,5 +103,5 @@ npm test
 | Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
 | Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-Verification marker: **Autonomous Sensory Environment · Version 0.8**  
-Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.8
+Verification marker: **Autonomous Observation Stabilization · Version 0.8.1**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.8.1

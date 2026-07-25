@@ -83,10 +83,10 @@ impl EnvironmentConfig {
             background_strength_mv: 2.0,
             pattern_a_enabled: true,
             pattern_b_enabled: true,
-            pattern_a_interval_ticks: 24,
-            pattern_b_interval_ticks: 36,
+            pattern_a_interval_ticks: 16,
+            pattern_b_interval_ticks: 18,
             pattern_a_first_tick: 16,
-            pattern_b_first_tick: 28,
+            pattern_b_first_tick: 22,
             maximum_events_per_tick: 6,
             event_history_limit: MAX_ENVIRONMENT_HISTORY,
         }
@@ -1011,9 +1011,11 @@ fn initial_patterns(config: &EnvironmentConfig) -> Vec<SensoryPattern> {
                     magnitude_mv: 16.0,
                 },
                 PatternStep {
+                    // Fire NEURON-001 after NEURON-002 to build reverse-pair
+                    // coactivation (002→001) for a new in-reach synapse.
                     offset_ticks: 2,
                     receptor_id: "RECEPTOR-A".into(),
-                    magnitude_mv: 6.0,
+                    magnitude_mv: 16.0,
                 },
             ],
             repetition_interval_ticks: config.pattern_b_interval_ticks,
