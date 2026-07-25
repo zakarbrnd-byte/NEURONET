@@ -36,11 +36,19 @@ Fixed excitatory weights:
 
 NEURON-005 needs converging input from both 003 and 004.
 
+## Direct node interaction
+
+- **Tap** a neuron to open the inspector (no signal).
+- **Long-press** (~500 ms) a neuron to inject **+5 mV** through the backend.
+- In the inspector: **Stimulate +5 mV**, **Strong Stimulus +20 mV**, or **Close**.
+
+This is labeled **direct electrode-style stimulation**. It is not natural touch perception. Future versions may route input through sensory receptor nodes.
+
 ## Reproduce the cascade
 
 1. Reset Network
-2. Select NEURON-001
-3. Inject Strong Signal (`+20 mV`)
+2. Tap NEURON-001 to open the inspector
+3. Strong Stimulus +20 mV
 4. Step One Tick repeatedly
 
 Expected discrete progression:
