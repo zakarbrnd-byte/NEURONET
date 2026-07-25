@@ -33,7 +33,10 @@ export interface WeightHistoryEntry {
   weight: number;
 }
 
-/** Living synapse — first-class biological object (0.6B). */
+export type PruningStatus = "stable" | "monitoring" | "atRisk" | "protected";
+export type CandidateStatus = "observing" | "eligible" | "maturing" | "blocked";
+
+/** Living synapse — first-class biological object (0.6B + pruning observation 0.6C). */
 export interface SynapseSnapshot {
   id: string;
   sourceNeuronId: string;
@@ -48,6 +51,52 @@ export interface SynapseSnapshot {
   creationTick: number;
   weightHistory: WeightHistoryEntry[];
   lastWeightDelta: number;
+  pruningRisk: number;
+  inactivityTicks: number;
+  lowWeightTicks: number;
+  lowHealthTicks: number;
+  protectedUntilTick: number;
+  pruningStatus: PruningStatus;
+  pruningReasons: string[];
+}
+
+export interface StructuralConfigSummary {
+  enabled: boolean;
+  evaluationIntervalTicks: number;
+  maxCandidateDistance: number;
+  minimumCoactivationScore: number;
+  candidateMaturationTicks: number;
+  pruningWeightThreshold: number;
+  pruningHealthThreshold: number;
+  pruningInactivityTicks: number;
+  pruningGraceTicks: number;
+  maxCandidates: number;
+}
+
+/** Prospective connection — observation only (0.6C does not create synapses). */
+export interface GrowthCandidate {
+  id: string;
+  sourceNeuronId: string;
+  targetNeuronId: string;
+  proposedConnectionType: SynapseType;
+  distance: number;
+  coactivationScore: number;
+  structuralCompatibility: number;
+  readiness: number;
+  status: CandidateStatus;
+  createdTick: number;
+  lastEvaluatedTick: number;
+  maturationTicks: number;
+  supportingReasons: string[];
+  blockingReasons: string[];
+}
+
+export interface StructuralSnapshot {
+  config: StructuralConfigSummary;
+  growthCandidates: GrowthCandidate[];
+  latestEvaluationTick: number | null;
+  candidateCount: number;
+  atRiskSynapseCount: number;
 }
 
 export interface TissueInfo {
@@ -64,6 +113,7 @@ export interface NetworkSnapshot {
   neurons: NeuronSnapshot[];
   synapses: SynapseSnapshot[];
   tissue: TissueInfo;
+  structural: StructuralSnapshot;
 }
 
 export interface PropagationTrace {
@@ -91,6 +141,11 @@ export interface NetworkEvent {
   sourceNeuronId?: string;
   targetNeuronId?: string;
   amountMv?: number;
+  entityId?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  readinessOrRisk?: number;
+  reasonCodes?: string[];
   message: string;
 }
 
@@ -104,12 +159,58 @@ export type ConnectionStatus = "connected" | "connecting" | "unavailable";
 
 export type ElectricalState = "Resting" | "Depolarized" | "Fired" | "Refractory";
 
+export interface TimelineStructuralNote {
+  type: string;
+  entityId?: string;
+  sourceNeuronId?: string;
+  targetNeuronId?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  readinessOrRisk?: number;
+  reasonCodes: string[];
+  message: string;
+}
+
 export interface TimelineEntry {
   tick: number;
   firedNeuronIds: string[];
   propagations: PropagationTrace[];
   depolarizedCount: number;
   summary: string;
+  structuralNotes?: TimelineStructuralNote[];
+}
+
+export function shortNeuronId(id: string): string {
+  return id.replace("NEURON-", "N-");
+}
+
+export function isStructuralEventType(type: string): boolean {
+  return (
+    type.startsWith("growth_candidate_") || type.startsWith("synapse_pruning_")
+  );
+}
+
+export function structuralEventPlainSummary(event: NetworkEvent): string {
+  const source = event.sourceNeuronId ? shortNeuronId(event.sourceNeuronId) : "?";
+  const target = event.targetNeuronId ? shortNeuronId(event.targetNeuronId) : "?";
+  switch (event.type) {
+    case "growth_candidate_observed":
+      return `A possible ${source} → ${target} synapse is being observed.`;
+    case "growth_candidate_eligible":
+      return `A possible ${source} → ${target} synapse became eligible.`;
+    case "growth_candidate_maturing":
+      return `A possible ${source} → ${target} synapse entered maturation after repeated coactivation within structural reach.`;
+    case "growth_candidate_weakened":
+      return `Growth candidate ${source} → ${target} weakened as evidence fell.`;
+    case "synapse_pruning_monitored":
+      return `Synapse ${source} → ${target} is being monitored for pruning risk.`;
+    case "synapse_pruning_risk_increased":
+      return `Pruning risk increased for synapse ${source} → ${target}.`;
+    case "synapse_pruning_risk_decreased":
+      return `Pruning risk decreased for synapse ${source} → ${target}.`;
+    default:
+      return event.message;
+  }
 }
 
 export function electricalState(neuron: NeuronSnapshot): ElectricalState {
@@ -127,10 +228,6 @@ export function electricalState(neuron: NeuronSnapshot): ElectricalState {
 
 export function distanceToThresholdMv(neuron: NeuronSnapshot): number {
   return neuron.thresholdMv - neuron.membranePotentialMv;
-}
-
-export function shortNeuronId(id: string): string {
-  return id.replace("NEURON-", "N-");
 }
 
 export function formatAge(seconds: number): string {

@@ -4,8 +4,8 @@
 
 | | |
 | --- | --- |
-| **Current version** | **0.6B Synaptic Plasticity** |
-| **Next** | **0.6C Structural Plasticity** |
+| **Current version** | **0.6C Structural Plasticity Foundations** |
+| **Next** | **0.6D Structural Growth (create synapses)** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 Before implementing any item, answer:
@@ -30,7 +30,7 @@ Digital Cell → Biological Neuron → Neural Core → Backend Network → Missi
 | **Scientific objective** | Fixed positions, regions, layers, cell types, morphology, E/I. |
 | **Observable outcome** | Tissue View + Biology panel + tissue header. |
 
-### 0.6B Synaptic Plasticity ✅ ← CURRENT
+### 0.6B Synaptic Plasticity ✅
 
 | | |
 | --- | --- |
@@ -38,17 +38,29 @@ Digital Cell → Biological Neuron → Neural Core → Backend Network → Missi
 | **Scientific objective** | Usage, health, stability, age, deterministic Hebbian weight change, history. |
 | **Observable outcome** | Synapse Inspector; weight-driven stroke thickness; strengthen/weaken cues. |
 
+### 0.6C Structural Plasticity Foundations ✅ ← CURRENT
+
+| | |
+| --- | --- |
+| **Purpose** | Observe where future growth or pruning *could* occur. |
+| **Scientific objective** | Growth candidates, coactivation evidence, pruning risk — without topology change. |
+| **Observable outcome** | Development mode; candidate inspector; pruning fields; structured structural events. |
+
+**Explicit non-goal of 0.6C:** create or delete synapses.
+
 ---
 
 ## Next
 
-### 0.6C Structural Plasticity ← NEXT
+### 0.6D Structural Growth ← NEXT
 
 | | |
 | --- | --- |
-| **Purpose** | Allow the wiring diagram itself to change. |
-| **Scientific objective** | Growth/pruning metaphors and birth of new synapses as inspectable processes. |
-| **Observable outcome** | New or removed synapses appear in snapshots and traces — not silent UI edits. |
+| **Purpose** | Allow mature candidates to become real synapses under backend rules. |
+| **Scientific objective** | Deterministic synapse birth from maturing candidates with inspectable events. |
+| **Observable outcome** | New synapses appear in snapshots/traces — never as silent UI edits. |
+
+Pruning (actual deletion) may follow in a later structural milestone after growth is stable.
 
 **Out of scope until later milestones:** body, prediction, memory, learning engines, cognition.
 

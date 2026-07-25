@@ -5,11 +5,13 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
+  GrowthCandidate,
   NeuronSnapshot,
   PropagationTrace,
   SynapseSnapshot,
 } from "../../types/neural";
 import { electricalState, shortNeuronId } from "../../types/neural";
+import type { TissueDisplayMode } from "../../types/ui";
 import {
   HIT_TARGET_RADIUS,
   LONG_PRESS_MS,
@@ -19,8 +21,12 @@ import {
 interface TissueViewProps {
   neurons: NeuronSnapshot[];
   synapses: SynapseSnapshot[];
+  growthCandidates?: GrowthCandidate[];
   selectedNeuronId: string | null;
   selectedSynapseId?: string | null;
+  selectedCandidateId?: string | null;
+  displayMode: TissueDisplayMode;
+  onDisplayModeChange: (mode: TissueDisplayMode) => void;
   activePropagations: PropagationTrace[];
   reducedMotion: boolean;
   interactionDisabled: boolean;
@@ -28,6 +34,7 @@ interface TissueViewProps {
   flashedNeuronId: string | null;
   onSelectNeuron: (neuronId: string) => void;
   onSelectSynapse?: (synapseId: string) => void;
+  onSelectCandidate?: (candidateId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
 }
@@ -53,6 +60,12 @@ interface GestureState {
 
 const WIDTH = 100;
 const HEIGHT = 100;
+
+const DISPLAY_MODES: Array<{ id: TissueDisplayMode; label: string }> = [
+  { id: "activity", label: "Activity" },
+  { id: "structure", label: "Structure" },
+  { id: "development", label: "Development" },
+];
 
 function toPoint(neuron: NeuronSnapshot): Point {
   return {
@@ -85,8 +98,12 @@ function axonPath(from: Point, to: Point, fromRadius: number, toRadius: number):
 export function TissueView({
   neurons,
   synapses,
+  growthCandidates = [],
   selectedNeuronId,
   selectedSynapseId = null,
+  selectedCandidateId = null,
+  displayMode,
+  onDisplayModeChange,
   activePropagations,
   reducedMotion,
   interactionDisabled,
@@ -94,6 +111,7 @@ export function TissueView({
   flashedNeuronId,
   onSelectNeuron,
   onSelectSynapse,
+  onSelectCandidate,
   onLongPressStimulate,
   onPressVisualChange,
 }: TissueViewProps) {
@@ -214,14 +232,42 @@ export function TissueView({
     }
   };
 
+  const showPulse = displayMode === "activity";
+  const emphasizeMorphology = displayMode === "structure" || displayMode === "development";
+  const showDevelopment = displayMode === "development";
+
   return (
     <div
-      className="tissue-view"
+      className={`tissue-view mode-${displayMode}`}
       data-testid="tissue-view"
+      data-display-mode={displayMode}
       onClickCapture={onClickCapture}
     >
+      <div
+        className="segmented tissue-display-modes"
+        role="tablist"
+        aria-label="Tissue display mode"
+        data-testid="tissue-display-mode"
+      >
+        {DISPLAY_MODES.map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            role="tab"
+            aria-selected={displayMode === mode.id}
+            className={`segmented-item ${displayMode === mode.id ? "is-active" : ""}`}
+            onClick={() => onDisplayModeChange(mode.id)}
+            data-testid={`tissue-mode-${mode.id}`}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
       <p className="tissue-hint">
         Fixed cell positions from the backend · Tap: Inspect · Hold: Stimulate +5 mV
+        {showDevelopment
+          ? " · Dashed paths are growth candidates (not synapses)"
+          : ""}
       </p>
       <svg
         className="tissue-canvas"
@@ -253,6 +299,15 @@ export function TissueView({
           >
             <path d="M1,0 L1,6" className="tissue-marker-inhibitory" />
           </marker>
+          <pattern
+            id="pruning-warning-pattern"
+            width="2"
+            height="2"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width="1" height="2" fill="currentColor" opacity="0.85" />
+          </pattern>
         </defs>
 
         {synapses.map((synapse) => {
@@ -264,7 +319,7 @@ export function TissueView({
 
           const inhibitory = synapse.type === "inhibitory";
           const edgeKey = `${synapse.sourceNeuronId}->${synapse.targetNeuronId}`;
-          const pulse = pulseByEdge.get(edgeKey);
+          const pulse = showPulse ? pulseByEdge.get(edgeKey) : undefined;
           const d = axonPath(
             from,
             to,
@@ -278,13 +333,25 @@ export function TissueView({
               : synapse.lastWeightDelta < 0
                 ? "synapse-weakening"
                 : "";
-          const strokeWidth = Math.max(0.45, Math.min(1.8, synapse.weight / 14));
+          const strokeWidth = Math.max(
+            0.45,
+            Math.min(1.8, synapse.weight / 14) * (emphasizeMorphology ? 1.15 : 1),
+          );
+          const atRisk =
+            showDevelopment &&
+            (synapse.pruningStatus === "atRisk" || synapse.pruningRisk >= 0.55);
+          const monitoring =
+            showDevelopment && synapse.pruningStatus === "monitoring" && !atRisk;
+          const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
 
           return (
             <g
               key={synapse.id}
-              className={`tissue-axon-group ${selected ? "is-selected" : ""} ${strengthClass}`}
+              className={`tissue-axon-group ${selected ? "is-selected" : ""} ${strengthClass} ${
+                atRisk ? "is-pruning-risk" : ""
+              } ${monitoring ? "is-pruning-monitor" : ""}`}
               data-testid={`tissue-synapse-${synapse.id}`}
+              data-pruning-status={synapse.pruningStatus}
             >
               <path
                 d={d}
@@ -315,6 +382,30 @@ export function TissueView({
                 fill="none"
                 pointerEvents="none"
               />
+              {atRisk ? (
+                <>
+                  <path
+                    d={d}
+                    className="tissue-axon-risk-overlay"
+                    strokeWidth={strokeWidth + 1.1}
+                    fill="none"
+                    strokeDasharray="1.2 1.2"
+                    pointerEvents="none"
+                    data-testid={`pruning-risk-marker-${synapse.id}`}
+                  />
+                  <g
+                    className="pruning-risk-badge"
+                    transform={`translate(${mid.x} ${mid.y - 2.2})`}
+                    pointerEvents="none"
+                    data-testid={`pruning-risk-badge-${synapse.id}`}
+                  >
+                    <rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx="0.6" />
+                    <text y="1.1" textAnchor="middle">
+                      !
+                    </text>
+                  </g>
+                </>
+              ) : null}
               {pulse && !reducedMotion ? (
                 <circle r="1.2" className="tissue-pulse-dot">
                   <animateMotion dur="0.7s" repeatCount="1" path={d} />
@@ -335,6 +426,72 @@ export function TissueView({
           );
         })}
 
+        {showDevelopment
+          ? growthCandidates.map((candidate) => {
+              const source = byId.get(candidate.sourceNeuronId);
+              const target = byId.get(candidate.targetNeuronId);
+              const from = positions.get(candidate.sourceNeuronId);
+              const to = positions.get(candidate.targetNeuronId);
+              if (!source || !target || !from || !to) return null;
+              const d = axonPath(
+                from,
+                to,
+                source.somaRadius * WIDTH,
+                target.somaRadius * WIDTH,
+              );
+              const selected = selectedCandidateId === candidate.id;
+              const opacity = 0.25 + candidate.readiness * 0.7;
+              const strokeWidth = 0.35 + candidate.readiness * 1.2;
+              const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+
+              return (
+                <g
+                  key={candidate.id}
+                  className={`tissue-candidate-group ${selected ? "is-selected" : ""}`}
+                  data-testid={`tissue-candidate-${candidate.id}`}
+                  data-candidate="true"
+                >
+                  <path
+                    d={d}
+                    className="tissue-candidate-hit"
+                    strokeWidth={Math.max(3.5, strokeWidth + 2.2)}
+                    fill="none"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Inspect growth candidate ${candidate.id}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectCandidate?.(candidate.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelectCandidate?.(candidate.id);
+                      }
+                    }}
+                  />
+                  <path
+                    d={d}
+                    className="tissue-candidate-path"
+                    strokeWidth={strokeWidth}
+                    strokeOpacity={opacity}
+                    strokeDasharray="2.2 1.6"
+                    fill="none"
+                    pointerEvents="none"
+                  />
+                  <text
+                    x={mid.x}
+                    y={mid.y - 1.5}
+                    className="tissue-candidate-label"
+                    pointerEvents="none"
+                  >
+                    candidate
+                  </text>
+                </g>
+              );
+            })
+          : null}
+
         {neurons.map((neuron) => {
           const point = positions.get(neuron.id)!;
           const soma = neuron.somaRadius * WIDTH;
@@ -344,6 +501,7 @@ export function TissueView({
           const flashed = flashedNeuronId === neuron.id;
           const state = electricalState(neuron);
           const inhibitory = neuron.cellType === "inhibitory";
+          const axonReach = neuron.axonLength * WIDTH;
 
           return (
             <g
@@ -365,6 +523,13 @@ export function TissueView({
                 className="tissue-hit"
                 fill="transparent"
               />
+              {emphasizeMorphology ? (
+                <circle
+                  r={axonReach}
+                  className="tissue-axon-reach"
+                  pointerEvents="none"
+                />
+              ) : null}
               <circle r={dendrite} className="tissue-dendrite" pointerEvents="none" />
               <circle r={soma} className="tissue-soma" pointerEvents="none" />
               <text y={soma + 3.5} className="tissue-label" pointerEvents="none">
@@ -377,6 +542,21 @@ export function TissueView({
           );
         })}
       </svg>
+
+      {showDevelopment ? (
+        <ul className="tissue-dev-legend" data-testid="tissue-development-legend">
+          <li>
+            <span className="legend-swatch legend-solid" /> Solid path: existing synapse
+          </li>
+          <li>
+            <span className="legend-swatch legend-dashed" /> Dashed path: growth candidate
+          </li>
+          <li>
+            <span className="legend-swatch legend-warning">!</span> Warning marker: pruning risk
+          </li>
+          <li>No structural change occurs in Version 0.6C</li>
+        </ul>
+      ) : null}
     </div>
   );
 }

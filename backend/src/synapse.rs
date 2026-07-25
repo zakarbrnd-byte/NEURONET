@@ -238,8 +238,7 @@ mod tests {
     #[test]
     fn hebbian_increase_respects_maximum() {
         let mut synapse =
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", MAX_WEIGHT, 0)
-                .unwrap();
+            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", MAX_WEIGHT, 0).unwrap();
         synapse.apply_hebbian_increase(1);
         assert_eq!(synapse.weight, MAX_WEIGHT);
         assert_eq!(synapse.last_weight_delta, 0.0);
@@ -248,8 +247,7 @@ mod tests {
     #[test]
     fn idle_decay_respects_minimum() {
         let mut synapse =
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", MIN_WEIGHT, 0)
-                .unwrap();
+            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", MIN_WEIGHT, 0).unwrap();
         for tick in 1..=20 {
             synapse.advance_age();
             synapse.apply_idle_decay(tick);

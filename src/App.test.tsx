@@ -65,6 +65,13 @@ function makeSynapse(
         : []),
     ],
     lastWeightDelta: id === "SYNAPSE-001" ? 0.1 : 0,
+    pruningRisk: 0,
+    inactivityTicks: 0,
+    lowWeightTicks: 0,
+    lowHealthTicks: 0,
+    protectedUntilTick: 10,
+    pruningStatus: "protected" as const,
+    pruningReasons: ["grace_period"],
   };
 }
 
@@ -89,9 +96,53 @@ const snapshot = {
     makeSynapse("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.2, "excitatory"),
     makeSynapse("SYNAPSE-002", "NEURON-002", "NEURON-003", 16, "excitatory"),
     makeSynapse("SYNAPSE-003", "NEURON-002", "NEURON-004", 16, "excitatory"),
-    makeSynapse("SYNAPSE-004", "NEURON-003", "NEURON-005", 8, "excitatory"),
+    {
+      ...makeSynapse("SYNAPSE-004", "NEURON-003", "NEURON-005", 8, "excitatory"),
+      pruningStatus: "atRisk" as const,
+      pruningRisk: 0.72,
+      inactivityTicks: 20,
+      lowWeightTicks: 4,
+      lowHealthTicks: 3,
+      protectedUntilTick: 10,
+      pruningReasons: ["low_weight", "prolonged_inactivity"],
+    },
     makeSynapse("SYNAPSE-005", "NEURON-004", "NEURON-005", 8, "inhibitory"),
   ],
+  structural: {
+    config: {
+      enabled: true,
+      evaluationIntervalTicks: 5,
+      maxCandidateDistance: 0.55,
+      minimumCoactivationScore: 2,
+      candidateMaturationTicks: 3,
+      pruningWeightThreshold: 6,
+      pruningHealthThreshold: 0.55,
+      pruningInactivityTicks: 12,
+      pruningGraceTicks: 10,
+      maxCandidates: 8,
+    },
+    growthCandidates: [
+      {
+        id: "CANDIDATE-NEURON-001-NEURON-005",
+        sourceNeuronId: "NEURON-001",
+        targetNeuronId: "NEURON-005",
+        proposedConnectionType: "excitatory" as const,
+        distance: 0.76,
+        coactivationScore: 3.5,
+        structuralCompatibility: 0.42,
+        readiness: 0.61,
+        status: "eligible" as const,
+        createdTick: 10,
+        lastEvaluatedTick: 15,
+        maturationTicks: 1,
+        supportingReasons: ["repeated_coactivation", "within_structural_reach"],
+        blockingReasons: [],
+      },
+    ],
+    latestEvaluationTick: 15,
+    candidateCount: 1,
+    atRiskSynapseCount: 1,
+  },
 };
 
 const stepTrace = {
@@ -141,7 +192,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6B", ageSeconds: 12 })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6C", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -172,7 +223,7 @@ describe("Mission Control page", () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
     vi.mocked(neuralApi.getHealth).mockResolvedValue({
       status: "ok",
-      version: "0.6B",
+      version: "0.6C",
       ageSeconds: 12,
     });
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
@@ -194,7 +245,7 @@ describe("Mission Control page", () => {
   it("renders MissionControl as the sole app layout", async () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
-    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent("Synapses 0.6B");
+    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent("Version 0.6C");
   });
 
   it("opens Synapse Inspector when a connection is selected", async () => {
@@ -264,8 +315,152 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.6B")).toBeInTheDocument();
+    expect(within(header).getByText("0.6C")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
+  });
+
+  it("exposes Development display mode with distinct candidate paths from backend data", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    expect(screen.getByTestId("tissue-display-mode")).toBeInTheDocument();
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("tissue-view")).toHaveAttribute(
+      "data-display-mode",
+      "development",
+    );
+    const candidate = screen.getByTestId(
+      "tissue-candidate-CANDIDATE-NEURON-001-NEURON-005",
+    );
+    expect(candidate).toBeInTheDocument();
+    expect(candidate.querySelector(".tissue-candidate-path")).toHaveAttribute(
+      "stroke-dasharray",
+    );
+    expect(screen.getByTestId("tissue-synapse-SYNAPSE-001")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-development-legend")).toHaveTextContent(
+      "Dashed path: growth candidate",
+    );
+  });
+
+  it("opens Growth Candidate inspector without a create button", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    await user.click(
+      screen.getByLabelText("Inspect growth candidate CANDIDATE-NEURON-001-NEURON-005"),
+    );
+    expect(await screen.findByRole("dialog", { name: "Growth Candidate" })).toBeVisible();
+    expect(screen.getByTestId("growth-candidate-panel")).toHaveTextContent("Readiness");
+    expect(screen.getByTestId("candidate-readiness")).toHaveTextContent("61%");
+    expect(screen.getByTestId("candidate-supporting-reasons")).toHaveTextContent(
+      "repeated coactivation",
+    );
+    expect(screen.getByTestId("candidate-observe-only")).toHaveTextContent(
+      "does not create synapses",
+    );
+    expect(screen.queryByRole("button", { name: /create synapse/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps at-risk synapses visible with a non-color-only risk marker", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("tissue-synapse-SYNAPSE-004")).toBeInTheDocument();
+    expect(screen.getByTestId("pruning-risk-badge-SYNAPSE-004")).toHaveTextContent("!");
+    expect(screen.getByTestId("pruning-risk-marker-SYNAPSE-004")).toBeInTheDocument();
+  });
+
+  it("shows pruning state in the Synapse inspector Development section", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByLabelText("Inspect synapse SYNAPSE-004"));
+    expect(await screen.findByTestId("synapse-development-section")).toBeVisible();
+    expect(screen.getByTestId("synapse-pruning-status")).toHaveTextContent("atRisk");
+    expect(screen.getByTestId("synapse-pruning-risk")).toHaveTextContent("72%");
+    expect(screen.getByTestId("synapse-pruning-reasons")).toHaveTextContent("low weight");
+  });
+
+  it("uses structured backend events for Development timeline filters", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([
+      {
+        id: "evt-struct-1",
+        timestamp: "2026-01-01T00:00:00Z",
+        networkTick: 40,
+        type: "growth_candidate_maturing",
+        sourceNeuronId: "NEURON-001",
+        targetNeuronId: "NEURON-003",
+        entityId: "CANDIDATE-NEURON-001-NEURON-003",
+        previousStatus: "eligible",
+        newStatus: "maturing",
+        readinessOrRisk: 0.8,
+        reasonCodes: ["repeated_coactivation", "within_structural_reach"],
+        message: "maturing",
+      },
+    ]);
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    await user.click(screen.getByTestId("timeline-filter-maturation"));
+    expect(await screen.findByTestId("timeline-structural-item")).toHaveTextContent(
+      "entered maturation",
+    );
+    expect(screen.getByTestId("timeline-structural-item")).toHaveTextContent(
+      "repeated_coactivation",
+    );
+  });
+
+  it("switching tissue display modes does not call backend mutate endpoints", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    const callsBefore = {
+      step: vi.mocked(neuralApi.stepNetwork).mock.calls.length,
+      reset: vi.mocked(neuralApi.resetNetwork).mock.calls.length,
+      inject: vi.mocked(neuralApi.injectSignal).mock.calls.length,
+    };
+    await user.click(screen.getByTestId("tissue-mode-structure"));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    await user.click(screen.getByTestId("tissue-mode-activity"));
+    expect(vi.mocked(neuralApi.stepNetwork).mock.calls.length).toBe(callsBefore.step);
+    expect(vi.mocked(neuralApi.resetNetwork).mock.calls.length).toBe(callsBefore.reset);
+    expect(vi.mocked(neuralApi.injectSignal).mock.calls.length).toBe(callsBefore.inject);
+  });
+
+  it("renders no candidate paths when backend sends none", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue({
+      ...snapshot,
+      structural: {
+        ...snapshot.structural,
+        growthCandidates: [],
+        candidateCount: 0,
+      },
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(
+      screen.queryByTestId("tissue-candidate-CANDIDATE-NEURON-001-NEURON-005"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the mission shell inside 100dvh and shows backend unavailable clearly", async () => {
+    await renderConnectedApp();
+    expect(screen.getByTestId("mission-control")).toHaveAttribute(
+      "data-layout",
+      "viewport-locked",
+    );
+    vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(false);
+    const { unmount } = render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(/Backend unavailable|No VITE_API_BASE_URL/i).length,
+      ).toBeGreaterThan(0),
+    );
+    unmount();
   });
 });

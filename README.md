@@ -5,33 +5,41 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.6B — Synaptic Plasticity** |
+| **Current version** | **0.6C — Structural Plasticity Foundations** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.6B Synaptic Plasticity
+## Current Version — 0.6C Structural Plasticity Foundations
 
-**Synapses are now first-class biological objects.**  
-Connections are living structures — not passive lines.
+**Version 0.6C observes structural readiness and pruning risk.**  
+**It does not create or delete synapses.**
 
-Every synapse owns:
+The backend evaluates:
 
-- weight (signal strength in mV)
-- type (excitatory / inhibitory)
-- usage count
-- last activated tick
-- stability (0–1)
-- health (0–1)
-- age (ticks)
-- creation tick
-- short weight history
+- which neuron pairs are plausible growth candidates
+- which existing synapses are stable, monitoring, or at risk
+- why those classifications were made (structured reason codes)
 
-Deterministic Hebbian adaptation strengthens a synapse when its source delivers and its target fires on the next tick. Unused synapses slowly weaken. No randomness.
+Tissue View adds a frontend-only display mode selector:
 
-**Not included:** new neurons, pruning, growth, DNA mutation, memory, body, cognition.
+- **Activity** — firing and propagation emphasis
+- **Structure** — soma, dendritic fields, axons, synapse strength
+- **Development** — dashed growth candidates + pruning-risk markers
+
+Mission Control never decides that a connection should grow or be pruned.
+
+**Not included:** synapse creation/deletion, axon geometry growth over time, neuron birth/death, DNA mutation, randomness, body, memory, cognition.
+
+See [`docs/experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](docs/experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
+
+---
+
+## Prior: 0.6B Synaptic Plasticity
+
+Synapses remain first-class living objects (weight, usage, health, stability, age, Hebbian / idle adaptation). 0.6C adds observational structural state on top of that model.
 
 ---
 
@@ -40,15 +48,16 @@ Deterministic Hebbian adaptation strengthens a synapse when its source delivers 
 | View | Role |
 | --- | --- |
 | **Network View** | Schematic graph. Tap a neuron or a synapse. Stroke thickness follows weight. |
-| **Tissue View** | Fixed backend positions, soma/dendrite morphology, curved axons, E/I endings. |
+| **Tissue View** | Fixed backend positions, morphology, E/I endings, Development candidates. |
 
-Tap a connection/axon → **Synapse Inspector** (Weight, Usage, Health, Age, Stability, Type, Last Used, history).
+Tap a connection/axon → **Synapse Inspector** (includes Development / pruning observation).  
+Tap a dashed candidate → **Growth Candidate Inspector** (observation only).
 
 ---
 
 ## Architecture
 
-- The **Rust backend** owns neurons, **living synapses**, membrane potentials, tissue geometry, plasticity, ticks, and events.
+- The **Rust backend** owns neurons, living synapses, tissue geometry, synaptic plasticity, **structural development state**, ticks, and events.
 - **Mission Control** observes snapshots and step traces only.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -60,7 +69,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Five neurons with living synapses `SYNAPSE-001`…`SYNAPSE-005`.  
 NEURON-004 / SYNAPSE-005 are inhibitory.
 
-Reset restores identical tissue and baseline synapse state.  
+Reset restores identical tissue and baseline synapse state, clears growth candidates and pair history, and restores stable/protected pruning observation defaults.  
 Age of the tissue process continues across reset.
 
 ## Run locally
@@ -80,26 +89,18 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173/NEURONET/`
-
-## Tests and builds
+### Tests
 
 ```bash
 npm test
-npm run build
-cd backend && cargo test && cargo build --release
 ```
 
-## Public deployment
+## Deployment
 
-- Frontend (GitHub Pages): https://zakarbrnd-byte.github.io/NEURONET/
-- Backend (Render): https://neuronet-backend-qphx.onrender.com
+| Surface | URL |
+| --- | --- |
+| Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
+| Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-## API
-
-- `GET /api/health` → version `0.6B`, `ageSeconds`
-- `GET /api/network` → `neurons`, **`synapses`**, `tissue`
-- `GET /api/events`
-- `POST /api/neurons/:id/signals`
-- `POST /api/network/step` → step trace with `synapseId` on propagations
-- `POST /api/network/reset`
+Verification marker: **Structural Plasticity Foundations · Version 0.6C**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.6C

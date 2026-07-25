@@ -115,6 +115,52 @@ export function SynapsePanel({ synapse }: SynapsePanelProps) {
           </ol>
         )}
       </section>
+
+      <section
+        className="synapse-development"
+        aria-label="Development pruning observation"
+        data-testid="synapse-development-section"
+      >
+        <h3 className="help-heading">Development</h3>
+        <p className="hint">Pruning risk is observed only — synapses are not deleted in 0.6C.</p>
+        <dl className="status-list panel-metrics">
+          <div className="status-row">
+            <dt>Pruning status</dt>
+            <dd className="capitalize" data-testid="synapse-pruning-status">
+              {synapse.pruningStatus}
+            </dd>
+          </div>
+          <div className="status-row">
+            <dt>Pruning risk</dt>
+            <dd data-testid="synapse-pruning-risk">{pct(synapse.pruningRisk)}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Inactivity</dt>
+            <dd>{synapse.inactivityTicks} ticks</dd>
+          </div>
+          <div className="status-row">
+            <dt>Low-weight duration</dt>
+            <dd>{synapse.lowWeightTicks} ticks</dd>
+          </div>
+          <div className="status-row">
+            <dt>Low-health duration</dt>
+            <dd>{synapse.lowHealthTicks} ticks</dd>
+          </div>
+          <div className="status-row">
+            <dt>Protected until</dt>
+            <dd>Tick {synapse.protectedUntilTick}</dd>
+          </div>
+        </dl>
+        {synapse.pruningReasons.length > 0 ? (
+          <ul className="reason-code-list" data-testid="synapse-pruning-reasons">
+            {synapse.pruningReasons.map((reason) => (
+              <li key={reason}>{reason.replaceAll("_", " ")}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint">No pruning reasons.</p>
+        )}
+      </section>
     </div>
   );
 }

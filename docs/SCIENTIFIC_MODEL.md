@@ -35,7 +35,8 @@ Always distinguish:
 | Fatigue / energy fields | Implemented (coarse educational indicators) |
 | Living synapses (usage, health, stability, age) | Implemented (0.6B) |
 | Deterministic Hebbian weight change | Implemented (0.6B, approximation) |
-| Structural plasticity / growth | Future work (0.6C) |
+| Structural readiness / pruning risk observation | Implemented (0.6C, approximation) |
+| Synapse creation / deletion | Future work (0.6D+) |
 | Body / sensors | Future work (0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |
 
@@ -102,11 +103,26 @@ region/layer labels, morphology radii, and mixed E/I synapses:
 NEURON-001 → NEURON-002 → {NEURON-003 (E), NEURON-004 (I)} → NEURON-005
 ```
 
-NEURON-004 is inhibitory; CONNECTION-005 delivers −8 mV when N-004 fires.
+NEURON-004 is inhibitory; SYNAPSE-005 delivers −8 mV when N-004 fires.
 Positions never move. Reset restores the identical geometry.
 
 This demonstrates physical organization plus excitation/inhibition.
 It is **not** cortical tissue and **not** developmental morphogenesis.
+
+---
+
+## Structural plasticity foundations (0.6C)
+
+**Implemented / Approximation**
+
+- Discrete coactivation evidence for directed pairs (same tick or previous→current).
+- Growth candidates with readiness, compatibility, maturation progress, reason codes.
+- Pruning-risk classification for existing synapses (grace-protected; no deletion).
+- Morphology reach uses normalized `axonLength` + `dendriteRadius` in the same space as positions.
+
+**Not implemented:** synapse creation, synapse deletion, axon outgrowth animation, neuron birth/death.
+
+Details: [`experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
 
 ---
 
@@ -126,12 +142,12 @@ It is **not** sensory transduction through receptors.
 
 ## Future: plasticity
 
-**Future work**
-
-| Milestone | Intent |
+| Milestone | Status / Intent |
 | --- | --- |
-| 0.7 Synaptic | Strengthen / weaken existing synapses; Hebbian-style adaptation; connection history |
-| 0.8 Structural | Growth / pruning metaphors; birth of new synapses |
+| 0.6B Synaptic | Implemented — Hebbian / idle weight change on living synapses |
+| 0.6C Structural foundations | Implemented — observe candidates and pruning risk only |
+| 0.6D Structural growth | Future — create synapses from mature candidates |
+| Later pruning | Future — delete synapses from high pruning risk |
 
 Plasticity must remain backend-owned and Mission Control–observable.  
 Do not “learn” by silently editing UI state.

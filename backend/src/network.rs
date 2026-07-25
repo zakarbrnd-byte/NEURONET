@@ -265,12 +265,7 @@ impl NeuralNetwork {
 
         let at_risk = synapses
             .iter()
-            .filter(|s| {
-                matches!(
-                    s.pruning_status,
-                    crate::synapse::PruningStatus::AtRisk
-                )
-            })
+            .filter(|s| matches!(s.pruning_status, crate::synapse::PruningStatus::AtRisk))
             .count();
 
         NetworkSnapshot {
@@ -480,8 +475,7 @@ impl NeuralNetwork {
         }
 
         // Idle decay for synapses that did not activate this tick.
-        let activated: std::collections::HashSet<String> =
-            activated_ids.iter().cloned().collect();
+        let activated: std::collections::HashSet<String> = activated_ids.iter().cloned().collect();
         let mut weaken_events: Vec<(String, String, f64, f64)> = Vec::new();
         for synapse in &mut self.synapses {
             if !activated.contains(&synapse.id) {
@@ -510,12 +504,7 @@ impl NeuralNetwork {
 
         // Structural plasticity foundations (0.6C): observe only — no create/delete.
         let previous = std::mem::take(&mut self.previous_fired);
-        record_coactivations(
-            &mut self.pair_activity,
-            &previous,
-            &fired_ids,
-            self.tick,
-        );
+        record_coactivations(&mut self.pair_activity, &previous, &fired_ids, self.tick);
         self.previous_fired = fired_ids.clone();
 
         let interval = self.structural_config.evaluation_interval_ticks.max(1);
@@ -641,13 +630,7 @@ impl NeuralNetwork {
             event.previous_status,
             event.new_status,
             event.metric,
-            Some(
-                event
-                    .reason_codes
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect(),
-            ),
+            Some(event.reason_codes.into_iter().map(str::to_string).collect()),
             event.message,
         )
     }
@@ -754,8 +737,15 @@ mod tests {
         let snap = network.snapshot();
         assert_eq!(snap.tick, 0);
         assert_eq!(snap.synapses.len(), 5);
-        assert!(snap.neurons.iter().all(|n| n.membrane_potential_mv == -70.0));
-        let s1 = snap.synapses.iter().find(|s| s.id == "SYNAPSE-001").unwrap();
+        assert!(snap
+            .neurons
+            .iter()
+            .all(|n| n.membrane_potential_mv == -70.0));
+        let s1 = snap
+            .synapses
+            .iter()
+            .find(|s| s.id == "SYNAPSE-001")
+            .unwrap();
         assert_eq!(s1.weight, 16.0);
         assert_eq!(s1.usage_count, 0);
         assert_eq!(s1.age, 0);
@@ -802,7 +792,10 @@ mod tests {
         assert!(Synapse::excitatory("BAD", "NEURON-001", "NEURON-001", 5.0, 0).is_err());
         let duplicate =
             Synapse::excitatory("SYNAPSE-DUP", "NEURON-001", "NEURON-002", 16.0, 0).unwrap();
-        assert!(network.add_synapse(duplicate).unwrap_err().contains("duplicate"));
+        assert!(network
+            .add_synapse(duplicate)
+            .unwrap_err()
+            .contains("duplicate"));
     }
 
     #[test]
@@ -1064,19 +1057,19 @@ mod tests {
             network.inject_signal("NEURON-005", 20.0).unwrap();
             network.step();
         }
-        assert!(!network.snapshot().structural.growth_candidates.is_empty()
-            || network.pair_activity_len_for_test() > 0);
+        assert!(
+            !network.snapshot().structural.growth_candidates.is_empty()
+                || network.pair_activity_len_for_test() > 0
+        );
         network.reset();
         let snap = network.snapshot();
         assert!(snap.structural.growth_candidates.is_empty());
         assert_eq!(snap.structural.candidate_count, 0);
         assert_eq!(snap.structural.latest_evaluation_tick, None);
         assert_eq!(network.pair_activity_len_for_test(), 0);
-        assert!(snap
-            .synapses
-            .iter()
-            .all(|s| s.pruning_status == crate::synapse::PruningStatus::Protected
-                || s.pruning_risk == 0.0));
+        assert!(snap.synapses.iter().all(|s| s.pruning_status
+            == crate::synapse::PruningStatus::Protected
+            || s.pruning_risk == 0.0));
     }
 
     #[test]

@@ -1291,3 +1291,140 @@ body {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+/* ========== Structural plasticity foundations (0.6C) ========== */
+
+.tissue-display-modes {
+  flex: 0 0 auto;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.segmented-wrap {
+  flex-wrap: wrap;
+}
+
+.tissue-axon-reach {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  stroke-width: 0.2;
+  stroke-dasharray: 0.8 0.8;
+  opacity: 0.55;
+}
+
+.tissue-candidate-path {
+  stroke: #8a7a4a;
+  stroke-linecap: round;
+}
+
+.tissue-candidate-hit {
+  stroke: transparent;
+  fill: none;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.tissue-candidate-group.is-selected .tissue-candidate-path {
+  stroke: var(--accent);
+}
+
+.tissue-candidate-label {
+  fill: #8a7a4a;
+  font-size: 2px;
+  text-anchor: middle;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tissue-axon-risk-overlay {
+  stroke: #9a6b2f;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.pruning-risk-badge rect {
+  fill: #1c1a14;
+  stroke: #9a6b2f;
+  stroke-width: 0.25;
+}
+
+.pruning-risk-badge text {
+  fill: #f0d7a0;
+  font-size: 2.6px;
+  font-weight: 800;
+}
+
+.tissue-dev-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.legend-solid {
+  background: #7f93a8;
+}
+
+.legend-dashed {
+  background: repeating-linear-gradient(
+    90deg,
+    #8a7a4a 0 4px,
+    transparent 4px 7px
+  );
+}
+
+.legend-warning {
+  width: 12px;
+  height: 12px;
+  line-height: 12px;
+  text-align: center;
+  border: 1px solid #9a6b2f;
+  color: #f0d7a0;
+  background: #1c1a14;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.reason-code-list {
+  margin: 0 0 10px;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.state-badge.state-observing,
+.state-badge.state-eligible,
+.state-badge.state-maturing,
+.state-badge.state-blocked {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.candidate-panel .panel-lede,
+.synapse-development {
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .synapse-strengthening .network-link,
+  .synapse-strengthening .tissue-axon,
+  .synapse-weakening .network-link,
+  .synapse-weakening .tissue-axon {
+    animation: none;
+  }
+}

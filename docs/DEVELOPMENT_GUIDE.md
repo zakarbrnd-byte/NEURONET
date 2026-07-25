@@ -72,11 +72,13 @@ Agent shortcut file: [`../CLAUDE.md`](../CLAUDE.md) (must stay consistent with t
 Backend owns:
 
 - neurons
-- connections
+- living synapses
 - membrane potentials
 - signals
 - propagation
 - tissue structure
+- synaptic plasticity state
+- structural development state (candidates, pruning risk)
 - learning/plasticity state (when those milestones exist)
 - simulation ticks and events
 
@@ -122,6 +124,7 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.6B Synaptic Plasticity**
+**Shipped runtime:** **0.6C Structural Plasticity Foundations**
 
-Do not implement 0.6C growth/pruning, body, or cognition unless explicitly asked.
+0.6C observes growth candidates and pruning risk only.  
+Do not implement synapse create/delete (0.6D+), body, or cognition unless explicitly asked.

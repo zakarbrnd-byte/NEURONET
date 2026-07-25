@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { StructuralSnapshot } from "../../types/neural";
 import { shortNeuronId } from "../../types/neural";
 import type { ControlsCategory } from "../../types/ui";
 
@@ -9,6 +10,7 @@ interface ControlsPanelProps {
   running: boolean;
   autoStep: number;
   maxAutoSteps: number;
+  structural: StructuralSnapshot | null;
   onStimulateWeak: () => void;
   onStimulateStrong: () => void;
   onStep: () => void;
@@ -20,6 +22,7 @@ interface ControlsPanelProps {
 const CATEGORIES: Array<{ id: ControlsCategory; label: string }> = [
   { id: "stimulus", label: "Stimulus" },
   { id: "time", label: "Time" },
+  { id: "structure", label: "Structure" },
   { id: "reset", label: "Reset" },
 ];
 
@@ -30,6 +33,7 @@ export function ControlsPanel({
   running,
   autoStep,
   maxAutoSteps,
+  structural,
   onStimulateWeak,
   onStimulateStrong,
   onStep,
@@ -124,6 +128,49 @@ export function ControlsPanel({
           </>
         ) : null}
 
+        {category === "structure" ? (
+          <section
+            className="structural-controls"
+            aria-label="Structural plasticity"
+            data-testid="structural-plasticity-controls"
+          >
+            <h3 className="help-heading">Structural Plasticity</h3>
+            <p className="hint">
+              Read-only observation. Version 0.6C does not create or delete synapses.
+            </p>
+            <dl className="status-list panel-metrics">
+              <div className="status-row">
+                <dt>Enabled</dt>
+                <dd>{structural?.config.enabled ? "Yes" : "No"}</dd>
+              </div>
+              <div className="status-row">
+                <dt>Evaluation interval</dt>
+                <dd>{structural?.config.evaluationIntervalTicks ?? "—"} ticks</dd>
+              </div>
+              <div className="status-row">
+                <dt>Latest evaluation</dt>
+                <dd>
+                  {structural?.latestEvaluationTick != null
+                    ? `Tick ${structural.latestEvaluationTick}`
+                    : "None yet"}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Candidates</dt>
+                <dd data-testid="structural-candidate-count">
+                  {structural?.candidateCount ?? 0}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>At-risk synapses</dt>
+                <dd data-testid="structural-at-risk-count">
+                  {structural?.atRiskSynapseCount ?? 0}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
         {category === "reset" ? (
           <>
             <button
@@ -143,8 +190,8 @@ export function ControlsPanel({
                   <dt>What is Tissue View?</dt>
                   <dd>
                     This view shows the physical organization of the artificial nervous system.
-                    Neuron positions are fixed. Signals travel along axons. Future versions will
-                    allow tissue growth.
+                    Neuron positions are fixed. Signals travel along axons. Development mode shows
+                    growth candidates and pruning risk without changing structure.
                   </dd>
                 </div>
                 <div>
@@ -185,8 +232,8 @@ export function ControlsPanel({
                 </div>
               </dl>
               <p className="hint">
-                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Mission Control UI · Layout
-                Revision 1 · Tissue 0.6A
+                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Structural Plasticity
+                Foundations · Version 0.6C
               </p>
             </section>
           </>

@@ -30,11 +30,12 @@ We are cultivating the conditions from which intelligence may emerge.
 
 ## Current milestone
 
-**Shipped:** 0.6B Synaptic Plasticity  
+**Shipped:** 0.6C Structural Plasticity Foundations  
 
-**Next development target: 0.6C Structural Plasticity**
+**Next development target: 0.6D Structural Growth**
 
-Do not implement growth, pruning, body, memory, or cognition unless that milestone is explicitly requested.
+0.6C observes candidates and pruning risk only — it does not create or delete synapses.  
+Do not implement synapse create/delete, body, memory, or cognition unless that milestone is explicitly requested.
 
 ## Canonical docs
 

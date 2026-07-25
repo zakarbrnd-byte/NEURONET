@@ -273,9 +273,13 @@ pub fn evaluate_growth_candidates(
     // Decay unused pair scores slightly each evaluation.
     for pair in pairs.iter_mut() {
         pair.evaluation_count = pair.evaluation_count.saturating_add(1);
-        if pair.last_coactivated_tick.map(|t| tick.saturating_sub(t)).unwrap_or(tick) > 5 {
-            pair.recent_coactivation_score =
-                (pair.recent_coactivation_score * 0.85).max(0.0);
+        if pair
+            .last_coactivated_tick
+            .map(|t| tick.saturating_sub(t))
+            .unwrap_or(tick)
+            > 5
+        {
+            pair.recent_coactivation_score = (pair.recent_coactivation_score * 0.85).max(0.0);
         }
     }
 
@@ -293,9 +297,9 @@ pub fn evaluate_growth_candidates(
             let source = neurons.iter().find(|n| n.id == source_id).unwrap();
             let target = neurons.iter().find(|n| n.id == target_id).unwrap();
             let distance = normalized_distance(source, target);
-            let pair = pairs.iter().find(|p| {
-                p.source_neuron_id == source_id && p.target_neuron_id == target_id
-            });
+            let pair = pairs
+                .iter()
+                .find(|p| p.source_neuron_id == source_id && p.target_neuron_id == target_id);
             let coactivation = pair.map(|p| p.recent_coactivation_score).unwrap_or(0.0);
             let proposed = proposed_type_from_source(source);
             let compatibility =
@@ -320,15 +324,14 @@ pub fn evaluate_growth_candidates(
                 blocking.push("insufficient_coactivation");
             }
 
-            let prior = existing.iter().find(|c| {
-                c.source_neuron_id == source_id && c.target_neuron_id == target_id
-            });
+            let prior = existing
+                .iter()
+                .find(|c| c.source_neuron_id == source_id && c.target_neuron_id == target_id);
 
             let mut maturation_ticks = prior.map(|c| c.maturation_ticks).unwrap_or(0);
             let created_tick = prior.map(|c| c.created_tick).unwrap_or(tick);
 
-            let status = if !blocking.is_empty()
-                && coactivation < config.minimum_coactivation_score
+            let status = if !blocking.is_empty() && coactivation < config.minimum_coactivation_score
             {
                 // Evidence fell: reset maturation.
                 if prior
@@ -524,8 +527,7 @@ pub fn evaluate_pruning_risk(
             risk += 0.35 * (synapse.low_health_ticks as f64 / 8.0).min(1.0);
         }
         if inactivity >= config.pruning_inactivity_ticks {
-            risk += 0.30
-                * ((inactivity - config.pruning_inactivity_ticks) as f64 / 12.0).min(1.0);
+            risk += 0.30 * ((inactivity - config.pruning_inactivity_ticks) as f64 / 12.0).min(1.0);
         }
         if synapse.stability < 0.35 {
             risk += 0.10;
@@ -644,9 +646,8 @@ mod tests {
             neuron("NEURON-001", 0.12, 0.5, CellType::Excitatory, 0.4, 0.1),
             neuron("NEURON-002", 0.32, 0.5, CellType::Excitatory, 0.4, 0.1),
         ];
-        let synapses = vec![
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0, 0).unwrap(),
-        ];
+        let synapses =
+            vec![Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0, 0).unwrap()];
         let mut pairs = vec![PairActivity {
             source_neuron_id: "NEURON-001".into(),
             target_neuron_id: "NEURON-002".into(),
@@ -679,9 +680,8 @@ mod tests {
             neuron("NEURON-001", 0.12, 0.5, CellType::Excitatory, 0.5, 0.2),
             neuron("NEURON-002", 0.32, 0.5, CellType::Excitatory, 0.5, 0.2),
         ];
-        let synapses = vec![
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0, 0).unwrap(),
-        ];
+        let synapses =
+            vec![Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0, 0).unwrap()];
         let mut pairs = vec![PairActivity {
             source_neuron_id: "NEURON-002".into(),
             target_neuron_id: "NEURON-001".into(),
@@ -747,9 +747,8 @@ mod tests {
     #[test]
     fn grace_period_protects_young_synapses() {
         let config = StructuralPlasticityConfig::default();
-        let mut synapses = vec![
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 5.0, 0).unwrap(),
-        ];
+        let mut synapses =
+            vec![Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 5.0, 0).unwrap()];
         synapses[0].age = 3;
         synapses[0].health = 0.2;
         let _events = evaluate_pruning_risk(&config, &mut synapses, 3);
@@ -828,16 +827,18 @@ mod tests {
             pruning_inactivity_ticks: 100,
             ..StructuralPlasticityConfig::default()
         };
-        let mut synapses = vec![
-            Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 5.0, 0).unwrap(),
-        ];
+        let mut synapses =
+            vec![Synapse::excitatory("SYNAPSE-001", "NEURON-001", "NEURON-002", 5.0, 0).unwrap()];
         synapses[0].age = 5;
         synapses[0].last_activated_tick = Some(4);
         evaluate_pruning_risk(&config, &mut synapses, 5);
         evaluate_pruning_risk(&config, &mut synapses, 6);
         evaluate_pruning_risk(&config, &mut synapses, 7);
         assert!(synapses[0].low_weight_ticks >= 2);
-        assert!(synapses[0].pruning_reasons.iter().any(|r| *r == "low_weight"));
+        assert!(synapses[0]
+            .pruning_reasons
+            .iter()
+            .any(|r| *r == "low_weight"));
         assert!(synapses[0].pruning_risk > 0.0);
     }
 }

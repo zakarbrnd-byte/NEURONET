@@ -11,8 +11,8 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
 | [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md) | Model assumptions |
 | [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) | Contributor rules |
 
-**Shipped runtime:** Version 0.5  
-**Current development target:** Version 0.6 Artificial Neural Tissue
+**Shipped runtime target:** Version **0.6C Structural Plasticity Foundations**  
+(Observes growth candidates and pruning risk; does not create or delete synapses.)
 
 ---
 
@@ -28,7 +28,8 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
                             │ snapshots, step traces, signals
 ┌───────────────────────────▼─────────────────────────────┐
 │  Neural Core (Rust / Axum)                              │
-│  neurons · connections · membrane · tissue · simulation │
+│  neurons · living synapses · membrane · tissue ·        │
+│  synaptic + structural plasticity observation · ticks     │
 │  SIMULATION OWNERSHIP — SOURCE OF TRUTH                 │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -44,16 +45,18 @@ The Rust backend owns:
 
 | Concern | Notes |
 | --- | --- |
-| Neurons | Identity and electrical fields defined by the scientific model |
-| Connections | Directed links and weights (excitatory in 0.5; E/I planned in 0.6) |
+| Neurons | Identity, electrical fields, tissue morphology |
+| Living synapses | Weight, type, usage, health, stability, age, pruning observation |
 | Membrane potential | Accumulation, threshold, firing decisions |
-| Tissue | Topology now; physical/organizational structure in 0.6+ |
+| Tissue | Deterministic positions, region/layer/cell type |
+| Synaptic plasticity | Deterministic Hebbian / idle decay (0.6B) |
+| Structural plasticity | Growth candidates + pruning risk only (0.6C; no create/delete) |
 | Simulation | Discrete ticks, propagation, event logs, step traces |
 | Authority | All neural state mutations |
 
-Location: `backend/` (`neuron`, `connection`, `network`, `api`).
+Location: `backend/` (`neuron`, `synapse`, `structural`, `network`, `api`).
 
-Frontend must never invent neurons, connections, signals, propagation, membrane potentials, learning, or simulation state.
+Frontend must never invent neurons, synapses, growth/pruning decisions, signals, propagation, membrane potentials, learning, or simulation state.
 
 ---
 
@@ -63,10 +66,10 @@ The React frontend owns:
 
 | Concern | Notes |
 | --- | --- |
-| Visualization | SVG graph; pulses from backend propagation traces only |
+| Visualization | Network + Tissue SVG; pulses from backend propagation traces only |
 | Interaction | Tap inspect, long-press stimulate command, Step / Run / Pause / Reset |
-| Inspection | Node / Timeline / Controls sheets |
-| UI state | Selection, open panel, auto-step scheduling, gesture feedback |
+| Inspection | Node / Synapse / Growth Candidate / Timeline / Controls sheets |
+| UI state | Selection, open panel, Tissue display mode, auto-step scheduling, gesture feedback |
 
 Frontend local state must not include a parallel neural reality.
 
