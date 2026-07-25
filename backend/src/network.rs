@@ -5,6 +5,10 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
+use crate::structural::{
+    evaluate_growth_candidates, evaluate_pruning_risk, record_coactivations, GrowthCandidate,
+    PairActivity, StructuralPlasticityConfig, StructuralSnapshot,
+};
 use crate::synapse::{Synapse, SynapseType};
 
 const MAX_EVENTS: usize = 200;
@@ -27,6 +31,16 @@ pub struct NetworkEvent {
     pub target_neuron_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount_mv: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readiness_or_risk: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason_codes: Option<Vec<String>>,
     pub message: String,
 }
 
@@ -48,6 +62,7 @@ pub struct NetworkSnapshot {
     pub neurons: Vec<Neuron>,
     pub synapses: Vec<Synapse>,
     pub tissue: TissueInfo,
+    pub structural: StructuralSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -79,10 +94,15 @@ pub struct NeuralNetwork {
     age_seconds: u64,
     /// Synapses that delivered last tick — Hebbian candidates if target fires now.
     pending_hebbian: Vec<String>,
+    structural_config: StructuralPlasticityConfig,
+    pair_activity: Vec<PairActivity>,
+    growth_candidates: Vec<GrowthCandidate>,
+    previous_fired: Vec<String>,
+    latest_structural_evaluation_tick: Option<u64>,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron tissue with living synapses (0.6B).
+    /// Deterministic five-neuron tissue with living synapses + structural observation (0.6C).
     pub fn initial() -> Self {
         Self::initial_with_age(0)
     }
@@ -95,6 +115,11 @@ impl NeuralNetwork {
             events: Vec::new(),
             age_seconds,
             pending_hebbian: Vec::new(),
+            structural_config: StructuralPlasticityConfig::default(),
+            pair_activity: Vec::new(),
+            growth_candidates: Vec::new(),
+            previous_fired: Vec::new(),
+            latest_structural_evaluation_tick: None,
         };
 
         let seeds = [
@@ -238,6 +263,16 @@ impl NeuralNetwork {
             .map(|n| n.region.clone())
             .unwrap_or_else(|| TISSUE_REGION.to_string());
 
+        let at_risk = synapses
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.pruning_status,
+                    crate::synapse::PruningStatus::AtRisk
+                )
+            })
+            .count();
+
         NetworkSnapshot {
             tick: self.tick,
             tissue: TissueInfo {
@@ -247,6 +282,17 @@ impl NeuralNetwork {
                 cell_count: neurons.len(),
                 synapse_count: synapses.len(),
                 age_seconds: self.age_seconds,
+            },
+            structural: StructuralSnapshot {
+                config: (&self.structural_config).into(),
+                growth_candidates: {
+                    let mut c = self.growth_candidates.clone();
+                    c.sort_by(|a, b| a.id.cmp(&b.id));
+                    c
+                },
+                latest_evaluation_tick: self.latest_structural_evaluation_tick,
+                candidate_count: self.growth_candidates.len(),
+                at_risk_synapse_count: at_risk,
             },
             neurons,
             synapses,
@@ -462,6 +508,39 @@ impl NeuralNetwork {
             ));
         }
 
+        // Structural plasticity foundations (0.6C): observe only — no create/delete.
+        let previous = std::mem::take(&mut self.previous_fired);
+        record_coactivations(
+            &mut self.pair_activity,
+            &previous,
+            &fired_ids,
+            self.tick,
+        );
+        self.previous_fired = fired_ids.clone();
+
+        let interval = self.structural_config.evaluation_interval_ticks.max(1);
+        if self.structural_config.enabled && self.tick % interval == 0 {
+            let synapse_count_before = self.synapses.len();
+            let growth_events = evaluate_growth_candidates(
+                &self.structural_config,
+                &self.neurons,
+                &self.synapses,
+                &mut self.pair_activity,
+                &mut self.growth_candidates,
+                self.tick,
+            );
+            let pruning_events =
+                evaluate_pruning_risk(&self.structural_config, &mut self.synapses, self.tick);
+            self.latest_structural_evaluation_tick = Some(self.tick);
+
+            for event in growth_events.into_iter().chain(pruning_events) {
+                event_ids.push(self.push_structural_event(event));
+            }
+
+            // Hard invariant for 0.6C: structure observation never mutates topology.
+            debug_assert_eq!(self.synapses.len(), synapse_count_before);
+        }
+
         NetworkStepTrace {
             tick: self.tick,
             fired_neuron_ids: fired_ids,
@@ -536,6 +615,58 @@ impl NeuralNetwork {
         amount_mv: Option<f64>,
         message: impl Into<String>,
     ) -> String {
+        self.push_event_full(
+            event_type,
+            neuron_id,
+            source_neuron_id,
+            target_neuron_id,
+            amount_mv,
+            None,
+            None,
+            None,
+            None,
+            None,
+            message,
+        )
+    }
+
+    fn push_structural_event(&mut self, event: crate::structural::StructuralEvent) -> String {
+        self.push_event_full(
+            event.event_type,
+            None,
+            event.source_neuron_id,
+            event.target_neuron_id,
+            None,
+            Some(event.entity_id),
+            event.previous_status,
+            event.new_status,
+            event.metric,
+            Some(
+                event
+                    .reason_codes
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            ),
+            event.message,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_event_full(
+        &mut self,
+        event_type: &str,
+        neuron_id: Option<String>,
+        source_neuron_id: Option<String>,
+        target_neuron_id: Option<String>,
+        amount_mv: Option<f64>,
+        entity_id: Option<String>,
+        previous_status: Option<String>,
+        new_status: Option<String>,
+        readiness_or_risk: Option<f64>,
+        reason_codes: Option<Vec<String>>,
+        message: impl Into<String>,
+    ) -> String {
         let id = Uuid::new_v4().to_string();
         self.events.push(NetworkEvent {
             id: id.clone(),
@@ -546,6 +677,11 @@ impl NeuralNetwork {
             source_neuron_id,
             target_neuron_id,
             amount_mv,
+            entity_id,
+            previous_status,
+            new_status,
+            readiness_or_risk,
+            reason_codes,
             message: message.into(),
         });
 
@@ -790,5 +926,207 @@ mod tests {
             network.step();
         }
         assert!(network.event_count() <= 200);
+    }
+
+    #[test]
+    fn structural_evaluation_never_creates_or_deletes_synapses() {
+        let mut network = NeuralNetwork::initial();
+        let before = network.snapshot().synapses.len();
+        for _ in 0..40 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.step();
+            network.step();
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert_eq!(snap.synapses.len(), before);
+        assert_eq!(
+            snap.synapses
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                "SYNAPSE-001",
+                "SYNAPSE-002",
+                "SYNAPSE-003",
+                "SYNAPSE-004",
+                "SYNAPSE-005"
+            ]
+        );
+    }
+
+    #[test]
+    fn repeated_coactivation_can_produce_growth_candidates() {
+        let mut network = NeuralNetwork::initial();
+        // Drive NEURON-001 and NEURON-005 which have no directed synapse either way.
+        for _ in 0..30 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert!(
+            snap.structural.candidate_count > 0
+                || snap
+                    .structural
+                    .growth_candidates
+                    .iter()
+                    .any(|c| c.source_neuron_id == "NEURON-001"
+                        || c.target_neuron_id == "NEURON-005"),
+            "expected at least one observed growth candidate after coactivation"
+        );
+        // No duplicate of existing directed edges.
+        for c in &snap.structural.growth_candidates {
+            assert!(!(c.source_neuron_id == "NEURON-001" && c.target_neuron_id == "NEURON-002"));
+        }
+    }
+
+    #[test]
+    fn candidate_positions_match_backend_neuron_positions() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..25 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        let snap = network.snapshot();
+        for c in &snap.structural.growth_candidates {
+            let source = snap
+                .neurons
+                .iter()
+                .find(|n| n.id == c.source_neuron_id)
+                .unwrap();
+            let target = snap
+                .neurons
+                .iter()
+                .find(|n| n.id == c.target_neuron_id)
+                .unwrap();
+            let expected = ((source.position.x - target.position.x).powi(2)
+                + (source.position.y - target.position.y).powi(2))
+            .sqrt();
+            assert!((c.distance - expected).abs() < 0.002);
+        }
+    }
+
+    #[test]
+    fn grace_period_keeps_initial_synapses_protected() {
+        let mut network = NeuralNetwork::initial();
+        // Evaluate within grace window.
+        for _ in 0..5 {
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert!(snap
+            .synapses
+            .iter()
+            .all(|s| s.pruning_status == crate::synapse::PruningStatus::Protected));
+    }
+
+    #[test]
+    fn idle_synapses_accumulate_pruning_evidence_after_grace() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..40 {
+            network.step();
+        }
+        let snap = network.snapshot();
+        let s4 = snap
+            .synapses
+            .iter()
+            .find(|s| s.id == "SYNAPSE-004")
+            .unwrap();
+        assert!(matches!(
+            s4.pruning_status,
+            crate::synapse::PruningStatus::Monitoring | crate::synapse::PruningStatus::AtRisk
+        ));
+        assert!(s4.pruning_risk > 0.0);
+        assert!(!s4.pruning_reasons.is_empty());
+    }
+
+    #[test]
+    fn active_synapses_avoid_high_pruning_risk() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..20 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.step();
+            network.step();
+            network.step();
+        }
+        let s1 = synapse(&network, "SYNAPSE-001");
+        assert!(s1.pruning_risk < 0.55);
+        assert_ne!(s1.pruning_status, crate::synapse::PruningStatus::AtRisk);
+    }
+
+    #[test]
+    fn reset_clears_candidates_and_pair_history() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..30 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        assert!(!network.snapshot().structural.growth_candidates.is_empty()
+            || network.pair_activity_len_for_test() > 0);
+        network.reset();
+        let snap = network.snapshot();
+        assert!(snap.structural.growth_candidates.is_empty());
+        assert_eq!(snap.structural.candidate_count, 0);
+        assert_eq!(snap.structural.latest_evaluation_tick, None);
+        assert_eq!(network.pair_activity_len_for_test(), 0);
+        assert!(snap
+            .synapses
+            .iter()
+            .all(|s| s.pruning_status == crate::synapse::PruningStatus::Protected
+                || s.pruning_risk == 0.0));
+    }
+
+    #[test]
+    fn identical_sequences_yield_identical_structural_state() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        for _ in 0..20 {
+            a.inject_signal("NEURON-001", 20.0).unwrap();
+            b.inject_signal("NEURON-001", 20.0).unwrap();
+            a.inject_signal("NEURON-005", 20.0).unwrap();
+            b.inject_signal("NEURON-005", 20.0).unwrap();
+            let ta = a.step();
+            let tb = b.step();
+            assert_eq!(ta.network.structural, tb.network.structural);
+            assert_eq!(ta.network.synapses, tb.network.synapses);
+        }
+    }
+
+    #[test]
+    fn structural_events_include_reason_codes() {
+        let mut network = NeuralNetwork::initial();
+        let mut saw_structural = false;
+        for _ in 0..20 {
+            let trace = network.step();
+            if trace.tick % 5 != 0 {
+                continue;
+            }
+            let events = network.events_newest_first();
+            for event_id in &trace.event_ids {
+                if let Some(event) = events.iter().find(|e| e.id == *event_id) {
+                    if event.event_type.starts_with("growth_candidate_")
+                        || event.event_type.starts_with("synapse_pruning_")
+                    {
+                        saw_structural = true;
+                        assert!(event
+                            .reason_codes
+                            .as_ref()
+                            .map(|r| !r.is_empty())
+                            .unwrap_or(false));
+                    }
+                }
+            }
+        }
+        assert!(saw_structural);
+    }
+}
+
+impl NeuralNetwork {
+    #[cfg(test)]
+    fn pair_activity_len_for_test(&self) -> usize {
+        self.pair_activity.len()
     }
 }

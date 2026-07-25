@@ -84,7 +84,7 @@ async fn refresh_age(state: &AppState) {
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.6B",
+        version: "0.6C",
         age_seconds: state.started_at.elapsed().as_secs(),
     })
 }
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint_reports_version_0_6b() {
+    async fn health_endpoint_reports_version_0_6c() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -166,7 +166,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.6B");
+        assert_eq!(json["version"], "0.6C");
         assert!(json["ageSeconds"].as_u64().is_some());
     }
 
@@ -210,6 +210,13 @@ mod tests {
         assert_eq!(s5["usageCount"], 0);
         assert_eq!(s5["stability"], 0.5);
         assert_eq!(s5["health"], 0.9);
+        assert_eq!(s5["pruningStatus"], "protected");
+        assert!(json["structural"]["config"]["enabled"].as_bool().unwrap());
+        assert_eq!(json["structural"]["candidateCount"], 0);
+        assert!(json["structural"]["growthCandidates"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]

@@ -3,4 +3,5 @@
 pub mod api;
 pub mod network;
 pub mod neuron;
+pub mod structural;
 pub mod synapse;

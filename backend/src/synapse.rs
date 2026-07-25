@@ -31,6 +31,16 @@ pub enum SynapseType {
     Inhibitory,
 }
 
+/// Observational pruning classification (0.6C — no deletion).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PruningStatus {
+    Stable,
+    Monitoring,
+    AtRisk,
+    Protected,
+}
+
 /// Recent weight sample for Mission Control history.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +67,14 @@ pub struct Synapse {
     pub weight_history: Vec<WeightHistoryEntry>,
     /// Signed delta applied on the most recent weight change (0 if none this tick).
     pub last_weight_delta: f64,
+    // --- Structural pruning observation (0.6C; no deletion) ---
+    pub pruning_risk: f64,
+    pub inactivity_ticks: u64,
+    pub low_weight_ticks: u64,
+    pub low_health_ticks: u64,
+    pub protected_until_tick: u64,
+    pub pruning_status: PruningStatus,
+    pub pruning_reasons: Vec<&'static str>,
 }
 
 impl Synapse {
@@ -134,6 +152,13 @@ impl Synapse {
                 weight,
             }],
             last_weight_delta: 0.0,
+            pruning_risk: 0.0,
+            inactivity_ticks: 0,
+            low_weight_ticks: 0,
+            low_health_ticks: 0,
+            protected_until_tick: 0,
+            pruning_status: PruningStatus::Protected,
+            pruning_reasons: vec!["grace_period"],
         })
     }
 
