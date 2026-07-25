@@ -126,11 +126,12 @@ export function NeuronInspector({
           </button>
         </div>
 
-        <div className="electrode-callout">
-          <strong>Direct electrode-style stimulation</strong>
+        <div className="electrode-callout" data-testid="laboratory-electrode-callout">
+          <strong>Laboratory Electrode</strong>
           <p>
-            This interaction directly injects current into the selected simulated neuron. Future
-            versions will route touch through sensory receptor nodes.
+            This interaction directly injects current into the selected simulated neuron. It is not
+            a sensory receptor event — receptor input arrives only through the Autonomous Sensory
+            Environment.
           </p>
         </div>
 

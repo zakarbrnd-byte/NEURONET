@@ -5,38 +5,40 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.7 — Developmental Neural Tissue** |
+| **Current version** | **0.8 — Autonomous Sensory Environment** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.7 Developmental Neural Tissue
+## Current Version — 0.8 Autonomous Sensory Environment
 
-**Version 0.7 makes artificial tissue visibly develop over simulation time.**
+**Version 0.8 supplies continuous, backend-owned sensory input** so ordinary
+tissue activity does not require repetitive manual electrode stimulation.
 
-Deterministic lifecycle:
+Flow:
 
-neural progenitor → maturation → differentiation → migration → settlement →
-eligibility for electrical and structural behavior
+```text
+Environment → Sensory Event → Receptor → Neural Network
+```
 
-Defaults grow conservatively from **5 settled neurons** to a maximum of **8**.
-Only developing cells migrate; settled somas stay fixed. The frontend never
-creates cells, chooses destinations, or invents migration.
+Manual long-press / inspector stimulation remains available as a **Laboratory
+Electrode** tool and is labeled separately from receptor input.
 
-This is a simplified developmental model — not embryology or stem-cell biology.
+This is a deterministic virtual environment — not real vision, hearing, touch,
+perception, or cognition.
 
-See [`docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md`](docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md).
+See [`docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md).
 
 ---
 
-## Prior: 0.6D Synapse Birth and Pruning
+## Prior: 0.7 Developmental Neural Tissue
 
-0.6D commits structural observations into topology mutations under explicit
-limits. 0.7 preserves that system and adds cell-level development.
+Backend-owned progenitor birth → maturation → differentiation → migration →
+settlement at demo scale (5→8 neurons). Preserved in 0.8.
 
-See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
+See [`docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md`](docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md).
 
 ---
 
@@ -45,15 +47,15 @@ See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D
 | View | Role |
 | --- | --- |
 | **Network View** | Schematic graph. Tap neuron or synapse. |
-| **Tissue View** | Positions, morphology, Development mode (progenitor zone, migration paths, candidates). |
+| **Tissue View** | Activity / Structure / Development / Sensory modes. |
 
-Tissue Development mode shows backend progenitor zone, developing cells, and settlement targets.
+Sensory mode shows receptors, sensory connections, and pattern activity from the backend.
 
 ---
 
 ## Architecture
 
-- The **Rust backend** owns neurons, living synapses, plasticity, structural mutations, and developmental lifecycle.
+- The **Rust backend** owns neurons, synapses, development, and the sensory environment.
 - **Mission Control** observes snapshots/events and never invents biology.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -62,11 +64,10 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Observatory tissue
 
-Five initial settled neurons `NEURON-001`…`NEURON-005` and synapses `SYNAPSE-001`…`SYNAPSE-005`.  
-`SYNAPSE-001` and `SYNAPSE-002` are structurally protected backbone pathways.  
-Dynamically born cells continue from `NEURON-006`. Dynamic synapses from `SYNAPSE-0006`.
+Five initial settled neurons and five neural synapses, plus three abstract
+receptors with five sensory input connections (not neural synapses).
 
-Reset restores the original five-neuron tissue and all ID / developmental counters.
+Reset restores tissue, environment seed, pattern counters, and ID sequences.
 
 ## Run locally
 
@@ -98,5 +99,5 @@ npm test
 | Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
 | Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-Verification marker: **Developmental Neural Tissue · Version 0.7**  
-Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.7
+Verification marker: **Autonomous Sensory Environment · Version 0.8**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.8

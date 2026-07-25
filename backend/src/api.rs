@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
+use crate::environment::EnvironmentPreset;
 use crate::network::{NetworkSnapshot, NetworkStepTrace, NeuralNetwork};
 
 pub type SharedNetwork = Arc<Mutex<NeuralNetwork>>;
@@ -37,6 +38,16 @@ struct SignalRequest {
     amount_mv: f64,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EnvironmentControlsRequest {
+    enabled: Option<bool>,
+    background_enabled: Option<bool>,
+    pattern_a_enabled: Option<bool>,
+    pattern_b_enabled: Option<bool>,
+    preset: Option<EnvironmentPreset>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ErrorResponse {
@@ -51,6 +62,10 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/api/neurons/{id}/signals", post(inject_signal))
         .route("/api/network/step", post(step_network))
         .route("/api/network/reset", post(reset_network))
+        .route(
+            "/api/environment/controls",
+            post(update_environment_controls),
+        )
         .layer(cors)
         .with_state(state)
 }
@@ -84,7 +99,7 @@ async fn refresh_age(state: &AppState) {
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.7",
+        version: "0.8",
         age_seconds: state.started_at.elapsed().as_secs(),
     })
 }
@@ -130,6 +145,28 @@ async fn reset_network(State(state): State<AppState>) -> Json<NetworkSnapshot> {
     Json(network.snapshot())
 }
 
+async fn update_environment_controls(
+    State(state): State<AppState>,
+    Json(body): Json<EnvironmentControlsRequest>,
+) -> impl IntoResponse {
+    refresh_age(&state).await;
+    let mut network = state.network.lock().await;
+    match network.set_environment_controls(
+        body.enabled,
+        body.background_enabled,
+        body.pattern_a_enabled,
+        body.pattern_b_enabled,
+        body.preset,
+    ) {
+        Ok(()) => (StatusCode::OK, Json(network.snapshot())).into_response(),
+        Err(message) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: message }),
+        )
+            .into_response(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,7 +189,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint_reports_version_0_7() {
+    async fn health_endpoint_reports_version_0_8() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -166,8 +203,37 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.7");
+        assert_eq!(json["version"], "0.8");
         assert!(json["ageSeconds"].as_u64().is_some());
+    }
+
+    #[tokio::test]
+    async fn network_endpoint_includes_environment_snapshot() {
+        let app = test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/network")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_json(response).await;
+        assert_eq!(json["environment"]["preset"], "balanced");
+        assert_eq!(
+            json["environment"]["receptors"].as_array().unwrap().len(),
+            3
+        );
+        assert_eq!(
+            json["environment"]["sensoryConnections"]
+                .as_array()
+                .unwrap()
+                .len(),
+            5
+        );
+        assert_eq!(json["environment"]["enabled"], true);
     }
 
     #[tokio::test]

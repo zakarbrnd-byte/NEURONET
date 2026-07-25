@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import type { NetworkEvent, TimelineEntry } from "../../types/neural";
 import {
+  environmentEventPlainSummary,
   isDevelopmentalEventType,
+  isEnvironmentEventType,
   isStructuralEventType,
   shortNeuronId,
   structuralEventPlainSummary,
@@ -29,6 +31,10 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: "migration", label: "Migration" },
   { id: "settlement", label: "Settlement" },
   { id: "capacity", label: "Capacity" },
+  { id: "environment", label: "Environment" },
+  { id: "receptors", label: "Receptors" },
+  { id: "patterns", label: "Patterns" },
+  { id: "laboratory", label: "Lab electrode" },
 ];
 
 const STRUCTURAL_FILTERS: TimelineFilter[] = [
@@ -46,6 +52,13 @@ const DEVELOPMENT_FILTERS: TimelineFilter[] = [
   "migration",
   "settlement",
   "capacity",
+];
+
+const ENVIRONMENT_FILTERS: TimelineFilter[] = [
+  "environment",
+  "receptors",
+  "patterns",
+  "laboratory",
 ];
 
 function matchesDevelopmentFilter(type: string, filter: TimelineFilter): boolean {
@@ -67,6 +80,22 @@ function matchesDevelopmentFilter(type: string, filter: TimelineFilter): boolean
   return false;
 }
 
+function matchesEnvironmentFilter(type: string, filter: TimelineFilter): boolean {
+  if (filter === "environment") {
+    return type.startsWith("environment_");
+  }
+  if (filter === "receptors") {
+    return type.startsWith("receptor_");
+  }
+  if (filter === "patterns") {
+    return type.startsWith("sensory_pattern_");
+  }
+  if (filter === "laboratory") {
+    return type === "laboratory_stimulus";
+  }
+  return false;
+}
+
 function matchesFilter(
   entry: TimelineEntry,
   filter: TimelineFilter,
@@ -80,11 +109,18 @@ function matchesFilter(
       entry.firedNeuronIds.length === 0 &&
       entry.propagations.length === 0 &&
       !tickEvents.some(
-        (event) => isStructuralEventType(event.type) || isDevelopmentalEventType(event.type),
+        (event) =>
+          isStructuralEventType(event.type) ||
+          isDevelopmentalEventType(event.type) ||
+          isEnvironmentEventType(event.type),
       )
     );
   }
-  if (STRUCTURAL_FILTERS.includes(filter) || DEVELOPMENT_FILTERS.includes(filter)) {
+  if (
+    STRUCTURAL_FILTERS.includes(filter) ||
+    DEVELOPMENT_FILTERS.includes(filter) ||
+    ENVIRONMENT_FILTERS.includes(filter)
+  ) {
     return false;
   }
   return false;
@@ -102,12 +138,31 @@ function matchesStructuralListFilter(type: string, filter: TimelineFilter): bool
   return false;
 }
 
+function eventKind(
+  type: string,
+): "structural" | "development" | "environment" {
+  if (isEnvironmentEventType(type)) return "environment";
+  if (isDevelopmentalEventType(type)) return "development";
+  return "structural";
+}
+
+function eventSummary(event: NetworkEvent): string {
+  if (isEnvironmentEventType(event.type)) {
+    return environmentEventPlainSummary(event);
+  }
+  return structuralEventPlainSummary(event);
+}
+
 export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const eventsByTick = useMemo(() => {
     const map = new Map<number, NetworkEvent[]>();
     for (const event of events) {
-      if (!isStructuralEventType(event.type) && !isDevelopmentalEventType(event.type)) {
+      if (
+        !isStructuralEventType(event.type) &&
+        !isDevelopmentalEventType(event.type) &&
+        !isEnvironmentEventType(event.type)
+      ) {
         continue;
       }
       const list = map.get(event.networkTick) ?? [];
@@ -118,20 +173,26 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
   }, [events]);
 
   const visible = useMemo(() => {
-    if (STRUCTURAL_FILTERS.includes(filter) || DEVELOPMENT_FILTERS.includes(filter)) {
+    if (
+      STRUCTURAL_FILTERS.includes(filter) ||
+      DEVELOPMENT_FILTERS.includes(filter) ||
+      ENVIRONMENT_FILTERS.includes(filter)
+    ) {
       const filtered = events
         .filter((event) => {
           if (DEVELOPMENT_FILTERS.includes(filter)) {
             return matchesDevelopmentFilter(event.type, filter);
           }
+          if (ENVIRONMENT_FILTERS.includes(filter)) {
+            return matchesEnvironmentFilter(event.type, filter);
+          }
           return matchesStructuralListFilter(event.type, filter);
         })
         .slice(0, 20);
-      return filtered.map((event) =>
-        isDevelopmentalEventType(event.type)
-          ? { kind: "development" as const, event }
-          : { kind: "structural" as const, event },
-      );
+      return filtered.map((event) => ({
+        kind: eventKind(event.type),
+        event,
+      }));
     }
 
     return entries
@@ -167,22 +228,26 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
           {visible.map((item) => {
             if (item.kind !== "tick") {
               const event = item.event;
+              const testId =
+                item.kind === "environment"
+                  ? "timeline-environment-item"
+                  : item.kind === "development"
+                    ? "timeline-development-item"
+                    : "timeline-structural-item";
               return (
                 <li
                   key={event.id}
                   className={`timeline-item ${
-                    item.kind === "development"
-                      ? "timeline-development"
-                      : "timeline-structural"
+                    item.kind === "environment"
+                      ? "timeline-environment"
+                      : item.kind === "development"
+                        ? "timeline-development"
+                        : "timeline-structural"
                   }`}
-                  data-testid={
-                    item.kind === "development"
-                      ? "timeline-development-item"
-                      : "timeline-structural-item"
-                  }
+                  data-testid={testId}
                 >
                   <div className="timeline-title">Tick {event.networkTick}</div>
-                  <div>{structuralEventPlainSummary(event)}</div>
+                  <div>{eventSummary(event)}</div>
                   <div className="timeline-detail">
                     Codes: {(event.reasonCodes ?? []).join(", ") || "none"}
                   </div>
@@ -229,12 +294,14 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
                   <div
                     key={event.id}
                     className={`timeline-detail ${
-                      isDevelopmentalEventType(event.type)
-                        ? "timeline-development-detail"
-                        : "timeline-structural-detail"
+                      isEnvironmentEventType(event.type)
+                        ? "timeline-environment-detail"
+                        : isDevelopmentalEventType(event.type)
+                          ? "timeline-development-detail"
+                          : "timeline-structural-detail"
                     }`}
                   >
-                    {structuralEventPlainSummary(event)}
+                    {eventSummary(event)}
                   </div>
                 ))}
               </li>

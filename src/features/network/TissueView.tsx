@@ -6,14 +6,21 @@ import {
 } from "react";
 import type {
   DevelopmentSummary,
+  EnvironmentSnapshot,
   GrowthCandidate,
   LifecycleState,
   NeuronSnapshot,
   PropagationTrace,
+  SensoryDeliveryTrace,
   SynapseSnapshot,
   TopologySummary,
 } from "../../types/neural";
-import { electricalState, neuronIsDeveloping, shortNeuronId } from "../../types/neural";
+import {
+  electricalState,
+  neuronIsDeveloping,
+  receptorTypeLabel,
+  shortNeuronId,
+} from "../../types/neural";
 import type { TissueDisplayMode } from "../../types/ui";
 import {
   HIT_TARGET_RADIUS,
@@ -28,9 +35,11 @@ interface TissueViewProps {
   selectedNeuronId: string | null;
   selectedSynapseId?: string | null;
   selectedCandidateId?: string | null;
+  selectedReceptorId?: string | null;
   displayMode: TissueDisplayMode;
   onDisplayModeChange: (mode: TissueDisplayMode) => void;
   activePropagations: PropagationTrace[];
+  activeSensoryDeliveries?: SensoryDeliveryTrace[];
   reducedMotion: boolean;
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
@@ -39,9 +48,11 @@ interface TissueViewProps {
   pruningSynapseIds?: string[];
   topology?: TopologySummary | null;
   development?: DevelopmentSummary | null;
+  environment?: EnvironmentSnapshot | null;
   onSelectNeuron: (neuronId: string) => void;
   onSelectSynapse?: (synapseId: string) => void;
   onSelectCandidate?: (candidateId: string) => void;
+  onSelectReceptor?: (receptorId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
 }
@@ -72,7 +83,30 @@ const DISPLAY_MODES: Array<{ id: TissueDisplayMode; label: string }> = [
   { id: "activity", label: "Activity" },
   { id: "structure", label: "Structure" },
   { id: "development", label: "Development" },
+  { id: "sensory", label: "Sensory" },
 ];
+
+function sensoryPath(
+  from: Point,
+  to: Point,
+  fromRadius: number,
+  toRadius: number,
+): string {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const start = {
+    x: from.x + ux * (fromRadius + 0.3),
+    y: from.y + uy * (fromRadius + 0.3),
+  };
+  const end = {
+    x: to.x - ux * (toRadius + 1.0),
+    y: to.y - uy * (toRadius + 1.0),
+  };
+  return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+}
 
 function toPoint(neuron: NeuronSnapshot): Point {
   return {
@@ -124,9 +158,11 @@ export function TissueView({
   selectedNeuronId,
   selectedSynapseId = null,
   selectedCandidateId = null,
+  selectedReceptorId = null,
   displayMode,
   onDisplayModeChange,
   activePropagations,
+  activeSensoryDeliveries = [],
   reducedMotion,
   interactionDisabled,
   pressingNeuronId,
@@ -135,9 +171,11 @@ export function TissueView({
   pruningSynapseIds = [],
   topology = null,
   development = null,
+  environment = null,
   onSelectNeuron,
   onSelectSynapse,
   onSelectCandidate,
+  onSelectReceptor,
   onLongPressStimulate,
   onPressVisualChange,
 }: TissueViewProps) {
@@ -153,6 +191,10 @@ export function TissueView({
       `${propagation.sourceNeuronId}->${propagation.targetNeuronId}`,
       propagation,
     ]),
+  );
+
+  const sensoryPulseByConnection = new Map(
+    activeSensoryDeliveries.map((delivery) => [delivery.connectionId, delivery]),
   );
 
   useEffect(() => {
@@ -259,10 +301,16 @@ export function TissueView({
   };
 
   const showPulse = displayMode === "activity";
-  const emphasizeMorphology = displayMode === "structure" || displayMode === "development";
+  const emphasizeMorphology =
+    displayMode === "structure" || displayMode === "development" || displayMode === "sensory";
   const showDevelopment = displayMode === "development";
+  const showSensory = displayMode === "sensory";
   const showDevViz = showDevelopment && development != null;
+  const showSensoryViz = showSensory && environment != null;
   const progenitorZone = development?.progenitorZone ?? null;
+  const receptors = environment?.receptors ?? [];
+  const sensoryConnections = environment?.sensoryConnections ?? [];
+  const activePatterns = environment?.activePatterns ?? [];
 
   return (
     <div
@@ -270,6 +318,7 @@ export function TissueView({
       data-testid="tissue-view"
       data-display-mode={displayMode}
       data-has-development={showDevViz ? "true" : "false"}
+      data-has-environment={showSensoryViz ? "true" : "false"}
       onClickCapture={onClickCapture}
     >
       <div
@@ -293,9 +342,12 @@ export function TissueView({
         ))}
       </div>
       <p className="tissue-hint">
-        Backend cell positions · Tap: Inspect · Hold: Stimulate +5 mV (settled)
+        Backend cell positions · Tap: Inspect · Hold: Laboratory Electrode +5 mV (settled)
         {showDevelopment
           ? " · Dashed paths are growth candidates · Migration paths from backend"
+          : ""}
+        {showSensory
+          ? " · Dotted double paths are sensory inputs · Receptors from backend"
           : ""}
       </p>
       <svg
@@ -593,6 +645,69 @@ export function TissueView({
             })
           : null}
 
+        {showSensoryViz
+          ? sensoryConnections.map((conn) => {
+              const receptor = receptors.find((r) => r.id === conn.receptorId);
+              const target = byId.get(conn.targetNeuronId);
+              const to = positions.get(conn.targetNeuronId);
+              if (!receptor || !target || !to) return null;
+              const from = {
+                x: receptor.position.x * WIDTH,
+                y: receptor.position.y * HEIGHT,
+              };
+              const d = sensoryPath(from, to, 2.2, target.somaRadius * WIDTH);
+              const pulse = sensoryPulseByConnection.get(conn.id);
+              const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+
+              return (
+                <g
+                  key={conn.id}
+                  className={`tissue-sensory-group ${conn.enabled ? "" : "is-disabled"} ${
+                    pulse ? "is-pulse" : ""
+                  }`}
+                  data-testid={`tissue-sensory-${conn.id}`}
+                  data-sensory-connection="true"
+                  pointerEvents="none"
+                >
+                  <path
+                    d={d}
+                    className="tissue-sensory-path-outer"
+                    strokeWidth={1.55}
+                    fill="none"
+                  />
+                  <path
+                    d={d}
+                    className="tissue-sensory-path-inner"
+                    strokeWidth={0.55}
+                    strokeDasharray="1.4 1.1"
+                    fill="none"
+                  />
+                  <text
+                    x={mid.x}
+                    y={mid.y - 1.6}
+                    className="tissue-sensory-label"
+                  >
+                    sensory
+                  </text>
+                  {pulse && !reducedMotion ? (
+                    <circle r="1.15" className="tissue-sensory-pulse-dot">
+                      <animateMotion dur="0.7s" repeatCount="1" path={d} />
+                    </circle>
+                  ) : null}
+                  {pulse ? (
+                    <text
+                      x={mid.x}
+                      y={mid.y + 2.4}
+                      className="tissue-sensory-pulse-label"
+                    >
+                      +{pulse.magnitudeMv.toFixed(1)} mV
+                    </text>
+                  ) : null}
+                </g>
+              );
+            })
+          : null}
+
         {neurons.map((neuron) => {
           const point = positions.get(neuron.id)!;
           const soma = neuron.somaRadius * WIDTH;
@@ -697,7 +812,116 @@ export function TissueView({
             </g>
           );
         })}
+
+        {showSensoryViz
+          ? receptors.map((receptor) => {
+              const cx = receptor.position.x * WIDTH;
+              const cy = receptor.position.y * HEIGHT;
+              const selected = selectedReceptorId === receptor.id;
+              const typeClass = `receptor-${receptor.receptorType}`;
+              return (
+                <g
+                  key={receptor.id}
+                  className={`tissue-receptor ${typeClass} ${
+                    receptor.active ? "is-active" : ""
+                  } ${selected ? "is-selected" : ""}`}
+                  data-testid={`tissue-receptor-${receptor.id}`}
+                  data-receptor-type={receptor.receptorType}
+                  data-receptor-active={receptor.active ? "true" : "false"}
+                  transform={`translate(${cx} ${cy})`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Inspect receptor ${receptor.id}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectReceptor?.(receptor.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectReceptor?.(receptor.id);
+                    }
+                  }}
+                >
+                  <rect
+                    x="-2.6"
+                    y="-2.6"
+                    width="5.2"
+                    height="5.2"
+                    rx="0.5"
+                    className="tissue-receptor-shape"
+                  />
+                  <text y="0.9" className="tissue-receptor-mark" textAnchor="middle">
+                    {receptor.receptorType === "background"
+                      ? "BG"
+                      : receptor.receptorType === "touch_a"
+                        ? "A"
+                        : "B"}
+                  </text>
+                  <text y="5.2" className="tissue-receptor-label" textAnchor="middle">
+                    {receptorTypeLabel(receptor.receptorType)}
+                  </text>
+                  {receptor.active ? (
+                    <circle
+                      r="3.6"
+                      className="tissue-receptor-activation-ring"
+                      data-testid={`tissue-receptor-active-${receptor.id}`}
+                    />
+                  ) : null}
+                </g>
+              );
+            })
+          : null}
       </svg>
+
+      {showSensory ? (
+        <>
+          {environment ? (
+            <dl className="sensory-summary" data-testid="sensory-summary">
+              <div>
+                <dt>Receptors</dt>
+                <dd data-testid="sensory-receptor-count">{environment.receptors.length}</dd>
+              </div>
+              <div>
+                <dt>Sensory inputs</dt>
+                <dd data-testid="sensory-input-count">{environment.sensoryInputCount}</dd>
+              </div>
+              <div>
+                <dt>Neural synapses</dt>
+                <dd data-testid="sensory-neural-synapse-count">
+                  {environment.neuralSynapseCount}
+                </dd>
+              </div>
+              <div>
+                <dt>Active patterns</dt>
+                <dd data-testid="sensory-active-patterns">
+                  {activePatterns.length ? activePatterns.join(", ") : "None"}
+                </dd>
+              </div>
+              <div>
+                <dt>Preset</dt>
+                <dd>{environment.preset}</dd>
+              </div>
+            </dl>
+          ) : null}
+          <ul className="tissue-sensory-legend" data-testid="tissue-sensory-legend">
+            <li>
+              <span className="legend-swatch legend-solid" /> Solid path: neural synapse
+            </li>
+            <li>
+              <span className="legend-swatch legend-sensory-double" /> Double / dotted: sensory
+              input path
+            </li>
+            <li>
+              <span className="legend-swatch legend-receptor" /> Square marker: sensory receptor
+            </li>
+            <li>
+              Active pattern: {activePatterns.length ? activePatterns.join(", ") : "none"}
+            </li>
+            <li>Sensory paths and receptors render only from backend environment data (0.8)</li>
+          </ul>
+        </>
+      ) : null}
 
       {showDevelopment ? (
         <>

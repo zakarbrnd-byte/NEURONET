@@ -217,6 +217,137 @@ export interface DevelopmentSummary {
   config: DevelopmentConfigSummary;
 }
 
+/** Version 0.8 — Autonomous Sensory Environment (backend-owned). */
+export type EnvironmentPreset = "quiet" | "balanced" | "active";
+
+export type ReceptorType = "background" | "touch_a" | "touch_b";
+
+export interface EnvironmentConfigSummary {
+  enabled: boolean;
+  deterministicSeed: number;
+  preset: EnvironmentPreset;
+  backgroundEnabled: boolean;
+  backgroundIntervalTicks: number;
+  backgroundStrengthMv: number;
+  patternAEnabled: boolean;
+  patternBEnabled: boolean;
+  patternAIntervalTicks: number;
+  patternBIntervalTicks: number;
+  patternAFirstTick: number;
+  patternBFirstTick: number;
+  maximumEventsPerTick: number;
+}
+
+export interface SensoryReceptor {
+  id: string;
+  receptorType: ReceptorType;
+  position: NeuronPosition;
+  region: string;
+  sensitivity: number;
+  activationThreshold: number;
+  currentActivation: number;
+  lastActivatedTick: number | null;
+  activationCount: number;
+  active: boolean;
+}
+
+export interface SensoryConnection {
+  id: string;
+  receptorId: string;
+  targetNeuronId: string;
+  weightMv: number;
+  enabled: boolean;
+}
+
+export interface PatternStep {
+  offsetTicks: number;
+  receptorId: string;
+  magnitudeMv: number;
+}
+
+export interface SensoryPattern {
+  id: string;
+  name: string;
+  steps: PatternStep[];
+  repetitionIntervalTicks: number;
+  firstTick: number;
+  enabled: boolean;
+  activationCount: number;
+  lastStartedTick: number | null;
+  active: boolean;
+  activeStartedTick: number | null;
+}
+
+export interface EnvironmentStatistics {
+  totalEvents: number;
+  backgroundEvents: number;
+  patternAStarts: number;
+  patternBStarts: number;
+  receptorActivations: number;
+  sensoryDeliveries: number;
+}
+
+export interface EnvironmentHistoryEntry {
+  eventId: string;
+  tick: number;
+  kind: string;
+  patternId?: string | null;
+  receptorId?: string | null;
+  targetNeuronId?: string | null;
+  magnitudeMv?: number | null;
+  sequenceStep?: number | null;
+  reasonCodes: string[];
+  message: string;
+}
+
+export interface EnvironmentSnapshot {
+  environmentId: string;
+  name: string;
+  enabled: boolean;
+  mode: string;
+  preset: EnvironmentPreset;
+  seed: number;
+  ageTicks: number;
+  eventCount: number;
+  latestEventTick: number | null;
+  nextScheduledEventTick: number | null;
+  nextBackgroundTick: number | null;
+  nextPatternATick: number | null;
+  nextPatternBTick: number | null;
+  activePatterns: string[];
+  statistics: EnvironmentStatistics;
+  config: EnvironmentConfigSummary;
+  receptors: SensoryReceptor[];
+  sensoryConnections: SensoryConnection[];
+  patterns: SensoryPattern[];
+  recentEvents: EnvironmentHistoryEntry[];
+  sensoryInputCount: number;
+  neuralSynapseCount: number;
+}
+
+export interface SensoryDeliveryTrace {
+  receptorId: string;
+  targetNeuronId: string;
+  magnitudeMv: number;
+  connectionId: string;
+  eventId: string;
+}
+
+export interface EnvironmentTrace {
+  eventsGenerated: string[];
+  receptorsActivated: string[];
+  sensoryDeliveries: SensoryDeliveryTrace[];
+  activePatterns: string[];
+}
+
+export interface EnvironmentControlsRequest {
+  enabled?: boolean;
+  backgroundEnabled?: boolean;
+  patternAEnabled?: boolean;
+  patternBEnabled?: boolean;
+  preset?: EnvironmentPreset;
+}
+
 export interface TissueInfo {
   label: string;
   region: string;
@@ -234,6 +365,8 @@ export interface NetworkSnapshot {
   structural: StructuralSnapshot;
   /** Present from Version 0.7; omit/null → no developmental visualization. */
   development?: DevelopmentSummary | null;
+  /** Present from Version 0.8; omit/null → no sensory visualization. */
+  environment?: EnvironmentSnapshot | null;
 }
 
 export interface PropagationTrace {
@@ -249,6 +382,8 @@ export interface NetworkStepTrace {
   firedNeuronIds: string[];
   propagations: PropagationTrace[];
   eventIds: string[];
+  /** Present from Version 0.8. */
+  environmentTrace?: EnvironmentTrace | null;
   network: NetworkSnapshot;
 }
 
@@ -334,8 +469,66 @@ export function isDevelopmentalEventType(type: string): boolean {
   );
 }
 
+export function isEnvironmentEventType(type: string): boolean {
+  return (
+    type.startsWith("environment_") ||
+    type.startsWith("receptor_") ||
+    type.startsWith("sensory_pattern_") ||
+    type === "laboratory_stimulus"
+  );
+}
+
 export function isObservatoryEventType(type: string): boolean {
-  return isStructuralEventType(type) || isDevelopmentalEventType(type);
+  return (
+    isStructuralEventType(type) ||
+    isDevelopmentalEventType(type) ||
+    isEnvironmentEventType(type)
+  );
+}
+
+export function environmentEventPlainSummary(event: NetworkEvent): string {
+  if (event.message) return event.message;
+  const receptor = event.sourceNeuronId ?? event.entityId ?? "?";
+  const target = event.targetNeuronId
+    ? shortNeuronId(event.targetNeuronId)
+    : event.neuronId
+      ? shortNeuronId(event.neuronId)
+      : "?";
+  switch (event.type) {
+    case "environment_paused":
+      return "Environment disabled — no sensory events.";
+    case "environment_resumed":
+      return event.message || "Environment controls updated.";
+    case "environment_event_started":
+      return `Background / environment event via ${receptor}.`;
+    case "receptor_activated":
+      return `${receptor} activated.`;
+    case "receptor_input_delivered":
+      return `${receptor} delivered sensory input to ${target}.`;
+    case "sensory_pattern_started":
+      return `Sensory pattern ${event.entityId ?? "?"} started.`;
+    case "sensory_pattern_step":
+      return `Sensory pattern step via ${receptor}.`;
+    case "sensory_pattern_completed":
+      return `Sensory pattern ${event.entityId ?? "?"} completed.`;
+    case "laboratory_stimulus":
+      return `Laboratory electrode stimulated ${target}.`;
+    default:
+      return event.message || event.type;
+  }
+}
+
+export function receptorTypeLabel(type: ReceptorType): string {
+  switch (type) {
+    case "background":
+      return "Background";
+    case "touch_a":
+      return "Touch A";
+    case "touch_b":
+      return "Touch B";
+    default:
+      return type;
+  }
 }
 
 export function neuronIsDeveloping(neuron: NeuronSnapshot): boolean {
@@ -464,7 +657,8 @@ export function explainStep(trace: NetworkStepTrace): string[] {
 
 export function timelineSummary(trace: NetworkStepTrace): string {
   const fired = trace.firedNeuronIds.map(shortNeuronId);
-  if (fired.length === 0 && trace.propagations.length === 0) {
+  const sensoryCount = trace.environmentTrace?.sensoryDeliveries.length ?? 0;
+  if (fired.length === 0 && trace.propagations.length === 0 && sensoryCount === 0) {
     return "Quiet recovery tick";
   }
   const parts: string[] = [];
@@ -473,6 +667,9 @@ export function timelineSummary(trace: NetworkStepTrace): string {
   }
   if (trace.propagations.length > 0) {
     parts.push(`${trace.propagations.length} signal(s) delivered`);
+  }
+  if (sensoryCount > 0) {
+    parts.push(`${sensoryCount} sensory input(s)`);
   }
   return parts.join("; ");
 }

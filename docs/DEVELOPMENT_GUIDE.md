@@ -80,6 +80,7 @@ Backend owns:
 - synaptic plasticity state
 - structural development state (candidates, pruning risk, birth/prune)
 - developmental lifecycle (birth, migration, settlement)
+- virtual environment, receptors, sensory connections
 - learning/plasticity state (when those milestones exist)
 - simulation ticks and events
 
@@ -104,6 +105,7 @@ Frontend must never invent:
 - propagation
 - membrane potentials
 - developmental lifecycle or migration
+- environmental events or receptor activations
 - learning
 - simulation state
 
@@ -126,8 +128,8 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.7 Developmental Neural Tissue**
+**Shipped runtime:** **0.8 Autonomous Sensory Environment**
 
-Cell development and topology change are backend-owned.  
-Do not implement body sensors, cognition, or large-scale tissue unless explicitly asked.
-Next recommended milestone: **0.8 Embodied Sensory Surface** (not started).
+Sensory input enters through backend receptors. Laboratory electrodes stay distinct.  
+Do not implement real device sensors, homeostasis, or cognition unless explicitly asked.
+Next candidates: **0.8B Homeostatic Regulation** or **0.9 Embodied Sensory Surface** (neither started).

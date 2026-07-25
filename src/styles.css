@@ -1590,3 +1590,184 @@ body {
   border-left: 2px solid color-mix(in srgb, #6b7c5c 55%, transparent);
   padding-left: 8px;
 }
+
+/* ========== Autonomous Sensory Environment (0.8) ========== */
+
+.tissue-view.mode-sensory .tissue-axon {
+  opacity: 0.28;
+}
+
+.tissue-sensory-path-outer {
+  stroke: #5c6e58;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.tissue-sensory-path-inner {
+  stroke: #b7c4a8;
+  stroke-linecap: round;
+  opacity: 0.95;
+}
+
+.tissue-sensory-label {
+  fill: #a8b59a;
+  font-size: 1.8px;
+  font-weight: 600;
+  text-anchor: middle;
+  letter-spacing: 0.02em;
+}
+
+.tissue-sensory-pulse-dot {
+  fill: #d6e0c8;
+  stroke: #3f4a38;
+  stroke-width: 0.25;
+}
+
+.tissue-sensory-pulse-label {
+  fill: #c5d2b6;
+  font-size: 1.9px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.tissue-sensory-group.is-disabled {
+  opacity: 0.35;
+}
+
+.tissue-receptor-shape {
+  fill: #d2d8c6;
+  stroke: #3a4334;
+  stroke-width: 0.35;
+}
+
+.tissue-receptor.is-selected .tissue-receptor-shape {
+  stroke: #e8eedc;
+  stroke-width: 0.55;
+}
+
+.tissue-receptor.is-active .tissue-receptor-shape {
+  fill: #e4ebd8;
+}
+
+.tissue-receptor-mark {
+  fill: #2f362a;
+  font-size: 2px;
+  font-weight: 700;
+}
+
+.tissue-receptor-label {
+  fill: #aebaa0;
+  font-size: 1.7px;
+  font-weight: 600;
+}
+
+.tissue-receptor-activation-ring {
+  fill: none;
+  stroke: #8a9a7a;
+  stroke-width: 0.35;
+  stroke-dasharray: 0.8 0.7;
+}
+
+.tissue-receptor.receptor-background .tissue-receptor-shape {
+  fill: #c9d0be;
+}
+
+.tissue-receptor.receptor-touch_a .tissue-receptor-shape {
+  fill: #d8d4c4;
+}
+
+.tissue-receptor.receptor-touch_b .tissue-receptor-shape {
+  fill: #cfd6c8;
+}
+
+.sensory-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px 10px;
+  margin: 8px 0 4px;
+  padding: 0;
+}
+
+.sensory-summary div {
+  margin: 0;
+}
+
+.sensory-summary dt {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.sensory-summary dd {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tissue-sensory-legend {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.legend-sensory-double {
+  background: linear-gradient(
+    to bottom,
+    transparent 30%,
+    #5c6e58 30%,
+    #5c6e58 42%,
+    transparent 42%,
+    transparent 58%,
+    #b7c4a8 58%,
+    #b7c4a8 70%,
+    transparent 70%
+  );
+  border: 1px solid color-mix(in srgb, #5c6e58 40%, transparent);
+  height: 8px;
+}
+
+.legend-receptor {
+  background: #d2d8c6;
+  border: 1px solid #3a4334;
+  border-radius: 1px;
+  height: 8px;
+}
+
+.environment-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.env-toggle-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.receptor-connection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.receptor-connection-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.timeline-environment {
+  border-left: 2px solid color-mix(in srgb, #8a9a7a 60%, transparent);
+  padding-left: 8px;
+}
