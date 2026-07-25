@@ -1,8 +1,8 @@
 [package]
 name = "neuronet-backend"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
-description = "NEURONET Version 0.7 neural core — backend source of truth"
+description = "NEURONET Version 0.8 neural core — backend source of truth"
 publish = false
 
 [dependencies]

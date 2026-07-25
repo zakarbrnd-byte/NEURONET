@@ -38,7 +38,8 @@ Always distinguish:
 | Structural readiness / pruning risk observation | Implemented (0.6C, approximation) |
 | Synapse creation / deletion (deterministic) | Implemented (0.6D, approximation) |
 | Developmental lifecycle / migration | Implemented (0.7, simplified approximation) |
-| Body / sensors | Future work (0.8–0.9+) |
+| Virtual sensory environment / receptors | Implemented (0.8, simplified approximation) |
+| Real device sensors / embodiment | Future work (0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |
 
 ---
@@ -147,6 +148,22 @@ Details: [`experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md`](experiments/0.7_DEVE
 
 ---
 
+## Autonomous sensory environment (0.8)
+
+**Implemented / Approximation**
+
+- Deterministic virtual environment with Balanced/Quiet/Active presets
+- Abstract receptors: background, touch_a, touch_b
+- Explicit sensory connections (not neural synapses; Option A wiring)
+- Recurring PATTERN-A / PATTERN-B and weak background pulses
+- Laboratory electrode stimulation remains distinct (`laboratory_stimulus`)
+
+**Not claimed:** real sensors, perception, pattern recognition, reward, goals, cognition.
+
+Details: [`experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md).
+
+---
+
 ## Stimulation model
 
 **Implemented / Approximation**
@@ -169,15 +186,16 @@ It is **not** sensory transduction through receptors.
 | 0.6C Structural foundations | Implemented — observe candidates and pruning risk |
 | 0.6D Synapse birth and pruning | Implemented — deterministic create/delete under limits |
 | 0.7 Developmental neural tissue | Implemented — simplified progenitor → settlement lifecycle |
+| 0.8 Autonomous sensory environment | Implemented — virtual receptors + scheduled patterns |
 
-Plasticity and development must remain backend-owned and Mission Control–observable.  
+Plasticity, development, and environment must remain backend-owned and Mission Control–observable.  
 Do not “learn” by silently editing UI state.
 
 ---
 
 ## Future: body
 
-**Future work (0.8 Embodied Sensory Surface, then 0.9+)**
+**Future work (0.9 Embodied Sensory Surface+)**
 
 Smartphone as first body: touch, camera, microphone, device sensors, speaker/haptics.
 
