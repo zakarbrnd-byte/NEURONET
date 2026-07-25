@@ -10,6 +10,7 @@ interface NeuronStatusProps {
   networkTick: number;
   connections: ConnectionSnapshot[];
   events: NetworkEvent[];
+  embedded?: boolean;
 }
 
 function formatMv(value: number): string {
@@ -25,11 +26,12 @@ export function NeuronStatus({
   networkTick,
   connections,
   events,
+  embedded = false,
 }: NeuronStatusProps) {
   if (!neuron) {
     return (
-      <section className="card">
-        <h2 className="card-title">Neuron Inspector</h2>
+      <section className={embedded ? "inspector-body" : "card"}>
+        {!embedded ? <h2 className="card-title">Neuron Inspector</h2> : null}
         <p className="hint">Select a backend neuron to inspect its electrical state.</p>
       </section>
     );
@@ -59,13 +61,22 @@ export function NeuronStatus({
   );
 
   return (
-    <section className="card" aria-labelledby="status-heading">
-      <h2 id="status-heading" className="card-title">
-        Neuron Inspector
-      </h2>
-      <p className="hint">
-        Values come from the Rust backend. Educational millivolt approximation only.
-      </p>
+    <section
+      className={embedded ? "inspector-body" : "card"}
+      aria-labelledby={embedded ? undefined : "status-heading"}
+    >
+      {!embedded ? (
+        <>
+          <h2 id="status-heading" className="card-title">
+            Neuron Inspector
+          </h2>
+          <p className="hint">
+            Values come from the Rust backend. Educational millivolt approximation only.
+          </p>
+        </>
+      ) : (
+        <p className="hint">Values come from the Rust backend.</p>
+      )}
 
       <dl className="status-list">
         <div className="status-row">

@@ -4,8 +4,6 @@ interface ControlsProps {
   running: boolean;
   autoStep: number;
   maxAutoSteps: number;
-  onWeakSignal: () => void;
-  onStrongSignal: () => void;
   onStep: () => void;
   onRun: () => void;
   onPause: () => void;
@@ -18,8 +16,6 @@ export function Controls({
   running,
   autoStep,
   maxAutoSteps,
-  onWeakSignal,
-  onStrongSignal,
   onStep,
   onRun,
   onPause,
@@ -29,22 +25,9 @@ export function Controls({
 
   return (
     <section className="actions" aria-label="Network controls">
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={locked}
-        onClick={onWeakSignal}
-      >
-        Inject Weak Signal
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary"
-        disabled={locked}
-        onClick={onStrongSignal}
-      >
-        Inject Strong Signal
-      </button>
+      <p className="hint sequence-meta">
+        Stimulate neurons by tapping (inspect) or long-pressing (+5 mV) in the network graph.
+      </p>
       <button type="button" className="btn btn-secondary" disabled={locked} onClick={onStep}>
         Step One Tick
       </button>

@@ -300,6 +300,12 @@ body {
   stroke-width: 3;
 }
 
+.network-node.pressing {
+  stroke: var(--accent);
+  stroke-width: 4;
+  filter: brightness(1.25);
+}
+
 .network-label,
 .network-node-id,
 .network-node-mv,
@@ -471,6 +477,92 @@ body {
   background: var(--bg-elevated);
 }
 
+.inspector-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.inspector-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(4, 8, 12, 0.55);
+  pointer-events: auto;
+}
+
+.inspector-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: min(85dvh, 720px);
+  overflow: auto;
+  pointer-events: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  padding: 12px 16px 24px;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.inspector-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 4px auto 12px;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inspector-header .card-title {
+  margin: 0;
+}
+
+.inspector-close {
+  min-height: 44px;
+  padding: 10px 14px;
+  flex: 0 0 auto;
+}
+
+.electrode-callout {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(61, 156, 240, 0.35);
+  border-radius: 12px;
+  background: rgba(61, 156, 240, 0.08);
+}
+
+.electrode-callout strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.electrode-callout p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.inspector-body {
+  margin-bottom: 14px;
+}
+
+.inspector-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 @media (min-width: 640px) {
   .page {
     padding-top: 40px;
@@ -482,5 +574,35 @@ body {
 
   .btn {
     flex: 1 1 calc(50% - 6px);
+  }
+}
+
+@media (min-width: 900px) {
+  .page {
+    max-width: 960px;
+  }
+
+  .inspector-root {
+    pointer-events: none;
+  }
+
+  .inspector-backdrop {
+    background: transparent;
+  }
+
+  .inspector-panel {
+    top: 24px;
+    right: 24px;
+    left: auto;
+    bottom: 24px;
+    width: min(380px, calc(100vw - 48px));
+    max-height: none;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  }
+
+  .inspector-handle {
+    display: none;
   }
 }

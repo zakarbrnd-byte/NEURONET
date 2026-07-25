@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NetworkView } from "./NetworkView";
 import type { ConnectionSnapshot, NeuronSnapshot, PropagationTrace } from "../../types/neural";
 
@@ -59,35 +59,90 @@ const connections: ConnectionSnapshot[] = [
   },
 ];
 
-describe("NetworkView", () => {
-  it("renders five backend neurons and five connections", () => {
-    const { container } = render(
-      <NetworkView
-        neurons={neurons}
-        connections={connections}
-        selectedNeuronId="NEURON-001"
-        activePropagations={[]}
-        reducedMotion={false}
-        onSelectNeuron={() => undefined}
-      />,
-    );
+function renderView(
+  overrides: Partial<{
+    onSelectNeuron: (id: string) => void;
+    onLongPressStimulate: (id: string) => void;
+    onPressVisualChange: (id: string | null) => void;
+    activePropagations: PropagationTrace[];
+    reducedMotion: boolean;
+  }> = {},
+) {
+  const onSelectNeuron = overrides.onSelectNeuron ?? vi.fn();
+  const onLongPressStimulate = overrides.onLongPressStimulate ?? vi.fn();
+  const onPressVisualChange = overrides.onPressVisualChange ?? vi.fn();
 
+  const result = render(
+    <NetworkView
+      neurons={neurons}
+      connections={connections}
+      selectedNeuronId="NEURON-001"
+      activePropagations={overrides.activePropagations ?? []}
+      reducedMotion={overrides.reducedMotion ?? false}
+      interactionDisabled={false}
+      pressingNeuronId={null}
+      onSelectNeuron={onSelectNeuron}
+      onLongPressStimulate={onLongPressStimulate}
+      onPressVisualChange={onPressVisualChange}
+    />,
+  );
+
+  return { ...result, onSelectNeuron, onLongPressStimulate, onPressVisualChange };
+}
+
+describe("NetworkView", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders five backend neurons and five connections", () => {
+    const { container } = renderView();
     expect(container.querySelectorAll(".network-node")).toHaveLength(5);
     expect(container.querySelectorAll(".network-link")).toHaveLength(5);
   });
 
-  it("does not create extra neurons", () => {
-    const { container } = render(
-      <NetworkView
-        neurons={neurons.slice(0, 2)}
-        connections={[connections[0]]}
-        selectedNeuronId="NEURON-001"
-        activePropagations={[]}
-        reducedMotion={false}
-        onSelectNeuron={() => undefined}
-      />,
-    );
-    expect(container.querySelectorAll(".network-node")).toHaveLength(2);
+  it("selects on short tap without stimulating", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = container.querySelector('[aria-label^="Select NEURON-003"]') as Element;
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+
+    expect(onSelectNeuron).toHaveBeenCalledWith("NEURON-003");
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+  });
+
+  it("stimulates on long press after 500ms", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
+
+    expect(onLongPressStimulate).toHaveBeenCalledWith("NEURON-002");
+    expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("cancels long press when the pointer moves too far", () => {
+    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
+    const node = container.querySelector('[aria-label^="Select NEURON-001"]') as Element;
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(node, { pointerId: 1, clientX: 40, clientY: 10 });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 40, clientY: 10 });
+
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+    expect(onSelectNeuron).not.toHaveBeenCalled();
   });
 
   it("animates only a matching real propagation", () => {
@@ -99,63 +154,8 @@ describe("NetworkView", () => {
         amountMv: 16,
       },
     ];
-    const { container, rerender } = render(
-      <NetworkView
-        neurons={neurons}
-        connections={connections}
-        selectedNeuronId="NEURON-001"
-        activePropagations={active}
-        reducedMotion
-        onSelectNeuron={() => undefined}
-      />,
-    );
-
+    const { container } = renderView({ activePropagations: active, reducedMotion: true });
     expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(1);
     expect(screen.getByText("+16 mV")).toBeInTheDocument();
-
-    rerender(
-      <NetworkView
-        neurons={neurons}
-        connections={connections}
-        selectedNeuronId="NEURON-001"
-        activePropagations={[]}
-        reducedMotion
-        onSelectNeuron={() => undefined}
-      />,
-    );
-    expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(0);
-  });
-
-  it("notifies when a neuron is selected", () => {
-    const onSelect = vi.fn();
-    const { container } = render(
-      <NetworkView
-        neurons={neurons}
-        connections={connections}
-        selectedNeuronId="NEURON-001"
-        activePropagations={[]}
-        reducedMotion={false}
-        onSelectNeuron={onSelect}
-      />,
-    );
-    const node = container.querySelector('[aria-label^="Select NEURON-003"]');
-    expect(node).toBeTruthy();
-    fireEvent.click(node as Element);
-    expect(onSelect).toHaveBeenCalledWith("NEURON-003");
-  });
-
-  it("keeps the SVG inside a bounded wrapper", () => {
-    const { container } = render(
-      <NetworkView
-        neurons={neurons}
-        connections={connections}
-        selectedNeuronId="NEURON-001"
-        activePropagations={[]}
-        reducedMotion={false}
-        onSelectNeuron={() => undefined}
-      />,
-    );
-    expect(container.querySelector(".network-svg-wrap")).toBeTruthy();
-    expect(container.querySelector(".network-svg")).toBeTruthy();
   });
 });

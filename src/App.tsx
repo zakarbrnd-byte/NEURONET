@@ -7,7 +7,7 @@ import { NetworkView } from "./features/network/NetworkView";
 import { Timeline } from "./features/network/Timeline";
 import { CausalPanel } from "./features/network/CausalPanel";
 import { NetworkSummary } from "./features/network/NetworkSummary";
-import { NeuronStatus } from "./features/neuron/NeuronStatus";
+import { NeuronInspector } from "./features/neuron/NeuronInspector";
 import { ApiError, neuralApi } from "./services/neuralApi";
 import type {
   ConnectionStatus,
@@ -23,7 +23,6 @@ import {
   timelineSummary,
 } from "./types/neural";
 
-const DEFAULT_NEURON = "NEURON-001";
 const WEAK_SIGNAL_MV = 5;
 const STRONG_SIGNAL_MV = 20;
 const MAX_AUTO_STEPS = 12;
@@ -35,7 +34,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [network, setNetwork] = useState<NetworkSnapshot | null>(null);
   const [events, setEvents] = useState<NetworkEvent[]>([]);
-  const [selectedNeuronId, setSelectedNeuronId] = useState(DEFAULT_NEURON);
+  const [selectedNeuronId, setSelectedNeuronId] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [pressingNeuronId, setPressingNeuronId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [autoStep, setAutoStep] = useState(0);
@@ -103,8 +104,8 @@ export default function App() {
       setEvents(backendEvents);
       setStatus("connected");
 
-      if (!snapshot.neurons.some((neuron) => neuron.id === selectedNeuronId)) {
-        setSelectedNeuronId(snapshot.neurons[0]?.id ?? DEFAULT_NEURON);
+      if (selectedNeuronId && !snapshot.neurons.some((neuron) => neuron.id === selectedNeuronId)) {
+        setSelectedNeuronId(snapshot.neurons[0]?.id ?? null);
       }
     } catch (err) {
       setStatus("unavailable");
@@ -182,7 +183,7 @@ export default function App() {
     }
   }
 
-  async function runMutation(action: () => Promise<NetworkSnapshot>) {
+  async function stimulateNeuron(neuronId: string, amountMv: number) {
     if (busyRef.current || runningRef.current || status !== "connected") {
       return;
     }
@@ -190,9 +191,11 @@ export default function App() {
     setBusy(true);
     busyRef.current = true;
     setError(null);
+    setSelectedNeuronId(neuronId);
+    setInspectorOpen(true);
 
     try {
-      const snapshot = await action();
+      const snapshot = await neuralApi.injectSignal(neuronId, amountMv);
       setNetwork(snapshot);
       setActivePropagations([]);
       await refreshEvents();
@@ -206,6 +209,7 @@ export default function App() {
     } finally {
       setBusy(false);
       busyRef.current = false;
+      setPressingNeuronId(null);
     }
   }
 
@@ -293,10 +297,15 @@ export default function App() {
     runningRef.current = false;
   }
 
+  function handleSelectNeuron(neuronId: string) {
+    setSelectedNeuronId(neuronId);
+    setInspectorOpen(true);
+  }
+
   const selectedNeuron =
-    network?.neurons.find((neuron) => neuron.id === selectedNeuronId) ??
-    network?.neurons[0] ??
-    null;
+    (selectedNeuronId
+      ? network?.neurons.find((neuron) => neuron.id === selectedNeuronId)
+      : null) ?? null;
 
   const sequenceStatus = running
     ? `running (${autoStep}/${MAX_AUTO_STEPS})`
@@ -314,10 +323,14 @@ export default function App() {
           <NetworkView
             neurons={network.neurons}
             connections={network.connections}
-            selectedNeuronId={selectedNeuron?.id ?? selectedNeuronId}
+            selectedNeuronId={selectedNeuronId}
             activePropagations={activePropagations}
             reducedMotion={reducedMotion}
-            onSelectNeuron={setSelectedNeuronId}
+            interactionDisabled={status !== "connected" || busy || running}
+            pressingNeuronId={pressingNeuronId}
+            onSelectNeuron={handleSelectNeuron}
+            onLongPressStimulate={(neuronId) => void stimulateNeuron(neuronId, WEAK_SIGNAL_MV)}
+            onPressVisualChange={setPressingNeuronId}
           />
         ) : (
           <section className="card">
@@ -337,14 +350,6 @@ export default function App() {
 
         <CausalPanel lastTrace={lastTrace} />
         <Timeline entries={timeline} />
-
-        <NeuronStatus
-          neuron={selectedNeuron}
-          networkTick={network?.tick ?? 0}
-          connections={network?.connections ?? []}
-          events={events}
-        />
-
         <ActivityFeed events={events} />
 
         <Controls
@@ -353,16 +358,6 @@ export default function App() {
           running={running}
           autoStep={autoStep}
           maxAutoSteps={MAX_AUTO_STEPS}
-          onWeakSignal={() =>
-            void runMutation(() =>
-              neuralApi.injectSignal(selectedNeuron?.id ?? selectedNeuronId, WEAK_SIGNAL_MV),
-            )
-          }
-          onStrongSignal={() =>
-            void runMutation(() =>
-              neuralApi.injectSignal(selectedNeuron?.id ?? selectedNeuronId, STRONG_SIGNAL_MV),
-            )
-          }
           onStep={() => void runStepRequest()}
           onRun={handleRunSequence}
           onPause={handlePauseSequence}
@@ -375,6 +370,27 @@ export default function App() {
           </p>
         ) : null}
       </main>
+
+      <NeuronInspector
+        open={inspectorOpen}
+        neuron={selectedNeuron}
+        networkTick={network?.tick ?? 0}
+        connections={network?.connections ?? []}
+        events={events}
+        busy={busy}
+        stimulateDisabled={status !== "connected" || running}
+        onStimulateWeak={() => {
+          if (selectedNeuronId) {
+            void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV);
+          }
+        }}
+        onStimulateStrong={() => {
+          if (selectedNeuronId) {
+            void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV);
+          }
+        }}
+        onClose={() => setInspectorOpen(false)}
+      />
     </div>
   );
 }

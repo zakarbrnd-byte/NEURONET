@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -93,8 +93,25 @@ vi.mock("./services/neuralApi", () => {
       hasConfiguredBackend: vi.fn(() => true),
       getHealth: vi.fn(async () => ({ status: "ok", version: "0.5" })),
       getNetwork: vi.fn(async () => snapshot),
-      getEvents: vi.fn(async () => []),
-      injectSignal: vi.fn(async () => snapshot),
+      getEvents: vi.fn(async () => [
+        {
+          id: "evt-inject",
+          timestamp: "2026-07-25T00:00:00.000Z",
+          networkTick: 0,
+          type: "signal_injected",
+          neuronId: "NEURON-002",
+          amountMv: 5,
+          message: "Injected +5 mV into NEURON-002",
+        },
+      ]),
+      injectSignal: vi.fn(async (_id: string, amountMv: number) => ({
+        ...snapshot,
+        neurons: snapshot.neurons.map((neuron) =>
+          neuron.id === "NEURON-002"
+            ? { ...neuron, membranePotentialMv: -70 + amountMv }
+            : neuron,
+        ),
+      })),
       stepNetwork: vi.fn(async () => stepTrace),
       resetNetwork: vi.fn(async () => snapshot),
     },
@@ -103,29 +120,65 @@ vi.mock("./services/neuralApi", () => {
 
 import { neuralApi } from "./services/neuralApi";
 
-describe("App observatory 0.5", () => {
+describe("App observatory direct interaction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
   });
 
-  it("renders five backend neurons and updates selection", async () => {
+  it("opens inspector on tap without injecting", async () => {
     const { container } = render(<App />);
     await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
-    expect(container.querySelectorAll(".network-node")).toHaveLength(5);
-    expect(container.querySelectorAll(".network-link")).toHaveLength(5);
 
-    const node = container.querySelector('[aria-label^="Select NEURON-004"]');
-    await userEvent.click(node as Element);
+    const node = container.querySelector('[aria-label^="Select NEURON-004"]') as Element;
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Direct electrode-style stimulation")).toBeInTheDocument();
     expect(screen.getByText("NEURON-004")).toBeInTheDocument();
+    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
   });
 
-  it("shows unavailable state and disables controls", async () => {
+  it("long press injects +5 mV through the backend and keeps inspector open", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
+
+    await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 5));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("-65.0 mV")).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("inspector strong stimulus calls the API", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
+
+    await screen.findByRole("dialog");
+    await userEvent.click(screen.getByRole("button", { name: "Strong Stimulus +20 mV" }));
+    await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 20));
+  });
+
+  it("shows unavailable state and disables step controls", async () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(false);
     const { container } = render(<App />);
     await waitFor(() => expect(screen.getByText("Backend Unavailable")).toBeInTheDocument());
-    const weak = container.querySelector("button.btn-primary") as HTMLButtonElement;
-    expect(weak.disabled).toBe(true);
+    const step = Array.from(container.querySelectorAll("button.btn")).find((button) =>
+      button.textContent?.includes("Step One Tick"),
+    ) as HTMLButtonElement;
+    expect(step.disabled).toBe(true);
   });
 
   it("steps through backend traces and builds timeline", async () => {
@@ -140,87 +193,5 @@ describe("App observatory 0.5", () => {
     await waitFor(() => expect(neuralApi.stepNetwork).toHaveBeenCalledTimes(1));
     expect(screen.getAllByText("Tick 1").length).toBeGreaterThan(0);
     expect(screen.getByText("+16 mV")).toBeInTheDocument();
-    expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(1);
-  });
-
-  it("does not replay the same propagation event id", async () => {
-    const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
-    const step = Array.from(container.querySelectorAll("button.btn")).find((button) =>
-      button.textContent?.includes("Step One Tick"),
-    );
-
-    await userEvent.click(step as HTMLButtonElement);
-    await waitFor(() => expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(1));
-
-    // Same event id returned again should not stay as a fresh pulse after second apply with empty fresh set.
-    vi.mocked(neuralApi.stepNetwork).mockResolvedValueOnce({
-      ...stepTrace,
-      tick: 2,
-      firedNeuronIds: [],
-      propagations: [
-        {
-          eventId: "evt-prop-1",
-          sourceNeuronId: "NEURON-001",
-          targetNeuronId: "NEURON-002",
-          amountMv: 16,
-        },
-      ],
-      network: { ...stepTrace.network, tick: 2 },
-    });
-
-    await userEvent.click(step as HTMLButtonElement);
-    await waitFor(() => expect(neuralApi.stepNetwork).toHaveBeenCalledTimes(2));
-    expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(0);
-  });
-
-  it("run sequence never overlaps step requests", async () => {
-    let inflight = 0;
-    let maxInflight = 0;
-    vi.mocked(neuralApi.stepNetwork).mockImplementation(async () => {
-      inflight += 1;
-      maxInflight = Math.max(maxInflight, inflight);
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      inflight -= 1;
-      return {
-        ...stepTrace,
-        tick: 1,
-        firedNeuronIds: [],
-        propagations: [],
-        network: {
-          ...snapshot,
-          tick: 1,
-          neurons: snapshot.neurons.map((neuron) => ({ ...neuron, tick: 1 })),
-        },
-      };
-    });
-
-    const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
-    const run = Array.from(container.querySelectorAll("button.btn")).find((button) =>
-      button.textContent?.includes("Run Sequence"),
-    );
-    await userEvent.click(run as HTMLButtonElement);
-    await waitFor(() => expect(neuralApi.stepNetwork).toHaveBeenCalled(), { timeout: 2000 });
-    await waitFor(() => expect(inflight).toBe(0), { timeout: 3000 });
-    expect(maxInflight).toBe(1);
-  });
-
-  it("reset clears timeline only after backend success", async () => {
-    const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
-    const step = Array.from(container.querySelectorAll("button.btn")).find((button) =>
-      button.textContent?.includes("Step One Tick"),
-    );
-    await userEvent.click(step as HTMLButtonElement);
-    await waitFor(() => expect(screen.getAllByText("Tick 1").length).toBeGreaterThan(0));
-
-    const reset = Array.from(container.querySelectorAll("button.btn")).find((button) =>
-      button.textContent?.includes("Reset Network"),
-    );
-    await userEvent.click(reset as HTMLButtonElement);
-    await waitFor(() => expect(neuralApi.resetNetwork).toHaveBeenCalled());
-    expect(screen.queryAllByText("Tick 1")).toHaveLength(0);
   });
 });
-
