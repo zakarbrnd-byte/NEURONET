@@ -1900,8 +1900,10 @@ mod tests {
         let mut b = NeuralNetwork::initial();
         step_n(&mut a, 30);
         step_n(&mut b, 30);
-        let na = a.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
-        let nb = b.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
         assert_eq!(na.position, nb.position);
         assert_eq!(na.lifecycle, nb.lifecycle);
         assert_eq!(na.birth_tick, 30);
@@ -1937,12 +1939,15 @@ mod tests {
         let mut network = NeuralNetwork::initial();
         step_n(&mut network, 35);
         let snap = network.snapshot();
-        assert!(snap.synapses.iter().all(|s| {
-            s.source_neuron_id != "NEURON-006" && s.target_neuron_id != "NEURON-006"
-        }));
-        assert!(snap.structural.growth_candidates.iter().all(|c| {
-            c.source_neuron_id != "NEURON-006" && c.target_neuron_id != "NEURON-006"
-        }));
+        assert!(snap
+            .synapses
+            .iter()
+            .all(|s| { s.source_neuron_id != "NEURON-006" && s.target_neuron_id != "NEURON-006" }));
+        assert!(snap
+            .structural
+            .growth_candidates
+            .iter()
+            .all(|c| { c.source_neuron_id != "NEURON-006" && c.target_neuron_id != "NEURON-006" }));
     }
 
     #[test]
@@ -1952,17 +1957,18 @@ mod tests {
         // Mature + differentiate
         step_n(&mut a, 42);
         step_n(&mut b, 42);
-        let na = a.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
-        let nb = b.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
         assert_eq!(na.cell_type_assigned, nb.cell_type_assigned);
         assert_eq!(na.target_position, nb.target_position);
         if let Some(t) = &na.target_position {
             assert!((0.0..=1.0).contains(&t.x));
             assert!((0.0..=1.0).contains(&t.y));
-            for settled in a.snapshot().neurons.iter().filter(|n| n.lifecycle
-                == crate::neuron::LifecycleState::Settled
-                && n.id != "NEURON-006")
-            {
+            for settled in sa.neurons.iter().filter(|n| {
+                n.lifecycle == crate::neuron::LifecycleState::Settled && n.id != "NEURON-006"
+            }) {
                 let dx = t.x - settled.position.x;
                 let dy = t.y - settled.position.y;
                 assert!((dx * dx + dy * dy).sqrt() >= crate::development::MIN_SOMA_SPACING - 1e-9);
@@ -2019,12 +2025,8 @@ mod tests {
         let mut settled_tick = None;
         for _ in 0..120 {
             network.step();
-            let cell = network
-                .snapshot()
-                .neurons
-                .iter()
-                .find(|n| n.id == "NEURON-006");
-            if let Some(c) = cell {
+            let snap = network.snapshot();
+            if let Some(c) = snap.neurons.iter().find(|n| n.id == "NEURON-006") {
                 if c.lifecycle == crate::neuron::LifecycleState::Settled {
                     settled_tick = c.settled_tick;
                     break;
@@ -2055,8 +2057,10 @@ mod tests {
         let mut b = NeuralNetwork::initial();
         step_n(&mut a, 45);
         step_n(&mut b, 45);
-        let na = a.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
-        let nb = b.snapshot().neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
         assert_eq!(na.morphology_progress, nb.morphology_progress);
         assert_eq!(na.soma_radius, nb.soma_radius);
 
@@ -2065,8 +2069,8 @@ mod tests {
         assert_eq!(snap.neurons.len(), 5);
         assert!(snap.neurons.iter().all(|n| n.id != "NEURON-006"));
         assert_eq!(snap.development.latest_birth_tick, None);
-        step_n(&mut a, 30);
         assert!(snap.development.population_capacity >= 5);
+        step_n(&mut a, 30);
         assert!(a.snapshot().neurons.iter().any(|n| n.id == "NEURON-006"));
     }
 

@@ -37,7 +37,8 @@ Always distinguish:
 | Deterministic Hebbian weight change | Implemented (0.6B, approximation) |
 | Structural readiness / pruning risk observation | Implemented (0.6C, approximation) |
 | Synapse creation / deletion (deterministic) | Implemented (0.6D, approximation) |
-| Body / sensors | Future work (0.9+) |
+| Developmental lifecycle / migration | Implemented (0.7, simplified approximation) |
+| Body / sensors | Future work (0.8–0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |
 
 ---
@@ -122,9 +123,27 @@ It is **not** cortical tissue and **not** developmental morphogenesis.
 
 **0.6D addition:** matured candidates may birth synapses; sustained at-risk evidence may prune unprotected synapses under topology limits. See [`experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
 
-**Not implemented:** axon outgrowth morphogenesis, neuron birth/death, DNA mutation.
+**Not implemented in 0.6C/0.6D:** axon outgrowth morphogenesis, neuron birth/death, DNA mutation.
 
 Details (foundations): [`experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
+
+---
+
+## Developmental neural tissue (0.7)
+
+**Implemented / Approximation**
+
+- Deterministic progenitor birth on a tick schedule (default first birth at tick 30).
+- Lifecycle: Maturing → Differentiating → Migrating → Settling → Settled.
+- Population-ratio differentiation (excitatory / inhibitory).
+- Backend-owned settlement targets and migration paths; settled somas never migrate.
+- Electrical and structural eligibility begin on the tick after settlement.
+- Demo scale: 5 initial settled neurons, maximum 8 total, one concurrent developing cell.
+
+**Not claimed:** embryology, stem-cell biology, chemical gradients, glia, apoptosis,
+vascular/metabolic systems, biological scale, or cognition.
+
+Details: [`experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md`](experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md).
 
 ---
 
@@ -149,15 +168,16 @@ It is **not** sensory transduction through receptors.
 | 0.6B Synaptic | Implemented — Hebbian / idle weight change on living synapses |
 | 0.6C Structural foundations | Implemented — observe candidates and pruning risk |
 | 0.6D Synapse birth and pruning | Implemented — deterministic create/delete under limits |
+| 0.7 Developmental neural tissue | Implemented — simplified progenitor → settlement lifecycle |
 
-Plasticity must remain backend-owned and Mission Control–observable.  
+Plasticity and development must remain backend-owned and Mission Control–observable.  
 Do not “learn” by silently editing UI state.
 
 ---
 
 ## Future: body
 
-**Future work (0.9+)**
+**Future work (0.8 Embodied Sensory Surface, then 0.9+)**
 
 Smartphone as first body: touch, camera, microphone, device sensors, speaker/haptics.
 

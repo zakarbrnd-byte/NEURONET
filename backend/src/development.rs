@@ -242,11 +242,7 @@ pub fn select_settlement_target(
             continue;
         }
         let spacing_score = (min_d * 1000.0) as i64;
-        let density_penalty = occupied
-            .iter()
-            .filter(|o| dist(&cand, o) < 0.25)
-            .count() as i64
-            * 10;
+        let density_penalty = occupied.iter().filter(|o| dist(&cand, o) < 0.25).count() as i64 * 10;
         let score = spacing_score - density_penalty;
         match &best {
             None => best = Some((cand, score)),
@@ -336,11 +332,16 @@ pub fn advance_migration(
         }
     };
 
-    let reached = new_progress >= 1.0 - 1e-9
-        || dist(&next, &target) < 1e-6;
+    let reached = new_progress >= 1.0 - 1e-9 || dist(&next, &target) < 1e-6;
     if reached {
         reasons.push(DevelopmentReasonCode::TargetReached);
-        return (target, 1.0, path.waypoints.len().saturating_sub(1), true, reasons);
+        return (
+            target,
+            1.0,
+            path.waypoints.len().saturating_sub(1),
+            true,
+            reasons,
+        );
     }
 
     let segment = ((new_progress * (path.waypoints.len().saturating_sub(1) as f64)) as usize)
@@ -379,7 +380,8 @@ fn morphology_for_lifecycle(
             (0.018 + 0.006 * p, 0.0, 0.0, p * 0.25)
         }
         LifecycleState::Differentiating => {
-            let p = (phase_age as f64 / config.differentiation_duration_ticks.max(1) as f64).min(1.0);
+            let p =
+                (phase_age as f64 / config.differentiation_duration_ticks.max(1) as f64).min(1.0);
             (0.022 + 0.008 * p, 0.02 * p, 0.0, 0.25 + p * 0.25)
         }
         LifecycleState::Migrating => {
@@ -417,14 +419,8 @@ fn push_dev_event(
     m.insert("tick".into(), serde_json::json!(tick));
     m.insert("cellId".into(), serde_json::json!(neuron.id));
     m.insert("neuronId".into(), serde_json::json!(neuron.id));
-    m.insert(
-        "lifecycleState".into(),
-        serde_json::json!(neuron.lifecycle),
-    );
-    m.insert(
-        "currentPosition".into(),
-        serde_json::json!(neuron.position),
-    );
+    m.insert("lifecycleState".into(), serde_json::json!(neuron.lifecycle));
+    m.insert("currentPosition".into(), serde_json::json!(neuron.position));
     if let Some(t) = &neuron.target_position {
         m.insert("targetPosition".into(), serde_json::json!(t));
     }
@@ -465,7 +461,9 @@ pub fn evaluate_development(
     {
         let mut settled_exc = neurons
             .iter()
-            .filter(|n| n.lifecycle == LifecycleState::Settled && n.cell_type == CellType::Excitatory)
+            .filter(|n| {
+                n.lifecycle == LifecycleState::Settled && n.cell_type == CellType::Excitatory
+            })
             .count();
         let mut settled_total = neurons
             .iter()
@@ -473,7 +471,9 @@ pub fn evaluate_development(
             .count();
         let mut differentiating: Vec<&Neuron> = neurons
             .iter()
-            .filter(|n| n.lifecycle == LifecycleState::Differentiating && n.cell_type_assigned.is_none())
+            .filter(|n| {
+                n.lifecycle == LifecycleState::Differentiating && n.cell_type_assigned.is_none()
+            })
             .collect();
         differentiating.sort_by(|a, b| a.id.cmp(&b.id));
         for cell in differentiating {
@@ -482,11 +482,7 @@ pub fn evaluate_development(
                 .iter()
                 .filter(|n| n.id != cell.id && n.lifecycle == LifecycleState::Settled)
                 .map(|n| n.position.clone())
-                .chain(
-                    pending_type
-                        .iter()
-                        .filter_map(|(_, _, t)| t.clone()),
-                )
+                .chain(pending_type.iter().filter_map(|(_, _, t)| t.clone()))
                 .collect();
             let reserved: Vec<Position> = neurons
                 .iter()
@@ -513,7 +509,8 @@ pub fn evaluate_development(
 
     // Advance existing developing cells.
     for cell in neurons.iter_mut() {
-        if cell.lifecycle == LifecycleState::Settled || cell.lifecycle == LifecycleState::Quiescent {
+        if cell.lifecycle == LifecycleState::Settled || cell.lifecycle == LifecycleState::Quiescent
+        {
             continue;
         }
 
@@ -554,8 +551,7 @@ pub fn evaluate_development(
                             let dx = target.x - start.x;
                             let dy = target.y - start.y;
                             cell.migration_distance = (dx * dx + dy * dy).sqrt();
-                            cell.migration_path =
-                                Some(build_migration_path(start, target.clone()));
+                            cell.migration_path = Some(build_migration_path(start, target.clone()));
                         }
                         let mut extra = serde_json::Map::new();
                         extra.insert(
@@ -837,7 +833,13 @@ mod tests {
         ];
         // 4/5 = 0.8 > 0.75 → choose inhibitory
         assert_eq!(choose_cell_type(&config, &neurons), CellType::Inhibitory);
-        neurons.push(Neuron::new_settled_demo(6, CellType::Inhibitory, 0.5, 0.5, 2));
+        neurons.push(Neuron::new_settled_demo(
+            6,
+            CellType::Inhibitory,
+            0.5,
+            0.5,
+            2,
+        ));
         // 4/6 ≈ 0.67 < 0.75 → excitatory
         assert_eq!(choose_cell_type(&config, &neurons), CellType::Excitatory);
     }
@@ -850,8 +852,7 @@ mod tests {
         let mut pos = start;
         let mut prog = 0.0;
         for _ in 0..40 {
-            let (n, p, _, reached, _) =
-                advance_migration(&pos, &path, prog, 0.08, 16);
+            let (n, p, _, reached, _) = advance_migration(&pos, &path, prog, 0.08, 16);
             pos = n;
             prog = p;
             if reached {
