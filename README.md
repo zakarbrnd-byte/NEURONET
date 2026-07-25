@@ -1,20 +1,43 @@
 # NEURONET
 
-**Version 0.1 — Debug Board Foundation**
+**Version 0.2 — Basic Digital Node**
 
-NEURONET is starting as a simple Chrome debugging dashboard. This milestone shows mock data for one future digital node. There is no backend, networking, or AI yet.
+NEURONET is a beginner-friendly Chrome Debug Board for one Digital Node. This milestone moves node rules out of the React UI and into a simple `DigitalNode` class. There is still no backend, networking, or AI.
 
 ## What it does right now
 
-The **NEURONET Debug Board** is a single React page that displays:
+The **NEURONET Debug Board** displays one local node:
 
-- Project name, version, and mode
-- Mock node fields: ID, state, energy, tick, last message
+- Project name, version `0.2`, and mode `Local DigitalNode`
+- Node fields: ID, state, energy, tick, last message
 - An energy progress bar
-- A short activity feed
-- **Send Hello** and **Reset** buttons (local React state only)
+- An activity feed
+- Buttons: **Send Hello**, **Wake**, **Sleep**, **Reset**
 
-All values are mock data in the browser. Nothing is saved to a server.
+## What DigitalNode is
+
+`src/models/DigitalNode.ts` is a plain TypeScript class that owns:
+
+- `id`, `state`, `energy`, `tick`, `lastMessage`
+- Methods: `receiveMessage`, `wake`, `sleep`, `reset`, `getData`
+
+Node logic (energy, state changes, ticks, message storage) lives in that class, not in the React components.
+
+The UI calls a method, then reads a snapshot with `getData()` and shows it.
+
+## Why node logic is separate from the UI
+
+Keeping rules inside `DigitalNode` makes the project easier to understand:
+
+- The Debug Board draws the current values.
+- The DigitalNode decides how values change.
+- Later milestones can grow the node without rewriting the whole page.
+
+## Browser-only memory
+
+- The node exists only in browser memory.
+- There is no backend and no persistence.
+- Refreshing the browser resets the node.
 
 ## Folder structure
 
@@ -26,7 +49,9 @@ NEURONET/
 │   │   ├── StatusCard.tsx
 │   │   └── ActivityFeed.tsx
 │   ├── data/
-│   │   └── mockNode.ts
+│   │   └── initialActivity.ts
+│   ├── models/
+│   │   └── DigitalNode.ts
 │   ├── types/
 │   │   └── node.ts
 │   ├── App.tsx
@@ -56,39 +81,25 @@ npm install
 npm run dev
 ```
 
-Vite prints a local URL, usually:
+Open:
 
 ```text
 http://localhost:5173/NEURONET/
 ```
 
-## Open in Chrome
-
-1. Run `npm run dev`.
-2. Open Chrome.
-3. Go to `http://localhost:5173/NEURONET/`.
-4. On a phone on the same network, use the Network URL Vite prints, plus `/NEURONET/`.
-
 ## GitHub Pages
 
-This project deploys from `main` with GitHub Actions (`.github/workflows/deploy-pages.yml`).
-
-After Pages is enabled for the repository (Settings → Pages → Source: **GitHub Actions**), the live Debug Board is:
+Live Debug Board:
 
 ```text
 https://zakarbrnd-byte.github.io/NEURONET/
 ```
 
-The Vite `base` path is set to `/NEURONET/` so asset URLs work on GitHub Pages.
+Deployed from `main` by `.github/workflows/deploy-pages.yml`.  
+Vite `base` is `/NEURONET/`.
 
 ## Build check
 
 ```bash
 npm run build
 ```
-
-## Important notes
-
-- Current data is **mock data** only.
-- There is **no backend** yet.
-- Buttons update React state in the browser only.

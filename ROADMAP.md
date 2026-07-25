@@ -1,10 +1,10 @@
 # NEURONET Roadmap
 
-## 0.1 Debug Board Foundation
+## 0.1 Debug Board Foundation ✅ Complete
 
 Create the folder structure and Chrome debugging screen.
 
-## 0.2 Basic Digital Node
+## 0.2 Basic Digital Node ← Current
 
 Replace mock data with a basic node model.
 

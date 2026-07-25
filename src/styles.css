@@ -190,6 +190,7 @@ body {
 .actions {
   display: flex;
   flex-direction: column;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 4px;
 }
@@ -241,6 +242,6 @@ body {
   }
 
   .btn {
-    flex: 1;
+    flex: 1 1 calc(50% - 6px);
   }
 }

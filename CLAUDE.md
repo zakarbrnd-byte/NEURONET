@@ -9,9 +9,10 @@ NEURONET is early. Keep it beginner-friendly.
 3. Do not introduce AI or cognition claims.
 4. Explain major code changes clearly.
 5. Preserve mobile Chrome compatibility.
+6. Keep node business rules inside `DigitalNode`, not in React components.
 
 ## Current milestone
 
-**0.1 Debug Board Foundation**
+**0.2 Basic Digital Node**
 
-React + TypeScript + Vite + plain CSS. Mock node data. No backend.
+React + TypeScript + Vite + plain CSS. One local `DigitalNode` model. No backend.
