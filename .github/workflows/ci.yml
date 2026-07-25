@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-foundation:
+    name: Backend foundation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Verify required foundation paths
+        run: |
+          set -euo pipefail
+          required=(
+            README.md
+            PHILOSOPHY.md
+            ARCHITECTURE.md
+            ENGINEERING_ROADMAP.md
+            RESEARCH_ROADMAP.md
+            HYPOTHESES.md
+            CONTRIBUTING.md
+            CLAUDE.md
+            CHANGELOG.md
+            LICENSE
+            backend/Cargo.toml
+            backend/src/main.rs
+            backend/src/lib.rs
+            frontend/package.json
+            shared/README.md
+            docs/README.md
+            docs/architecture/README.md
+            docs/hypotheses/README.md
+          )
+          for path in "${required[@]}"; do
+            if [[ ! -e "$path" ]]; then
+              echo "Missing required foundation path: $path"
+              exit 1
+            fi
+          done
+
+          if [[ -e ROADMAP.md ]]; then
+            echo "ROADMAP.md must not exist; use ENGINEERING_ROADMAP.md and RESEARCH_ROADMAP.md"
+            exit 1
+          fi
+
+      - name: Cargo check workspace
+        run: cargo check --workspace
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+  frontend-foundation:
+    name: Frontend foundation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify frontend scaffold
+        run: |
+          set -euo pipefail
+          test -f frontend/package.json
+          test -d frontend/src
+          test -d frontend/components
+          test -d frontend/layouts
+          test -d frontend/pages
+          test -d frontend/services
+          test -d frontend/hooks
+          test -d frontend/types
+          test -d frontend/assets

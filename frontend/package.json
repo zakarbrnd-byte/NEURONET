@@ -1,0 +1,16 @@
+{
+  "name": "neuronet-mission-control",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "NEURONET Mission Control frontend foundation (no UI implementation in 0.0.0)",
+  "scripts": {
+    "dev": "echo \"Frontend foundation only. Implement Mission Control in engineering v0.15.\" && exit 1",
+    "build": "echo \"Frontend foundation only. Implement Mission Control in engineering v0.15.\" && exit 1",
+    "lint": "echo \"No UI sources to lint at foundation stage.\"",
+    "test": "echo \"No frontend tests at foundation stage.\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
