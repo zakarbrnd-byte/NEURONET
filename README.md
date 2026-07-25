@@ -2,53 +2,82 @@
 
 **Artificial Life Operating System (ALOS)**
 
-Research whether cognition can emerge from a decentralized society of
-autonomous computational cells inspired by biology.
+A scientific research platform investigating whether cognition can emerge from a
+decentralized society of autonomous computational cells inspired by biology.
 
 ---
 
-## Project Vision
+## Vision
 
-NEURONET is a scientific research platform for artificial life.
+NEURONET seeks to grow computational life rather than simulate intelligence as a
+monolithic model.
 
-It is **not** another chatbot.  
-It is **not** another Large Language Model.  
-It is **not** another conventional neural network product.
+We treat cognition as a possible outcome of local interaction, local memory, and
+evolutionary dynamics — not as a feature to hardcode into a central service.
 
-Instead of simulating intelligence as a monolithic model, NEURONET investigates
-whether intelligence can **grow** from local interactions among autonomous
-computational cells — organisms that both compute and remember.
-
-There is never a central brain.
+If intelligence appears, it must appear as an emergent property of the society
+of cells.
 
 ---
 
 ## Mission
 
-Build an enduring experimental substrate where:
+Research whether cognition can emerge from a decentralized society of autonomous
+computational cells inspired by biology.
 
-- computational cells live with local memory and local metabolism
-- societies form through local communication
-- adaptation and forgetting can evolve over time
-- observation is possible without control becoming cognition
-- hypotheses can be tested, supported, or falsified
+NEURONET is:
+
+- a long-term artificial-life laboratory
+- an engineering substrate for living computational organisms
+- a measurement environment for scientific hypotheses
+
+NEURONET is **not**:
+
+- another chatbot
+- another Large Language Model
+- another conventional neural network product
+- another AI assistant
 
 ---
 
 ## Artificial Life Operating System
 
-NEURONET is designed as an **ALOS** — an operating platform for digital life
-research.
+NEURONET is designed as an **ALOS** — an operating platform for digital organisms
+and the instruments required to study them.
 
-| Layer | Role |
-|-------|------|
-| Digital Cell | Atomic autonomous organism |
-| Runtime / Network | Local hosting and future societies |
-| Mission Control | Permanent scientific observatory |
-| Experiment Lab | Future hypothesis execution environment |
+| Layer | Purpose |
+|-------|---------|
+| Digital Cell | Atomic autonomous organism (memory + compute together) |
+| Runtime / Network | Process-local hosting and future multi-cell societies |
+| Mission Control | Permanent scientific observatory console |
+| Experiment Lab | Future environment for controlled trials |
 
-Mission Control is comparable to a flight/science console: it observes and
-supports experiments. It does not think for the organism.
+Mission Control is a microscope and flight console.  
+It observes and supports experiments.  
+It does not become the organism’s mind.
+
+---
+
+## Why This Project Exists
+
+Modern AI development often concentrates capability into centralized models and
+control planes. That approach is powerful — and it answers a different question
+than the one NEURONET asks.
+
+NEURONET asks:
+
+> Can mind-like organization arise from many simple, local, autonomous units —
+> the way biological systems do?
+
+To answer that question honestly, the platform must:
+
+1. forbid a central brain
+2. keep knowledge local to cells
+3. co-locate memory with computation
+4. allow structure to evolve
+5. refuse to hardcode cognition
+
+This repository exists to hold that experiment for years.
 
 ---
 
@@ -56,39 +85,59 @@ supports experiments. It does not think for the organism.
 
 ```text
 NEURONET/
-├── backend/                 # Rust organism host + API (scaffolded)
+├── backend/                 # Rust organism host + observatory API
 │   ├── src/
 │   ├── core/
-│   ├── cell/
-│   ├── memory/
-│   ├── messaging/
-│   ├── scheduler/
-│   ├── runtime/
-│   ├── energy/
 │   ├── api/
 │   ├── storage/
+│   ├── runtime/
+│   ├── cell/
+│   ├── messaging/
+│   ├── memory/
+│   ├── scheduler/
+│   ├── energy/
 │   └── tests/
 ├── frontend/                # Mission Control UI preparation
-├── shared/                  # types, protocols, constants
-├── docs/                    # diagrams, experiments, research, screenshots
+│   ├── src/
+│   ├── components/
+│   ├── layouts/
+│   ├── pages/
+│   ├── services/
+│   ├── hooks/
+│   ├── assets/
+│   └── types/
+├── shared/                  # Cross-boundary contracts
+│   ├── constants/
+│   ├── protocols/
+│   └── types/
+├── docs/                    # Research and architecture artifacts
+│   ├── architecture/
+│   ├── experiments/
+│   ├── hypotheses/
+│   ├── research/
+│   ├── screenshots/
+│   └── diagrams/
 ├── .github/workflows/       # CI
 ├── README.md
-├── ROADMAP.md
-├── PHILOSOPHY.md
-├── ARCHITECTURE.md
-├── HYPOTHESES.md
+├── PHILOSOPHY.md            # Constitution
+├── ARCHITECTURE.md          # System architecture
+├── ENGINEERING_ROADMAP.md   # Software delivery versions
+├── RESEARCH_ROADMAP.md      # Scientific questions by phase
+├── HYPOTHESES.md            # Hypothesis tracker
 ├── CONTRIBUTING.md
-├── CLAUDE.md
+├── CLAUDE.md                # Guidance for AI coding agents
+├── CHANGELOG.md
 └── LICENSE
 ```
 
-Every major folder includes a README describing its purpose.
+Engineering and research are deliberately separated so contributors can track
+software readiness without confusing it with scientific progress.
 
 ---
 
-## Tech Stack
+## Technology Stack
 
-### Planned backend
+### Backend (planned)
 
 - Rust (stable)
 - Cargo workspace
@@ -98,89 +147,100 @@ Every major folder includes a README describing its purpose.
 - SQLite
 - Tracing
 
-### Planned frontend
+### Frontend (planned)
 
 - React
 - TypeScript
 - Vite
 
-### Communication
+### Shared contracts
 
-- REST first for Mission Control
-- Architecture prepared for WebSockets later
+- Types, protocols, and constants under `/shared`
 
-### Current status
+### Current implementation status
 
-Foundation scaffolding only. Organism logic is intentionally unimplemented.
-
----
-
-## Roadmap Summary
-
-| Version | Focus |
-|---------|-------|
-| **0.0** | Repository foundation (current) |
-| **0.1** | Digital Cell |
-| **0.15** | Mission Control |
-| **0.2** | Living Network |
-| **0.3** | Adaptive Brain |
-| **0.4** | Observatory |
-| **0.5** | Experiment Lab |
-| **0.6** | Learning Engine |
-| **0.7** | Emergent Concepts |
-| **1.0** | Cognitive Organism |
-
-See [`ROADMAP.md`](ROADMAP.md) for long-term versions and version discipline.
+**Foundation only.**  
+The repository compiles as a scaffold. Organism logic, Mission Control, and
+Digital Cells are intentionally not implemented yet.
 
 ---
 
-## Quick Start
+## Engineering Roadmap
 
-### Prerequisites
+Software delivery versions (see [`ENGINEERING_ROADMAP.md`](ENGINEERING_ROADMAP.md)):
 
-- Rust stable (`rustup`)
-- Git
-
-### Verify foundation
-
-```bash
-cargo check --workspace
-cargo run -p neuronet-backend
-```
-
-Expected result: the scaffold binary identifies NEURONET and reports that
-organism logic is not loaded yet.
-
-### Read the constitution
-
-1. [`PHILOSOPHY.md`](PHILOSOPHY.md)
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md)
-3. [`ROADMAP.md`](ROADMAP.md)
-4. [`HYPOTHESES.md`](HYPOTHESES.md)
-5. [`CONTRIBUTING.md`](CONTRIBUTING.md)
-6. [`CLAUDE.md`](CLAUDE.md) (required for AI coding agents)
+| Version | Name |
+|---------|------|
+| 0.0 | Repository Foundation |
+| 0.1 | Digital Cell Runtime |
+| 0.15 | Mission Control |
+| 0.2 | Living Network |
+| 0.3 | Adaptive Brain |
+| 0.4 | Observatory |
+| 0.5 | Experiment Lab |
+| 0.6 | Learning Engine |
+| 0.7 | Emergent Concepts |
+| 1.0 | Cognitive Organism |
 
 ---
 
-## Mission Control Overview
+## Research Roadmap
 
-Mission Control will be the permanent browser-based observatory for NEURONET.
+Scientific phases (see [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md)):
 
-It will allow researchers to:
+1. Can a Digital Cell exist?
+2. Can multiple cells communicate?
+3. Can distributed memory emerge?
+4. Can cells reorganize themselves?
+5. Can concept formation emerge?
+6. Can prediction emerge?
+7. Can distributed cognition emerge?
 
-- observe live cells
-- inspect energy and memory statistics
-- watch lifecycle activity
-- inject experimental messages
-- activate future modules (Network Map, Experiment Lab, and more)
-
-It will **not** become a central reasoning engine.
-
-Frontend folders are prepared now; UI implementation begins in version **0.15**.
+Later speculative questions (hypotheses, not promises): open-ended evolution,
+curiosity, and eventually consciousness.
 
 ---
 
-## Foundational Laws
+## Current Version
+
+**0.0.0 — Repository Foundation**
+
+Delivered:
+
+- constitution and dual roadmaps
+- permanent directory architecture
+- Cargo workspace preparation
+- frontend / shared preparation
+- CI foundation checks
+- initial hypothesis set
+
+Not delivered (by design):
+
+- Digital Cell runtime
+- Mission Control UI
+- learning or network dynamics
+
+---
+
+## Future Vision
+
+A durable laboratory where:
+
+- autonomous cells persist and interact locally
+- societies form without a central controller
+- plasticity and forgetting can evolve
+- Mission Control measures without replacing cognition
+- hypotheses are tested with evidence, not slogans
+
+Success is scientific coherence over decades — not a viral demo.
+
+---
+
+## Constitution
+
+Read [`PHILOSOPHY.md`](PHILOSOPHY.md) before contributing.
+
+### Five Foundational Laws
 
 1. No Central Brain  
 2. Local Knowledge Only  
@@ -190,12 +250,24 @@ Frontend folders are prepared now; UI implementation begins in version **0.15**.
 
 ---
 
-## Contributing
+## Quick Start
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+```bash
+cargo check --workspace
+cargo run -p neuronet-backend
+```
 
-Pull requests that reintroduce a central brain, global cognitive memory, or
-hardcoded cognition will be rejected.
+The scaffold binary identifies the project and confirms that no organism logic
+is loaded.
+
+Further reading:
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`ENGINEERING_ROADMAP.md`](ENGINEERING_ROADMAP.md)
+- [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md)
+- [`HYPOTHESES.md`](HYPOTHESES.md)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- [`CLAUDE.md`](CLAUDE.md)
 
 ---
 

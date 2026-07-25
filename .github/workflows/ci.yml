@@ -23,12 +23,14 @@ jobs:
           set -euo pipefail
           required=(
             README.md
-            ROADMAP.md
             PHILOSOPHY.md
             ARCHITECTURE.md
+            ENGINEERING_ROADMAP.md
+            RESEARCH_ROADMAP.md
             HYPOTHESES.md
             CONTRIBUTING.md
             CLAUDE.md
+            CHANGELOG.md
             LICENSE
             backend/Cargo.toml
             backend/src/main.rs
@@ -36,6 +38,8 @@ jobs:
             frontend/package.json
             shared/README.md
             docs/README.md
+            docs/architecture/README.md
+            docs/hypotheses/README.md
           )
           for path in "${required[@]}"; do
             if [[ ! -e "$path" ]]; then
@@ -43,6 +47,11 @@ jobs:
               exit 1
             fi
           done
+
+          if [[ -e ROADMAP.md ]]; then
+            echo "ROADMAP.md must not exist; use ENGINEERING_ROADMAP.md and RESEARCH_ROADMAP.md"
+            exit 1
+          fi
 
       - name: Cargo check workspace
         run: cargo check --workspace
@@ -64,10 +73,11 @@ jobs:
         run: |
           set -euo pipefail
           test -f frontend/package.json
-          test -d frontend/src/components
-          test -d frontend/src/pages
-          test -d frontend/src/layouts
-          test -d frontend/src/services
-          test -d frontend/src/hooks
-          test -d frontend/src/types
-          test -d frontend/src/assets
+          test -d frontend/src
+          test -d frontend/components
+          test -d frontend/layouts
+          test -d frontend/pages
+          test -d frontend/services
+          test -d frontend/hooks
+          test -d frontend/types
+          test -d frontend/assets

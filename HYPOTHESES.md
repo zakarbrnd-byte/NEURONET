@@ -1,174 +1,219 @@
-# HYPOTHESES.md — Research Hypotheses
+# HYPOTHESES.md — Scientific Hypothesis Tracker
 
-NEURONET is a scientific platform. Claims require questions, predictions, and
-experiments. This file tracks the first research hypotheses.
+NEURONET registers research claims before celebrating them.
 
 Status vocabulary:
 
-- `proposed` — articulated, not yet testable in-repo
-- `ready` — experiment design exists; awaiting implementation substrate
-- `active` — experiment running
-- `supported` — evidence currently favors the prediction
-- `challenged` — evidence currently weakens the prediction
-- `falsified` — prediction failed under agreed conditions
-- `retired` — no longer pursued (with reason)
+| Status | Meaning |
+|--------|---------|
+| `proposed` | Articulated; substrate may be incomplete |
+| `ready` | Experiment design is complete enough to run when substrate exists |
+| `active` | Experiment currently running |
+| `supported` | Evidence currently favors the prediction |
+| `challenged` | Evidence currently weakens the prediction |
+| `falsified` | Prediction failed under agreed conditions |
+| `retired` | No longer pursued (reason required) |
+
+Extended writeups may live under `docs/hypotheses/`.
 
 ---
 
 ## H001 — Distributed Memory Produces Resilient Cognition
 
-### Question
+**Title:** Distributed memory resilience
 
-Does distributing memory across autonomous cells produce more resilient
-functional continuity than concentrating equivalent memory in one place?
+**Question:** Does distributing memory across autonomous cells produce more resilient functional continuity than concentrating equivalent memory in one place?
 
-### Prediction
+**Prediction:** A society with overlapping local memories will retain usable organization after random cell loss better than a single cell or central store holding the same total information.
 
-A society of cells with local memories will retain usable organization after
-random cell loss better than a single cell (or central store) holding the same
-total information.
+**Experiment:** Seed overlapping memories in a multi-cell network; ablate random cells; compare retained organization against centralized controls confined to an isolated harness.
 
-### Status
+**Result:** Not yet available.
 
-`proposed`
-
-### Experiment
-
-1. Build a multi-cell network (requires v0.2+).
-2. Seed overlapping local memories via repeated local interactions.
-3. Randomly remove a percentage of cells.
-4. Measure remaining task-relevant organization / recall proxies.
-5. Compare against a centralized-memory control that violates Law 1 only inside
-   an isolated experiment harness (never in production architecture).
-
-### Results
-
-Not yet available. Substrate incomplete.
+**Status:** `proposed`
 
 ---
 
-## H002 — Forgetting Improves Learning
+## H002 — Forgetting Improves Learning Under Constraint
 
-### Question
+**Title:** Adaptive forgetting
 
-Does controlled forgetting improve a cell’s ability to form useful future
-associations under finite memory and energy?
+**Question:** Does controlled forgetting improve adaptation when memory capacity and energy are finite?
 
-### Prediction
+**Prediction:** Cells with decay/forgetting rules will outperform no-forgetting cells on adaptation benchmarks under fixed memory and energy caps.
 
-Cells with decay/forgetting rules will outperform no-forgetting cells on
-adaptation benchmarks when memory capacity and energy are constrained.
+**Experiment:** Matched workloads with and without forgetting (v0.6 Learning Engine); compare interference, adaptation latency, and survival of useful associations.
 
-### Status
+**Result:** Not yet available.
 
-`proposed`
-
-### Experiment
-
-1. Implement local forgetting seams (v0.6 Learning Engine).
-2. Run matched workloads with and without forgetting.
-3. Hold energy/memory caps constant.
-4. Compare adaptation latency and interference rates.
-
-### Results
-
-Not yet available. Requires learning dynamics.
+**Status:** `proposed`
 
 ---
 
 ## H003 — Concepts Emerge from Repeated Associations
 
-### Question
+**Title:** Association-born concepts
 
-Can concept-like stable patterns arise from repeated local associations without
-a predefined ontology?
+**Question:** Can concept-like stable patterns arise from repeated local associations without a predefined ontology?
 
-### Prediction
+**Prediction:** Repeated co-occurrence will produce durable higher-order structures that behave like concepts under retrieval and transfer tests.
 
-Repeated co-occurrence of local signals will produce durable higher-order
-memory structures that behave like concepts under retrieval and transfer tests,
-despite no hardcoded concept table.
+**Experiment:** Expose cells to associated stimulus pairs; prohibit concept labels in logic; compare against shuffled controls (v0.7 measurement).
 
-### Status
+**Result:** Not yet available.
 
-`proposed`
-
-### Experiment
-
-1. Expose cells to repeated associated stimulus pairs (v0.5+ / v0.7).
-2. Prohibit explicit concept labels in cell logic.
-3. Measure spontaneous clustering / retrieval generalization.
-4. Attempt falsification with shuffled controls.
-
-### Results
-
-Not yet available. Requires association metrics and multi-cell interaction.
+**Status:** `proposed`
 
 ---
 
 ## H004 — Local Interactions Produce Global Organization
 
-### Question
+**Title:** Local-to-global organization
 
-Can global organization arise from purely local interaction rules?
+**Question:** Can global organization arise from purely local interaction rules?
 
-### Prediction
+**Prediction:** Networks using local messaging and local adaptation will exhibit macroscopic structure that no cell fully represents.
 
-Networks following local messaging and local adaptation rules will exhibit
-macroscopic structure (clusters, pathways, specialized roles) that no cell
-represents in full.
+**Experiment:** Run N identical cells with neighbor-limited rules; quantify modularity, pathways, and role differentiation; verify no global state access during the run.
 
-### Status
+**Result:** Not yet available.
 
-`proposed`
-
-### Experiment
-
-1. Instantiate N identical cells with local neighbor rules (v0.2–0.3).
-2. Allow extended interaction under controlled energy regimes.
-3. Quantify global metrics (modularity, path structure, role differentiation).
-4. Verify no cell has access to global state during the run.
-
-### Results
-
-Not yet available. Requires living network substrate.
+**Status:** `proposed`
 
 ---
 
 ## H005 — Metabolic Cost Shapes Useful Behavior
 
-### Question
+**Title:** Metabolism as behavioral regularizer
 
-Does an energy budget prevent pathological hyperactivity and bias cells toward
-selective processing?
+**Question:** Does an energy budget reduce pathological hyperactivity and bias cells toward selective processing?
 
-### Prediction
+**Prediction:** Cells with wake/process/remember costs and sleep recovery will show more stable long-run behavior than unlimited-energy variants.
 
-Cells with wake/process/remember costs and sleep recovery will show more stable
-long-run behavior than equivalent cells with unlimited energy.
+**Experiment:** Compare capped vs uncapped energy regimes after Digital Cell energy model exists (engineering v0.1+).
 
-### Status
+**Result:** Pending substrate.
 
-`ready` (design-ready for v0.1 energy model; comparative experiment after baseline cell exists)
-
-### Experiment
-
-1. Implement energy costs in Digital Cell lifecycle (v0.1).
-2. Compare capped vs uncapped energy variants in a controlled harness.
-3. Measure message thrash, memory growth rate, and survival/continuity.
-
-### Results
-
-Pending v0.1 implementation.
+**Status:** `ready`
 
 ---
 
-## Adding New Hypotheses
+## H006 — Neighbor-Limited Communication Prevents Pseudo-Emergence
 
-1. Use the next free ID (`H006`, …).
-2. Include Question, Prediction, Status, Experiment, Results.
-3. Link experiments to folders under `docs/experiments/`.
-4. Never mark `supported` without recorded methods and data references.
-5. If a hypothesis requires violating a Foundational Law in production code,
-   reject the hypothesis framing or confine the violation to an explicit
-   simulation control that cannot ship as architecture.
+**Title:** Locality as anti-cheat constraint
+
+**Question:** Does restricting communication to neighbors prevent trivial “global coordination” artifacts that look like emergence?
+
+**Prediction:** Neighbor-limited societies will show slower but more authentic organization than broadcast-everywhere controls, and broadcast controls will inflate false emergent metrics.
+
+**Experiment:** Identical local rules under neighbor graph vs all-to-all broadcast; compare organization metrics and ablation authenticity.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H007 — Redundant Encoding Outperforms Unique Encoding After Damage
+
+**Title:** Redundant local encoding
+
+**Question:** Does partial redundancy across cell memories improve post-damage recovery of society-level patterns?
+
+**Prediction:** Societies with controlled redundancy will recover target patterns after ablation better than unique-encoding societies with equal total memory budget.
+
+**Experiment:** Train/seed two societies with equal total memory bits but different redundancy; ablate; measure recovery.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H008 — Plasticity Without Reward Still Reorganizes Topology
+
+**Title:** Unsupervised local rewiring
+
+**Question:** Can connection create/prune dynamics reorganize topology using only local co-activity signals, without an external reward channel?
+
+**Prediction:** Local co-activity rules will change graph structure in statistically reliable ways even when no global reward is provided.
+
+**Experiment:** Run adaptive-brain rules with co-activity only; compare topology trajectories to frozen-topology controls.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H009 — Observation Load Must Not Alter Endogenous Dynamics
+
+**Title:** Non-perturbing observatory
+
+**Question:** Can Mission Control observe a living society at research granularity without becoming a causal driver of the behavior under study?
+
+**Prediction:** Passive-only observation at designed sampling rates will not significantly change endogenous lifecycle/memory metrics compared with unaugmented runs.
+
+**Experiment:** Twin runs with and without observatory polling/streaming; compare energy, memory growth, and message rates within pre-registered bounds.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H010 — Synchronous Global Ticking Suppresses Natural Organization
+
+**Title:** Against the master clock
+
+**Question:** Does imposing a single global tick across all cells reduce the diversity of organization relative to local clocks?
+
+**Prediction:** Local-clock societies will exhibit richer role differentiation than globally synchronized societies under otherwise matched rules.
+
+**Experiment:** Compare local schedulers vs enforced global barrier ticking; measure diversity and modularity.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H011 — Prediction Requires Temporal Structure in Local Experience
+
+**Title:** Experience-grounded prediction
+
+**Question:** Can anticipatory behavior appear from local history alone when environmental sequences contain structure?
+
+**Prediction:** Cells exposed to structured temporal sequences will show anticipatory responses above chance; the same cells in unstructured noise will not.
+
+**Experiment:** Structured vs shuffled sequence environments; measure anticipatory local responses without a central forecast service.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## H012 — Hardcoded Planners Produce Fragile Competence
+
+**Title:** Anti-hardcode competence fragility
+
+**Question:** Do systems that secretly introduce centralized planning appear competent in narrow demos while failing locality/ablation tests required by NEURONET?
+
+**Prediction:** Planner-injected controls will outperform on scripted demos but fail ablation/locality audits that local-only societies can partially survive.
+
+**Experiment:** Maintain an isolated “cheat architecture” harness for comparison only; never ship it as production architecture; publish both demo scores and audit failures.
+
+**Result:** Not yet available.
+
+**Status:** `proposed`
+
+---
+
+## Adding Hypotheses
+
+1. Allocate the next ID (`H013`, …).
+2. Include Title, Question, Prediction, Experiment, Result, Status.
+3. Link detailed protocols under `docs/hypotheses/` and runs under `docs/experiments/`.
+4. Never mark `supported` without methods and data references.
+5. If a hypothesis requires violating a Foundational Law in production code, reject that framing or confine the violation to an explicit non-shipping control harness.

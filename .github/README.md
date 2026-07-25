@@ -1,8 +1,8 @@
 # .github
 
-GitHub project automation and community metadata for NEURONET.
+GitHub automation and community metadata for the NEURONET research laboratory.
 
 ## workflows/
 
-CI and automation pipelines. Foundation stage includes a structure/build check
-that keeps the scaffold honest while organism logic is still unimplemented.
+CI pipelines. Foundation stage validates repository structure and the Rust
+scaffold quality while organism logic remains unimplemented.

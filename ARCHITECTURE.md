@@ -1,71 +1,42 @@
-# ARCHITECTURE.md — NEURONET System Architecture
+# ARCHITECTURE.md
 
-This document describes the intended architecture of NEURONET as a research
-platform. It is written for the foundation stage: folders and contracts exist;
-organism logic does not yet.
+This document describes the intended architecture of NEURONET as a scientific
+Artificial Life Operating System.
 
- complementary constitution: `PHILOSOPHY.md`  
- complementary schedule: `ROADMAP.md`
+Complementary documents:
 
----
+- Constitution: [`PHILOSOPHY.md`](PHILOSOPHY.md)
+- Software versions: [`ENGINEERING_ROADMAP.md`](ENGINEERING_ROADMAP.md)
+- Scientific phases: [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md)
 
-## Architectural Intent
-
-NEURONET is an Artificial Life Operating System (ALOS).
-
-The architecture optimizes for:
-
-- autonomous cells
-- local knowledge
-- co-located memory and compute
-- evolutionary extensibility
-- long-lived observatory tooling
-
-The architecture rejects:
-
-- central reasoning engines
-- global cognitive memory
-- hardcoded planning stacks
-- chatbot interaction as the primary metaphor
+Foundation status: directories and contracts exist; organism logic does not.
 
 ---
 
-## Repository Layout
+## Overall Architecture
+
+NEURONET separates three enduring concerns:
+
+1. **Organism substrate** (`backend/`) — autonomous cells, local runtime, persistence
+2. **Observatory** (`frontend/` + `backend/api`) — Mission Control instrumentation
+3. **Research record** (`docs/`, `HYPOTHESES.md`, roadmaps) — questions, methods, evidence
 
 ```text
-NEURONET/
-├── backend/                 # Rust organism host + observatory API
-│   ├── src/                 # crate roots
-│   ├── core/                # shared backend primitives
-│   ├── cell/                # Digital Cell
-│   ├── memory/              # local memory
-│   ├── messaging/           # local messaging
-│   ├── scheduler/           # local clocks
-│   ├── runtime/             # process-local host
-│   ├── energy/              # metabolism
-│   ├── api/                 # Mission Control API
-│   ├── storage/             # persistence adapters
-│   └── tests/
-├── frontend/                # Mission Control UI
-│   └── src/
-│       ├── components/
-│       ├── pages/
-│       ├── layouts/
-│       ├── services/
-│       ├── hooks/
-│       ├── types/
-│       └── assets/
-├── shared/                  # cross-boundary contracts
-│   ├── types/
-│   ├── protocols/
-│   └── constants/
-├── docs/                    # research artifacts
-│   ├── diagrams/
-│   ├── experiments/
-│   ├── research/
-│   └── screenshots/
-└── .github/workflows/       # CI
+[ Digital Cells ]--local messages--[ Digital Cells ]
+       |                                 |
+       v                                 v
+[ Local Runtime Host(s) ]         [ Local Runtime Host(s) ]
+       \                                 /
+        \--------- Observatory API -----/
+                         |
+                         v
+                 [ Mission Control ]
+                         |
+                         v
+              [ Experiments / Hypotheses ]
 ```
+
+No box in this diagram is permitted to become a central brain.
 
 ---
 
@@ -73,39 +44,87 @@ NEURONET/
 
 ### Role
 
-The backend hosts living computational cells and exposes instrumentation.
-
-It is an organism host, not an application server with business logic.
+Host living computational cells and expose research instrumentation.
 
 ### Planned stack
 
-- Rust (stable)
-- Cargo workspace
-- Tokio
-- Axum (observatory API)
-- Serde
-- SQLite
-- Tracing
+- Rust (stable), Cargo workspace
+- Tokio, Axum, Serde, SQLite, Tracing
 
-### Module responsibilities
+### Module map
 
-| Module | Responsibility |
-|--------|----------------|
-| `cell` | Autonomous cell trait + Digital Cell |
-| `memory` | Local memory entries and stores |
-| `messaging` | Envelopes and per-cell inboxes |
-| `energy` | Metabolic budget |
-| `scheduler` | Local tick timing |
-| `runtime` | Hosting, snapshots, activity chronicle |
-| `storage` | Durable local state |
-| `api` | Mission Control HTTP/WebSocket surface |
-| `core` | Shared non-cognitive primitives |
+| Path | Responsibility |
+|------|----------------|
+| `backend/src` | Crate roots |
+| `backend/core` | Shared non-cognitive primitives |
+| `backend/cell` | Cell trait and Digital Cell |
+| `backend/memory` | Local memory structures |
+| `backend/messaging` | Envelopes and per-cell inboxes |
+| `backend/energy` | Metabolic budget |
+| `backend/scheduler` | Local metabolic clocks |
+| `backend/runtime` | Process-local organism hosting |
+| `backend/storage` | Persistence adapters |
+| `backend/api` | Observatory HTTP/WebSocket surface |
+| `backend/tests` | Integration tests |
 
-### Non-negotiables
+### Rules
 
-- No master controller process that thinks for cells
 - Scheduler is local, never omniscient
 - Storage snapshots local state; it does not centralize mind
+- API handlers instrument and intervene; they do not plan
+
+---
+
+## Frontend
+
+### Role
+
+Mission Control — permanent browser observatory.
+
+### Planned stack
+
+- React, TypeScript, Vite
+
+### Folder map
+
+| Path | Responsibility |
+|------|----------------|
+| `frontend/src` | Application entry and app wiring |
+| `frontend/components` | Reusable UI units |
+| `frontend/layouts` | Stable shell chrome |
+| `frontend/pages` | Module/page surfaces |
+| `frontend/services` | Transport clients |
+| `frontend/hooks` | Live state hooks |
+| `frontend/types` | UI-local types |
+| `frontend/assets` | Static assets |
+
+### Shell commitment
+
+Mission Control keeps a permanent module registry (Digital Cell, Network Map,
+Experiment Lab, Memory Explorer, Evolution Monitor, Metrics, Time Machine,
+Brain Graph, Node Inspector, Settings). Future versions activate modules; they
+do not redesign the console identity.
+
+---
+
+## Mission Control
+
+Mission Control is comparable to a scientific mission console:
+
+- observe live organisms
+- inspect energy, memory, and activity
+- inject experimental stimuli
+- run and review trials (future Experiment Lab)
+
+Mission Control is **not** allowed to:
+
+- own global cognitive memory
+- become the society’s planner
+- hardcode reasoning disguised as “helpful automation”
+
+Transport begins with REST and must remain replaceable by streaming protocols
+through a client interface boundary in `frontend/services` and
+`shared/protocols`.
 
 ---
 
@@ -113,7 +132,7 @@ It is an organism host, not an application server with business logic.
 
 The Digital Cell is the atomic organism.
 
-### Lifecycle (planned)
+### Planned lifecycle
 
 ```text
 Wake → Receive → Process → Remember → Sleep → Tick++
@@ -121,138 +140,88 @@ Wake → Receive → Process → Remember → Sleep → Tick++
 
 ### Ownership
 
-Each cell owns:
+Each cell owns identity, energy, state, memory, inbox, and tick count.
 
-- identity
-- energy
-- state
-- memory
-- message queue
-- tick counter
+### Scale assumption
 
-### Scaling assumption
-
-Version 0.1 may run one cell, but every type and trait must assume millions of
-identical instances may exist later (`Vec<Box<dyn Cell>>` readiness).
-
----
-
-## Frontend — Mission Control
-
-### Role
-
-Mission Control is the permanent operating console for NEURONET.
-
-Comparable to a scientific mission console / microscope:
-
-- observe
-- debug
-- test
-- experiment
-
-It is not the product UI for a chatbot.
-
-### Planned stack
-
-- React
-- TypeScript
-- Vite
-
-### Structural commitment
-
-The sidebar module registry is permanent:
-
-- Digital Cell
-- Network Map
-- Experiment Lab
-- Memory Explorer
-- Evolution Monitor
-- Metrics
-- Time Machine
-- Brain Graph
-- Node Inspector
-- Settings
-
-Future versions activate modules. They do not redesign Mission Control.
+Version 0.1 may run one cell. Every interface must assume millions of identical
+cells may exist later without architectural redesign.
 
 ---
 
 ## Communication
 
-### Early transport
-
-REST between Mission Control and backend.
-
-### Transport seam
-
-Frontend services depend on an abstract client interface so WebSockets (or other
-streams) can replace polling with minimal panel changes.
-
-### Message philosophy
-
-Messages are local signals between cells (or experimenter injections into a
-cell inbox). There is no semantic global bus.
+- Cells communicate through local messages
+- Experimenters may inject messages into a cell inbox via observatory APIs
+- There is no semantic global bus that understands meaning for the society
+- Protocol contracts live in `shared/protocols`
 
 ---
 
 ## Persistence
 
-Persistence preserves organism continuity across process restarts.
+Persistence preserves organism continuity across restarts.
 
 Planned persisted elements:
 
 - cell identity
 - energy
 - local memory
-- tick / metabolic metadata as needed
+- metabolic metadata required for restore
 
 Persistence is durability for life, not a shared cognitive substrate.
 
 ---
 
-## Future Network
+## Modules
 
-Version 0.2+ introduces living networks:
+Modules are additive and law-preserving.
 
-- many cells
-- neighbor sets
-- local delivery
-- adaptive connections (0.3+)
+Engineering activates capabilities by version (`ENGINEERING_ROADMAP.md`).  
+Research asks whether those capabilities produce scientific phenomena
+(`RESEARCH_ROADMAP.md`, `HYPOTHESES.md`).
 
-Network growth must remain compatible with Laws 1–5.
-No graph service may become a central brain.
+Never merge those concerns into one status light.
 
 ---
 
-## Shared Contracts
+## Future Expansion
 
-`/shared` keeps backend and frontend honest:
+Expected expansions without constitutional change:
 
-- `types/` — status, events, commands
-- `protocols/` — REST / WebSocket contracts
-- `constants/` — version labels, module IDs, bounds
+- multi-host societies
+- adaptive topology
+- local learning / forgetting
+- richer observatory modules
+- experiment automation and comparative trials
 
-Breaking protocol changes require documentation and roadmap awareness.
+Forbidden expansions:
 
----
-
-## Module Evolution Strategy
-
-1. Implement the smallest living unit (Digital Cell).
-2. Instrument it (Mission Control).
-3. Replicate it (Living Network).
-4. Allow it to adapt (Adaptive Brain / Learning Engine).
-5. Measure emergence (Observatory / Experiment Lab / Emergent Concepts).
-
-At every step, prefer additive modules over rewrites.
+- central cognitive services
+- global mind databases
+- hardcoded planners presented as emergence
+- chatbot product cores replacing the ALOS mission
 
 ---
 
-## What This Foundation Deliberately Omits
+## Docs Layout
 
-- No Digital Cell implementation
-- No Mission Control UI implementation
-- No experimental learning code
-- No placeholder “AI” services
+| Path | Purpose |
+|------|---------|
+| `docs/architecture` | Deep-dive diagrams and ADRs |
+| `docs/experiments` | Trial plans and results |
+| `docs/hypotheses` | Extended hypothesis writeups |
+| `docs/research` | Literature and theory notes |
+| `docs/diagrams` | Visual figures |
+| `docs/screenshots` | Observatory captures |
+
+---
+
+## What Foundation Omits
+
+- Digital Cell implementation
+- Mission Control implementation
+- Learning systems
+- Network dynamics
 
 Scaffolding exists so implementation can begin without re-litigating structure.

@@ -1,14 +1,14 @@
 # docs/experiments
 
-Experiment plans and results tied to hypotheses in `/HYPOTHESES.md`.
+Experiment plans and results tied to hypotheses.
 
 Suggested naming:
 
 ```text
-H001-distributed-memory/
+H001-ablation-2026-07/
   plan.md
   results.md
   notes.md
 ```
 
-Do not treat anecdotes as results. Record methods, predictions, and outcomes.
+Record methods, predictions, and outcomes. Anecdotes are not results.

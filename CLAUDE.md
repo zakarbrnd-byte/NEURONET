@@ -1,91 +1,96 @@
 # CLAUDE.md — Guidance for AI Coding Agents
 
-This file is for future AI coding agents (and humans acting as architects).
+This file is mandatory reading for AI coding agents working in NEURONET.
 
-Read it before generating code in this repository.
+Never violate project philosophy to ship a shortcut.
 
 ---
 
-## Project Vision
+## Vision
 
 **NEURONET** is an experimental **Artificial Life Operating System (ALOS)**.
 
 Mission: research whether cognition can emerge from a decentralized society of
 autonomous computational cells inspired by biology.
 
-NEURONET is **not**:
+NEURONET is not a chatbot, LLM wrapper, conventional neural-network product, or
+assistant app.
 
-- a chatbot
-- an LLM wrapper
-- a conventional neural network framework
-- an AI assistant product
-
-It is a scientific research platform.
+It is a scientific research laboratory in repository form.
 
 ---
 
 ## Current Version
 
-**0.0 — Repository Foundation**
+**0.0.0 — Repository Foundation**
 
-What exists:
+Exists:
 
-- constitution and roadmap documents
+- constitution and dual roadmaps
+- hypothesis tracker
 - permanent directory architecture
-- Cargo workspace scaffold
-- frontend folder preparation
-- shared contracts folders
-- CI skeleton
+- Cargo / frontend / shared scaffolding
+- CI foundation checks
 
-What does **not** exist yet:
+Does not exist yet:
 
 - Digital Cell implementation
 - Mission Control UI implementation
 - learning systems
 - multi-cell networks
 
-Do not invent those in drive-by refactors. Implement them only when the user
-explicitly requests the corresponding roadmap version.
+Do not invent those unless the user explicitly requests the corresponding
+engineering version.
 
 ---
 
-## Architecture Map
+## Architecture
 
 ```text
-backend/     Rust organism host + observatory API (future)
-frontend/    Mission Control observatory UI (future)
-shared/      cross-boundary types/protocols/constants
-docs/        research artifacts and diagrams
+backend/     organism host + observatory API (future logic)
+frontend/    Mission Control observatory UI (future logic)
+shared/      types, protocols, constants
+docs/        architecture, experiments, hypotheses, research artifacts
 ```
 
-Canonical docs:
+Canonical documents:
 
-- `PHILOSOPHY.md` — constitution
+- `PHILOSOPHY.md` — constitution / Five Laws
 - `ARCHITECTURE.md` — structure
-- `ROADMAP.md` — version plan
-- `HYPOTHESES.md` — research claims
-- `CONTRIBUTING.md` — human/agent workflow
+- `ENGINEERING_ROADMAP.md` — software versions
+- `RESEARCH_ROADMAP.md` — scientific phases
+- `HYPOTHESES.md` — claims tracker
+- `CONTRIBUTING.md` — workflow
+- `CHANGELOG.md` — released versions
 
 ---
 
-## Roadmap (agent-facing summary)
+## Roadmaps
 
-| Version | Name | Agent implication |
-|---------|------|-------------------|
-| 0.0 | Foundation | Docs + scaffold only |
-| 0.1 | Digital Cell | Implement one autonomous cell correctly |
-| 0.15 | Mission Control | Browser observatory over the cell |
-| 0.2 | Living Network | Many cells, local interactions |
-| 0.3 | Adaptive Brain | Local plasticity |
-| 0.4 | Observatory | Multi-cell Mission Control modules |
-| 0.5 | Experiment Lab | Hypothesis-linked experimentation |
-| 0.6 | Learning Engine | Local learn/forget dynamics |
-| 0.7 | Emergent Concepts | Measure unprogrammed structure |
-| 1.0 | Cognitive Organism | Evidence-based society milestone |
+### Engineering (software)
+
+0.0 Foundation → 0.1 Digital Cell Runtime → 0.15 Mission Control → 0.2 Living
+Network → 0.3 Adaptive Brain → 0.4 Observatory → 0.5 Experiment Lab → 0.6
+Learning Engine → 0.7 Emergent Concepts → 1.0 Cognitive Organism
+
+### Research (questions)
+
+1. Can a Digital Cell exist?  
+2. Can multiple cells communicate?  
+3. Can distributed memory emerge?  
+4. Can cells reorganize themselves?  
+5. Can concept formation emerge?  
+6. Can prediction emerge?  
+7. Can distributed cognition emerge?
+
+Future speculative horizons (not promises): open-ended evolution, curiosity,
+consciousness.
+
+Never collapse engineering completion into scientific confirmation.
 
 ---
 
-## Five Laws (non-negotiable)
+## Five Laws
 
 1. **No Central Brain**
 2. **Local Knowledge Only**
@@ -93,37 +98,37 @@ Canonical docs:
 4. **Everything Evolves**
 5. **Intelligence Must Emerge**
 
-If a proposed design needs a master controller, global mind memory, or hardcoded
+If a design needs a master controller, global mind memory, or hardcoded
 reasoning engine, reject that design.
 
-Mission Control may observe and inject stimuli. Mission Control may never become
-the organism’s mind.
+Mission Control may observe and inject stimuli.  
+Mission Control may never become the organism’s mind.
 
 ---
 
-## Engineering Rules for Agents
+## Engineering Principles
 
 1. Prefer the existing folder map over inventing parallel trees.
-2. Keep backend autonomy boundaries explicit in types and modules.
+2. Keep autonomy boundaries explicit in types and modules.
 3. Design every cell API as if millions of identical cells will exist.
 4. Do not hardcode cognition, planning, or “smart” central services.
 5. Do not add chatbot UX patterns to Mission Control.
 6. Update docs when architecture or roadmap reality changes.
-7. Add tests with behavior; do not leave TODO scaffolds as fake progress.
+7. Add tests with behavior; do not leave fake progress scaffolds.
 8. Keep commits focused and CI green.
 9. When uncertain, choose the option that best preserves the Five Laws.
-10. Foundation stage: do not implement application logic unless explicitly asked.
+10. At foundation stage, do not implement application logic unless explicitly asked.
 
 ---
 
-## Coding Standards
+## Coding Conventions
 
 ### Rust
 
 - Stable toolchain
-- Safe Rust only (foundation forbids `unsafe`)
-- Idiomatic modules, explicit errors, documented public surfaces
-- Tokio/Axum/SQLite/Tracing arrive with the versions that need them
+- Safe Rust only at foundation (`#![forbid(unsafe_code)]` in scaffold)
+- Explicit errors, documented public surfaces
+- Introduce Tokio/Axum/SQLite/Tracing only with versions that need them
 
 ### Frontend
 
@@ -133,51 +138,44 @@ the organism’s mind.
 
 ### Shared
 
-- Put cross-boundary contracts in `/shared`
+- Cross-boundary contracts in `/shared`
 - Prefer additive protocol evolution
 
----
+### Docs
 
-## Future Development Philosophy
-
-Build life, then society, then plasticity, then measurement.
-
-Resist the gravitational pull of:
-
-- “just add an LLM”
-- “just add a global store”
-- “just add a planner”
-- “just make it chat”
-
-Those shortcuts destroy the experiment.
-
-Your job is to help NEURONET remain a coherent artificial-life research platform
-for many years.
-
----
-
-## When Implementing a Version
-
-Before coding:
-
-1. Confirm the requested version in `ROADMAP.md`
-2. Re-read relevant laws in `PHILOSOPHY.md`
-3. Place code in the mapped folders from `ARCHITECTURE.md`
-4. Add/adjust tests and docs in the same change set
-5. Record hypothesis impact in `HYPOTHESES.md` when claims are made
-
-After coding:
-
-1. Ensure the Five Laws still hold
-2. Ensure one-cell code still scales conceptually to many cells
-3. Ensure Mission Control (if touched) remains a microscope
+- Engineering changes → `ENGINEERING_ROADMAP.md` + `CHANGELOG.md`
+- Scientific claims → `HYPOTHESES.md` / `RESEARCH_ROADMAP.md`
+- Folder purpose READMEs required for new directories
 
 ---
 
 ## Absolute Don’ts
 
-- Do not silently replace the architecture with an LLM app
+- Do not replace the architecture with an LLM app
 - Do not introduce a central cognitive service
-- Do not put global mutable “brain state” in shared memory
+- Do not create global mutable “brain state”
 - Do not fake emergence with hardcoded behaviors
-- Do not empty or ignore constitution documents
+- Do not ignore or rewrite the constitution casually
+- Do not mark hypotheses `supported` without evidence
+- Do not implement Digital Cells or Mission Control during foundation-only tasks
+
+---
+
+## Operating Procedure for Agents
+
+Before coding:
+
+1. Confirm requested version/phase
+2. Re-read relevant laws
+3. Place code in mapped folders
+4. Plan tests and docs with the change
+
+After coding:
+
+1. Verify Five Laws still hold
+2. Verify one-cell designs still scale conceptually to many cells
+3. Verify Mission Control (if touched) remains a microscope
+4. Update changelog/roadmaps/hypotheses as appropriate
+
+Your job is to help NEURONET remain a coherent artificial-life research platform
+for many years.

@@ -1,7 +1,6 @@
 # docs/diagrams
 
-Store architecture diagrams, lifecycle figures, and network sketches here.
+Architecture diagrams, lifecycle figures, and network sketches.
 
-Preferred formats: SVG, PNG, or text diagrams (Mermaid) committed as `.md` companions.
-
-Every diagram should state which version/law it illustrates.
+Preferred formats: SVG, PNG, or Mermaid sources committed as Markdown companions.
+Label each figure with the version/phase it illustrates.

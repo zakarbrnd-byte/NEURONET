@@ -1,24 +1,25 @@
-# CONTRIBUTING.md — Working on NEURONET
+# CONTRIBUTING.md
 
 Thank you for contributing to Project NEURONET.
 
-This repository is a scientific research platform for artificial life.
+This repository is a university-lab-style scientific platform for artificial life.
 Contributions should strengthen the organism substrate, the observatory, or the
-research record — not turn NEURONET into a chatbot product.
+research record.
 
 ---
 
-## Before You Write Code
+## Before You Start
 
 Read:
 
-1. `PHILOSOPHY.md` — constitution / Five Laws
-2. `ARCHITECTURE.md` — system structure
-3. `ROADMAP.md` — what belongs in the current version
-4. `CLAUDE.md` — guidance for human and AI agents
-5. `HYPOTHESES.md` — if your change claims scientific effect
+1. [`PHILOSOPHY.md`](PHILOSOPHY.md) — constitution
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — system structure
+3. [`ENGINEERING_ROADMAP.md`](ENGINEERING_ROADMAP.md) — software versions
+4. [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md) — scientific phases
+5. [`HYPOTHESES.md`](HYPOTHESES.md) — if making scientific claims
+6. [`CLAUDE.md`](CLAUDE.md) — required for AI coding agents
 
-If a change violates a Foundational Law, it will be rejected.
+Changes that violate the Five Foundational Laws will be rejected.
 
 ---
 
@@ -27,33 +28,37 @@ If a change violates a Foundational Law, it will be rejected.
 ### General
 
 - Prefer clarity over cleverness
-- No placeholder logic presented as complete
-- No `TODO` comments that smuggle unfinished architecture into main
+- No fake completeness (placeholder logic presented as done)
+- No TODO comments that smuggle unfinished architecture into mainline
 - No dead code
 - Small, reviewable pull requests
 
 ### Rust (backend)
 
-- Idiomatic, safe Rust (`unsafe` is forbidden at foundation and discouraged forever)
+- Idiomatic safe Rust
+- `unsafe` is forbidden at foundation stage and strongly discouraged forever
 - Explicit errors over panics in library code
 - Document public modules and APIs
-- Keep cell autonomy boundaries obvious in type design
+- Keep cell autonomy boundaries obvious in types
 
 ### TypeScript / React (frontend)
 
-- Modern React + TypeScript
+- Modern React + TypeScript when UI work begins
 - Mission Control remains a scientific console
 - Prefer stable layouts and module activation over redesign churn
-- Shared contracts live in `/shared` when crossed by backend and frontend
+- Cross-boundary contracts belong in `/shared`
 
-### Architecture Rules (enforced socially and in review)
+---
+
+## Architecture Rules
 
 1. No central brain
 2. Local knowledge only for cells
 3. Memory and compute remain co-located in cells
-4. Design for evolution (learn/forget/rewire later)
+4. Design for evolution (learn / forget / rewire later)
 5. Do not hardcode cognition
 6. Mission Control is instrumentation, not mind
+7. Do not confuse engineering milestones with scientific confirmation
 
 ---
 
@@ -62,73 +67,79 @@ If a change violates a Foundational Law, it will be rejected.
 1. Branch from `main`
 2. Use descriptive branch names
 3. Keep commits focused
-4. Open a pull request early when architecture is uncertain
-5. Ensure CI passes
+4. Open a pull request when architecture is uncertain
+5. Keep CI green
 
 Suggested prefixes:
 
-- `feat/` for roadmap capabilities
-- `docs/` for documentation
-- `research/` for hypotheses/experiments
-- `chore/` for tooling
+- `feat/` roadmap capabilities
+- `docs/` documentation
+- `research/` hypotheses and experiments
+- `chore/` tooling
 
-Cloud agent branches may follow environment-required naming conventions.
+Cloud agents may follow environment-required branch naming.
 
 ---
 
 ## Commit Style
 
-Use imperative, descriptive subject lines:
+Use imperative subjects:
 
 ```text
-Add local energy clamp helpers for Digital Cell
-Document H005 metabolic cost experiment plan
-Tighten CI foundation path checks
+Add Digital Cell energy clamp helpers
+Document H009 observatory perturbation protocol
+Tighten foundation CI path checks
 ```
 
-Guidelines:
-
-- One logical change per commit when practical
-- Explain *why* in the body if the diff is non-obvious
-- Reference hypothesis IDs when relevant (`H002`, etc.)
+Include hypothesis IDs when relevant. Explain why in the commit body when the
+diff is non-obvious.
 
 ---
 
-## Documentation Requirements
+## Documentation Standards
 
-- Public architectural changes update `ARCHITECTURE.md`
-- Roadmap-impacting work updates `ROADMAP.md`
-- New research claims update `HYPOTHESES.md` and/or `docs/experiments/`
-- New folders include a `README.md` stating purpose
+- Architectural changes update `ARCHITECTURE.md` and/or `docs/architecture/`
+- Software version changes update `ENGINEERING_ROADMAP.md` and `CHANGELOG.md`
+- Scientific phase changes update `RESEARCH_ROADMAP.md`
+- New claims update `HYPOTHESES.md` and optionally `docs/hypotheses/`
+- New folders include a README stating purpose
 - Do not leave empty directories
 
+Distinguish:
+
+- **Engineering status** (what software exists)
+- **Research status** (what questions are answered)
+
 ---
 
-## Testing Requirements
+## Testing Standards
 
 - New backend modules ship with unit tests
 - Cross-module behavior ships with integration tests under `backend/tests/`
-- API contracts get explicit tests when `backend/api` is implemented
-- Research experiments record methods and results; anecdotes are not results
+- API contracts receive explicit tests when implemented
+- Experiments record methods and results; anecdotes are not results
 - CI must remain green
 
-At foundation stage, the bar is:
+Foundation-stage bar:
 
-- repository structure intact
+- structure intact
 - backend scaffold compiles
-- lint/format checks pass
+- clippy/format checks pass
 
 ---
 
-## Review Criteria
+## Review Process
 
-Reviewers will ask:
+Reviewers evaluate:
 
-- Does this preserve the Five Laws?
-- Is this the right roadmap version?
-- Will this still make sense with millions of cells?
-- Did we accidentally invent a central controller?
-- Are claims evidenced or merely asserted?
+1. Law compatibility
+2. Correct roadmap lane (engineering vs research)
+3. Millions-of-cells readiness where cell APIs are touched
+4. Absence of accidental central controllers
+5. Evidence quality for any scientific claim
+6. Documentation completeness
+
+A dazzling demo that violates locality is not mergeable.
 
 ---
 
@@ -136,5 +147,6 @@ Reviewers will ask:
 
 NEURONET is ambitious and patient.
 
-We optimize for decades of coherent research, not viral demos.
-Argue with evidence. Change the constitution only with extraordinary cause.
+Argue with evidence.  
+Prefer durable architecture over viral screenshots.  
+Change the constitution only with extraordinary cause.

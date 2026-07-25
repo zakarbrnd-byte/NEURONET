@@ -1,19 +1,20 @@
 # docs
 
-Research and engineering documentation beyond the root constitution files.
+Research and deep-dive engineering documentation beyond the root constitution.
 
 | Path | Purpose |
 |------|---------|
-| `diagrams/` | Architecture and experiment diagrams |
+| `architecture/` | ADRs, deep architecture notes, evolution records |
 | `experiments/` | Experiment plans, logs, and analyses |
-| `research/` | Notes, literature, and theoretical writeups |
+| `hypotheses/` | Extended hypothesis protocols linked from `HYPOTHESES.md` |
+| `research/` | Literature notes and theoretical explorations |
+| `diagrams/` | Figures and visual models |
 | `screenshots/` | Observatory and experiment captures |
 
-Root-level canon lives in:
+Root canon remains in:
 
 - `PHILOSOPHY.md`
 - `ARCHITECTURE.md`
-- `ROADMAP.md`
+- `ENGINEERING_ROADMAP.md`
+- `RESEARCH_ROADMAP.md`
 - `HYPOTHESES.md`
-- `CONTRIBUTING.md`
-- `CLAUDE.md`

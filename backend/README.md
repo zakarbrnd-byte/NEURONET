@@ -1,4 +1,4 @@
-# Backend
+# backend
 
 Rust workspace member that will host the NEURONET organism runtime and
 Mission Control observatory API.
@@ -28,4 +28,6 @@ Mission Control observatory API.
 
 ## Status
 
-Foundation only. No organism logic is implemented yet.
+Foundation only (`0.0.0`). No organism logic is implemented yet.
+
+See `ENGINEERING_ROADMAP.md` version 0.1 for the first implementation target.

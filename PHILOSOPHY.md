@@ -2,30 +2,19 @@
 
 This document is the constitution of Project NEURONET.
 
-If a design decision conflicts with this file, this file wins.
+If implementation, convenience, or fashion conflicts with this file, this file wins.
 
 ---
 
-## Project Vision
+## Vision
 
 NEURONET is an experimental **Artificial Life Operating System (ALOS)**.
 
-Its mission is to research whether cognition can emerge from a decentralized
-society of autonomous computational cells inspired by biology.
+We are building a laboratory in which computational organisms can live, interact,
+adapt, and — possibly — give rise to cognitive organization.
 
-NEURONET is **not**:
-
-- another chatbot
-- another Large Language Model
-- another conventional neural network
-- another AI assistant product
-
-NEURONET is a scientific research platform for growing computational life.
-
-We do not begin by simulating intelligence as a mathematical trick.
-We begin by constructing organisms that live, remember, interact, and evolve.
-
-If intelligence appears, it must appear as an outcome — not as a feature flag.
+We do not begin with a chatbot persona.  
+We begin with cells.
 
 ---
 
@@ -33,13 +22,14 @@ If intelligence appears, it must appear as an outcome — not as a feature flag.
 
 ### LAW 1 — No Central Brain
 
-There is never a master controller.
+There is never a master controller of thought.
 
-There is never a central reasoning engine.
+There is never a central reasoning engine that owns cognition for the society.
 
-There is never global cognitive memory.
+There is never a global cognitive memory shared as a mind.
 
-Mission Control may observe. It may inject stimuli. It may never become the mind.
+Mission Control may observe and intervene experimentally.  
+Mission Control may never become the mind.
 
 ### LAW 2 — Local Knowledge Only
 
@@ -50,9 +40,7 @@ Each Digital Cell knows only:
 - messages it has received
 - neighboring cells (when neighborhoods exist)
 
-Nothing else.
-
-A cell must never require omniscient awareness of the society to function.
+A cell must not require omniscient awareness of the society to live.
 
 ### LAW 3 — Memory and Computation Are Inseparable
 
@@ -61,11 +49,11 @@ Every Digital Cell owns its own memory.
 Every Digital Cell performs its own computation.
 
 NEURONET rejects the classical CPU/RAM split as a model of mind.
-Thought and memory cohabitate inside the cell.
+Experience is processed where it is retained.
 
 ### LAW 4 — Everything Evolves
 
-Future versions must allow cells to:
+Future systems must allow cells to:
 
 - learn
 - forget
@@ -74,7 +62,7 @@ Future versions must allow cells to:
 - create relationships
 - remove relationships
 
-Architecture anticipates plasticity. It does not hardcode a final topology.
+Architecture anticipates plasticity. It does not freeze a final topology.
 
 ### LAW 5 — Intelligence Must Emerge
 
@@ -84,87 +72,91 @@ Never hardcode planning.
 
 Never hardcode cognition.
 
-If NEURONET becomes intelligent, that intelligence must arise from local
+If NEURONET ever exhibits intelligence, that intelligence must arise from local
 interactions among autonomous cells.
 
 ---
 
 ## Why Biology
 
-Biology solved persistence, adaptation, and decentralized coordination long
-before software did.
+Biology solved persistence, adaptation, and decentralized coordination under
+constraint.
 
-Neurons are not API handlers.
-Cells are not microservices with a product manager.
-Living systems compute through metabolism, memory, signaling, and selection.
-
-NEURONET borrows biological constraints because those constraints are generative:
+Biological systems compute through:
 
 - local state
-- limited energy
+- metabolism
+- signaling
 - imperfect memory
-- neighbor-limited communication
-- evolutionary pressure
+- selection over time
 
-We study life-like computation by building life-like computational organisms.
-
----
-
-## Why Decentralization
-
-Centralized cognition recreates a single point of failure and a single point of
-control. That architecture is excellent for compilers and bad for organisms.
-
-A decentralized society can:
-
-- survive partial failure
-- scale by replication
-- specialize through interaction
-- reorganize without a planner
-
-Decentralization is not a deployment preference.
-It is an epistemic commitment: knowledge remains local.
+NEURONET borrows these constraints because they are generative.  
+Unlimited global knowledge and zero cost make the experiment too easy to fake.
 
 ---
 
-## Why Memory + Compute Together
+## Why Decentralized Computing
 
-Separating memory from compute creates a warehouse with a distant worker.
-That model is powerful for von Neumann machines and impoverished for minds.
+Centralized cognition creates a single point of control and a single point of
+failure. It also smuggles in an architectural answer before the scientific
+question is asked.
+
+Decentralization is not a deployment preference.  
+It is an epistemic commitment:
+
+> Knowledge remains local; organization, if it appears, must be assembled from
+> local interactions.
+
+A decentralized society can survive partial failure, scale by replication, and
+specialize without a planner.
+
+---
+
+## Why Memory and Computation Are Inseparable
+
+A warehouse of memory with a distant worker is a von Neumann convenience, not a
+theory of mind.
 
 In NEURONET:
 
-- experience is stored where it is processed
+- the cell that lives an event is the cell that stores it
 - forgetting is local
 - confidence is local
-- association forms inside the cell that lived the event
+- association forms inside the organism that experienced the signal
 
-This co-location is the substrate on which later learning can evolve.
+This co-location is the substrate on which learning can later evolve.
 
 ---
 
 ## Why Emergence
 
-Hardcoded intelligence pretends the answer is already known.
+Hardcoded intelligence assumes the answer is already known.
 
-Emergence admits that the interesting behaviors may be discovered, not declared.
+Emergence admits that the interesting behaviors may be discovered.
 
-NEURONET’s bet:
+NEURONET’s working bet:
 
 > Simple autonomous cells + local memory + local interaction + evolutionary
 > dynamics can produce organization that no single cell contains.
 
-We will be disciplined about not cheating that bet.
+We will be disciplined about not cheating that bet with hidden planners,
+global minds, or scripted “emergence.”
 
 ---
 
-## Scientific Goals
+## Scientific Method
 
-1. Build a reproducible artificial organism substrate.
-2. Instrument it without enslaving it to a central controller.
-3. Test hypotheses about memory, forgetting, association, and organization.
-4. Scale from one cell to societies without rewriting the constitution.
-5. Determine what, if anything, emerges that deserves the word cognition.
+NEURONET follows research discipline:
+
+1. Ask a question that can fail (`RESEARCH_ROADMAP.md`)
+2. Register a prediction (`HYPOTHESES.md`)
+3. Build only the substrate required (`ENGINEERING_ROADMAP.md`)
+4. Run controlled experiments (`docs/experiments/`)
+5. Record support, challenge, or falsification
+6. Prefer negative results over narrative inflation
+
+Instrumentation is mandatory.  
+Theatrical claims are not.
 
 ---
 
@@ -174,18 +166,35 @@ Success is **not** “it chats well.”
 
 Success looks like:
 
-- a living computational society that persists and adapts
+- a living computational substrate that persists and adapts
 - behaviors that are not centrally scripted
-- measurable support or falsification of research hypotheses
-- an architecture that remains coherent at organism scale
-- a research platform others can extend for decades
+- measurable support or falsification of hypotheses
+- an architecture coherent at organism and society scale
+- a laboratory others can extend for decades
 
-Failure modes to avoid:
+A version number reaching 1.0 means the research organism platform is real.
+It does not mean consciousness has been achieved.
+
+---
+
+## Failure Philosophy
+
+Failure is data.
+
+We expect many hypotheses to be challenged or falsified.  
+That is not project failure; that is science working.
+
+Project failure looks like:
 
 - secretly reintroducing a central brain
 - turning Mission Control into the mind
 - shipping product UX instead of scientific substrate
-- claiming emergence while hardcoding the outcome
+- claiming emergence while hardcoding outcomes
+- confusing engineering milestones with proof of cognition
+- abandoning measurement when results are inconvenient
+
+If NEURONET must choose between a dazzling demo and constitutional honesty,
+it chooses honesty.
 
 ---
 
@@ -193,5 +202,6 @@ Failure modes to avoid:
 
 NEURONET is a long project.
 
-We are not assembling a demo.
-We are preparing a world in which digital life might grow.
+We are not assembling a weekend prototype.  
+We are preparing a world in which digital life might grow — and in which we will
+have the discipline to admit when it does not.
