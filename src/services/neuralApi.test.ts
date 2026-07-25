@@ -23,7 +23,7 @@ describe("neuralApi", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ tick: 0, neurons: [], connections: [] }),
+      json: async () => ({ tick: 0, neurons: [], synapses: [] }),
     } as Response);
 
     const { neuralApi } = await import("./neuralApi");

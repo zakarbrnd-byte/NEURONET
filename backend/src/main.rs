@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
@@ -38,13 +39,14 @@ async fn main() {
 
     let state = AppState {
         network: Arc::new(Mutex::new(NeuralNetwork::initial())),
+        started_at: Instant::now(),
     };
 
     let cors = build_cors(&origins);
     let router = app(state, cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("NEURONET backend 0.5 listening on http://{addr}");
+    tracing::info!("NEURONET backend 0.6C listening on http://{addr}");
     tracing::info!("CORS origins: {:?}", origins);
 
     let listener = tokio::net::TcpListener::bind(addr)

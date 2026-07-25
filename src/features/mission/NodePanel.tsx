@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { MetricHint } from "../../components/MetricHint";
 import type {
-  ConnectionSnapshot,
   NetworkEvent,
   NeuronSnapshot,
+  SynapseSnapshot,
 } from "../../types/neural";
 import {
   distanceToThresholdMv,
@@ -15,7 +15,7 @@ import type { NodeCategory } from "../../types/ui";
 interface NodePanelProps {
   neuron: NeuronSnapshot | null;
   networkTick: number;
-  connections: ConnectionSnapshot[];
+  synapses: SynapseSnapshot[];
   events: NetworkEvent[];
 }
 
@@ -24,13 +24,14 @@ const CATEGORIES: Array<{ id: NodeCategory; label: string }> = [
   { id: "recovery", label: "Recovery" },
   { id: "connections", label: "Connections" },
   { id: "history", label: "History" },
+  { id: "biology", label: "Biology" },
 ];
 
 function formatMv(value: number): string {
   return `${value.toFixed(1)} mV`;
 }
 
-export function NodePanel({ neuron, networkTick, connections, events }: NodePanelProps) {
+export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelProps) {
   const [category, setCategory] = useState<NodeCategory>("electrical");
 
   if (!neuron) {
@@ -39,8 +40,8 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
 
   const state = electricalState(neuron);
   const distance = distanceToThresholdMv(neuron);
-  const incoming = connections.filter((c) => c.targetNeuronId === neuron.id).length;
-  const outgoing = connections.filter((c) => c.sourceNeuronId === neuron.id).length;
+  const incoming = synapses.filter((c) => c.targetNeuronId === neuron.id).length;
+  const outgoing = synapses.filter((c) => c.sourceNeuronId === neuron.id).length;
   const latestReceived = events.find(
     (event) =>
       event.type === "signal_propagated" && event.targetNeuronId === neuron.id,
@@ -156,9 +157,64 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
               </dt>
               <dd>
                 {latestReceived?.amountMv != null
-                  ? `+${latestReceived.amountMv} mV`
+                  ? `${latestReceived.amountMv >= 0 ? "+" : ""}${latestReceived.amountMv} mV`
                   : "None"}
               </dd>
+            </div>
+          </>
+        ) : null}
+
+        {category === "biology" ? (
+          <>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="region" label="Region" />
+              </dt>
+              <dd>{neuron.region}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="layer" label="Layer" />
+              </dt>
+              <dd>{neuron.layer}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="cellType" label="Cell Type" />
+              </dt>
+              <dd className="capitalize">{neuron.cellType}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="dnaId" label="DNA ID" />
+              </dt>
+              <dd>{neuron.dnaId}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="position" label="Position" />
+              </dt>
+              <dd>
+                x={neuron.position.x.toFixed(2)}, y={neuron.position.y.toFixed(2)}
+              </dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="somaRadius" label="Soma Radius" />
+              </dt>
+              <dd>{neuron.somaRadius.toFixed(3)}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="dendriteRadius" label="Dendrite Radius" />
+              </dt>
+              <dd>{neuron.dendriteRadius.toFixed(3)}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="axonLength" label="Axon Length" />
+              </dt>
+              <dd>{neuron.axonLength.toFixed(3)}</dd>
             </div>
           </>
         ) : null}

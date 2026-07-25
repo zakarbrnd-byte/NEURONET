@@ -3,6 +3,9 @@
 //! This is NOT a complete biophysical simulation. It is a beginner-friendly
 //! model that makes resting potential, depolarization, firing, and recovery
 //! visible and testable.
+//!
+//! Version 0.6A adds fixed physical tissue properties (position, morphology,
+//! cell type). Positions never move. No growth, learning, or memory.
 
 use serde::Serialize;
 
@@ -25,6 +28,22 @@ pub const REFRACTORY_PERIOD: u32 = 2;
 pub const MIN_MEMBRANE_MV: f64 = -90.0;
 pub const MAX_MEMBRANE_MV: f64 = 40.0;
 
+/// Normalized tissue coordinates in \[0, 1\].
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Excitatory or inhibitory cell identity (deterministic tissue role).
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CellType {
+    Excitatory,
+    Inhibitory,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Neuron {
@@ -37,10 +56,46 @@ pub struct Neuron {
     pub refractory_ticks: u32,
     pub fired: bool,
     pub tick: u64,
+    pub position: Position,
+    pub region: String,
+    pub layer: u32,
+    pub cell_type: CellType,
+    pub dna_id: String,
+    pub soma_radius: f64,
+    pub dendrite_radius: f64,
+    pub axon_length: f64,
+}
+
+/// Deterministic tissue seed for the observatory cortex.
+pub struct TissueSeed {
+    pub position: Position,
+    pub region: &'static str,
+    pub layer: u32,
+    pub cell_type: CellType,
+    pub dna_id: &'static str,
+    pub soma_radius: f64,
+    pub dendrite_radius: f64,
+    pub axon_length: f64,
 }
 
 impl Neuron {
     pub fn new(id: impl Into<String>) -> Self {
+        Self::with_tissue(
+            id,
+            TissueSeed {
+                position: Position { x: 0.5, y: 0.5 },
+                region: "Observatory Cortex",
+                layer: 1,
+                cell_type: CellType::Excitatory,
+                dna_id: "DNA-000",
+                soma_radius: 0.035,
+                dendrite_radius: 0.09,
+                axon_length: 0.2,
+            },
+        )
+    }
+
+    pub fn with_tissue(id: impl Into<String>, seed: TissueSeed) -> Self {
         Self {
             id: id.into(),
             resting_potential_mv: -70.0,
@@ -51,13 +106,23 @@ impl Neuron {
             refractory_ticks: 0,
             fired: false,
             tick: 0,
+            position: seed.position,
+            region: seed.region.to_string(),
+            layer: seed.layer,
+            cell_type: seed.cell_type,
+            dna_id: seed.dna_id.to_string(),
+            soma_radius: seed.soma_radius,
+            dendrite_radius: seed.dendrite_radius,
+            axon_length: seed.axon_length,
         }
     }
 
-    /// Positive signals depolarize (raise) membrane potential.
-    /// Zero and negative input are ignored in Version 0.4.
+    /// Apply a synaptic or electrode signal.
+    ///
+    /// Positive amounts depolarize. Negative amounts hyperpolarize (inhibition).
+    /// Zero is ignored. Electrode injection remains positive-only at the API.
     pub fn receive_signal(&mut self, amount_mv: f64) {
-        if amount_mv <= 0.0 {
+        if amount_mv == 0.0 {
             return;
         }
 
@@ -152,6 +217,7 @@ mod tests {
         assert_eq!(neuron.refractory_ticks, 0);
         assert!(!neuron.fired);
         assert_eq!(neuron.tick, 0);
+        assert_eq!(neuron.cell_type, CellType::Excitatory);
     }
 
     #[test]
@@ -162,11 +228,12 @@ mod tests {
     }
 
     #[test]
-    fn ignores_zero_and_negative_signals() {
+    fn ignores_zero_signals_and_accepts_inhibition() {
         let mut neuron = Neuron::new("NEURON-001");
         neuron.receive_signal(0.0);
-        neuron.receive_signal(-3.0);
         assert_eq!(neuron.membrane_potential_mv, -70.0);
+        neuron.receive_signal(-3.0);
+        assert_eq!(neuron.membrane_potential_mv, -73.0);
     }
 
     #[test]
@@ -226,5 +293,31 @@ mod tests {
         }
         assert_eq!(neuron.energy, 0.0);
         assert!(neuron.energy >= 0.0);
+    }
+
+    #[test]
+    fn tissue_seed_sets_physical_properties() {
+        let neuron = Neuron::with_tissue(
+            "NEURON-004",
+            TissueSeed {
+                position: Position { x: 0.60, y: 0.72 },
+                region: "Observatory Cortex",
+                layer: 2,
+                cell_type: CellType::Inhibitory,
+                dna_id: "DNA-004",
+                soma_radius: 0.032,
+                dendrite_radius: 0.085,
+                axon_length: 0.28,
+            },
+        );
+        assert_eq!(neuron.position.x, 0.60);
+        assert_eq!(neuron.position.y, 0.72);
+        assert_eq!(neuron.region, "Observatory Cortex");
+        assert_eq!(neuron.layer, 2);
+        assert_eq!(neuron.cell_type, CellType::Inhibitory);
+        assert_eq!(neuron.dna_id, "DNA-004");
+        assert_eq!(neuron.soma_radius, 0.032);
+        assert_eq!(neuron.dendrite_radius, 0.085);
+        assert_eq!(neuron.axon_length, 0.28);
     }
 }

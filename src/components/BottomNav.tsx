@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import type { MissionPanel } from "../types/ui";
+import type { MainView, MissionPanel } from "../types/ui";
 
 interface BottomNavProps {
-  active: MissionPanel;
-  onChange: (panel: MissionPanel) => void;
+  active: MissionPanel | MainView;
+  onChange: (panel: "network" | "tissue" | "timeline" | "controls") => void;
 }
 
 const ITEMS: Array<{
-  id: MissionPanel;
+  id: "network" | "tissue" | "timeline" | "controls";
   label: string;
   ariaLabel: string;
   icon: ReactNode;
@@ -32,13 +32,21 @@ const ITEMS: Array<{
     ),
   },
   {
-    id: "node",
-    label: "Node",
-    ariaLabel: "Neuron details",
+    id: "tissue",
+    label: "Tissue",
+    ariaLabel: "Tissue view",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="nav-icon">
-        <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="12" cy="12" r="2" fill="currentColor" />
+        <circle cx="12" cy="12" r="3.2" fill="currentColor" />
+        <circle
+          cx="12"
+          cy="12"
+          r="7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          opacity="0.55"
+        />
       </svg>
     ),
   },

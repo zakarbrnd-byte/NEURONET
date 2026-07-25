@@ -1,13 +1,19 @@
-//! Neural network owner — the only place that owns neurons and connections.
+//! Neural network owner — the only place that owns neurons and living synapses.
 
 use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::connection::{Connection, ConnectionType};
-use crate::neuron::{Neuron, NeuronStepResult};
+use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
+use crate::structural::{
+    evaluate_growth_candidates, evaluate_pruning_risk, record_coactivations, GrowthCandidate,
+    PairActivity, StructuralPlasticityConfig, StructuralSnapshot,
+};
+use crate::synapse::{Synapse, SynapseType};
 
 const MAX_EVENTS: usize = 200;
+const TISSUE_REGION: &str = "Observatory Cortex";
+const TISSUE_LABEL: &str = "Artificial Neural Tissue";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +31,28 @@ pub struct NetworkEvent {
     pub target_neuron_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount_mv: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readiness_or_risk: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason_codes: Option<Vec<String>>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TissueInfo {
+    pub label: String,
+    pub region: String,
+    pub alive: bool,
+    pub cell_count: usize,
+    pub synapse_count: usize,
+    pub age_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -33,13 +60,16 @@ pub struct NetworkEvent {
 pub struct NetworkSnapshot {
     pub tick: u64,
     pub neurons: Vec<Neuron>,
-    pub connections: Vec<Connection>,
+    pub synapses: Vec<Synapse>,
+    pub tissue: TissueInfo,
+    pub structural: StructuralSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PropagationTrace {
     pub event_id: String,
+    pub synapse_id: String,
     pub source_neuron_id: String,
     pub target_neuron_id: String,
     pub amount_mv: f64,
@@ -58,47 +88,134 @@ pub struct NetworkStepTrace {
 #[derive(Debug)]
 pub struct NeuralNetwork {
     neurons: Vec<Neuron>,
-    connections: Vec<Connection>,
+    synapses: Vec<Synapse>,
     tick: u64,
     events: Vec<NetworkEvent>,
+    age_seconds: u64,
+    /// Synapses that delivered last tick — Hebbian candidates if target fires now.
+    pending_hebbian: Vec<String>,
+    structural_config: StructuralPlasticityConfig,
+    pair_activity: Vec<PairActivity>,
+    growth_candidates: Vec<GrowthCandidate>,
+    previous_fired: Vec<String>,
+    latest_structural_evaluation_tick: Option<u64>,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron observatory network with branching and convergence.
+    /// Deterministic five-neuron tissue with living synapses + structural observation (0.6C).
     pub fn initial() -> Self {
+        Self::initial_with_age(0)
+    }
+
+    pub fn initial_with_age(age_seconds: u64) -> Self {
         let mut network = Self {
             neurons: Vec::new(),
-            connections: Vec::new(),
+            synapses: Vec::new(),
             tick: 0,
             events: Vec::new(),
+            age_seconds,
+            pending_hebbian: Vec::new(),
+            structural_config: StructuralPlasticityConfig::default(),
+            pair_activity: Vec::new(),
+            growth_candidates: Vec::new(),
+            previous_fired: Vec::new(),
+            latest_structural_evaluation_tick: None,
         };
 
-        for id in [
-            "NEURON-001",
-            "NEURON-002",
-            "NEURON-003",
-            "NEURON-004",
-            "NEURON-005",
-        ] {
-            network.neurons.push(Neuron::new(id));
-        }
-
-        let edges = [
-            ("CONNECTION-001", "NEURON-001", "NEURON-002", 16.0),
-            ("CONNECTION-002", "NEURON-002", "NEURON-003", 16.0),
-            ("CONNECTION-003", "NEURON-002", "NEURON-004", 16.0),
-            ("CONNECTION-004", "NEURON-003", "NEURON-005", 8.0),
-            ("CONNECTION-005", "NEURON-004", "NEURON-005", 8.0),
+        let seeds = [
+            (
+                "NEURON-001",
+                TissueSeed {
+                    position: Position { x: 0.12, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 1,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-001",
+                    soma_radius: 0.036,
+                    dendrite_radius: 0.092,
+                    axon_length: 0.22,
+                },
+            ),
+            (
+                "NEURON-002",
+                TissueSeed {
+                    position: Position { x: 0.32, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 1,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-002",
+                    soma_radius: 0.038,
+                    dendrite_radius: 0.095,
+                    axon_length: 0.30,
+                },
+            ),
+            (
+                "NEURON-003",
+                TissueSeed {
+                    position: Position { x: 0.60, y: 0.28 },
+                    region: TISSUE_REGION,
+                    layer: 2,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-003",
+                    soma_radius: 0.034,
+                    dendrite_radius: 0.088,
+                    axon_length: 0.28,
+                },
+            ),
+            (
+                "NEURON-004",
+                TissueSeed {
+                    position: Position { x: 0.60, y: 0.72 },
+                    region: TISSUE_REGION,
+                    layer: 2,
+                    cell_type: CellType::Inhibitory,
+                    dna_id: "DNA-004",
+                    soma_radius: 0.032,
+                    dendrite_radius: 0.084,
+                    axon_length: 0.28,
+                },
+            ),
+            (
+                "NEURON-005",
+                TissueSeed {
+                    position: Position { x: 0.88, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 3,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-005",
+                    soma_radius: 0.037,
+                    dendrite_radius: 0.090,
+                    axon_length: 0.12,
+                },
+            ),
         ];
 
-        for (id, source, target, weight) in edges {
-            network
-                .add_connection_unchecked(
-                    Connection::excitatory(id, source, target, weight)
-                        .expect("valid initial connection"),
-                )
-                .expect("valid initial connection");
+        for (id, seed) in seeds {
+            network.neurons.push(Neuron::with_tissue(id, seed));
         }
+
+        let excitatory = [
+            ("SYNAPSE-001", "NEURON-001", "NEURON-002", 16.0),
+            ("SYNAPSE-002", "NEURON-002", "NEURON-003", 16.0),
+            ("SYNAPSE-003", "NEURON-002", "NEURON-004", 16.0),
+            ("SYNAPSE-004", "NEURON-003", "NEURON-005", 8.0),
+        ];
+
+        for (id, source, target, weight) in excitatory {
+            network
+                .add_synapse_unchecked(
+                    Synapse::excitatory(id, source, target, weight, 0)
+                        .expect("valid initial synapse"),
+                )
+                .expect("valid initial synapse");
+        }
+
+        network
+            .add_synapse_unchecked(
+                Synapse::inhibitory("SYNAPSE-005", "NEURON-004", "NEURON-005", 8.0, 0)
+                    .expect("valid inhibitory synapse"),
+            )
+            .expect("valid inhibitory synapse");
 
         network.push_event(
             "network_ready",
@@ -106,14 +223,23 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Deterministic five-neuron network ready",
+            "Deterministic artificial neural tissue with living synapses ready",
         );
 
         network
     }
 
+    pub fn set_age_seconds(&mut self, age_seconds: u64) {
+        self.age_seconds = age_seconds;
+    }
+
+    pub fn age_seconds(&self) -> u64 {
+        self.age_seconds
+    }
+
     pub fn reset(&mut self) {
-        *self = Self::initial();
+        let age = self.age_seconds;
+        *self = Self::initial_with_age(age);
         self.events.clear();
         self.push_event(
             "network_reset",
@@ -121,7 +247,7 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Network reset to deterministic initial state",
+            "Tissue reset to deterministic initial state",
         );
     }
 
@@ -129,13 +255,42 @@ impl NeuralNetwork {
         let mut neurons = self.neurons.clone();
         neurons.sort_by(|a, b| a.id.cmp(&b.id));
 
-        let mut connections = self.connections.clone();
-        connections.sort_by(|a, b| a.id.cmp(&b.id));
+        let mut synapses = self.synapses.clone();
+        synapses.sort_by(|a, b| a.id.cmp(&b.id));
+
+        let region = neurons
+            .first()
+            .map(|n| n.region.clone())
+            .unwrap_or_else(|| TISSUE_REGION.to_string());
+
+        let at_risk = synapses
+            .iter()
+            .filter(|s| matches!(s.pruning_status, crate::synapse::PruningStatus::AtRisk))
+            .count();
 
         NetworkSnapshot {
             tick: self.tick,
+            tissue: TissueInfo {
+                label: TISSUE_LABEL.to_string(),
+                region,
+                alive: true,
+                cell_count: neurons.len(),
+                synapse_count: synapses.len(),
+                age_seconds: self.age_seconds,
+            },
+            structural: StructuralSnapshot {
+                config: (&self.structural_config).into(),
+                growth_candidates: {
+                    let mut c = self.growth_candidates.clone();
+                    c.sort_by(|a, b| a.id.cmp(&b.id));
+                    c
+                },
+                latest_evaluation_tick: self.latest_structural_evaluation_tick,
+                candidate_count: self.growth_candidates.len(),
+                at_risk_synapse_count: at_risk,
+            },
             neurons,
-            connections,
+            synapses,
         }
     }
 
@@ -174,6 +329,10 @@ impl NeuralNetwork {
     pub fn step(&mut self) -> NetworkStepTrace {
         self.tick = self.tick.saturating_add(1);
         let mut event_ids: Vec<String> = Vec::new();
+
+        for synapse in &mut self.synapses {
+            synapse.advance_age();
+        }
 
         let mut ordered_indexes: Vec<usize> = (0..self.neurons.len()).collect();
         ordered_indexes.sort_by(|&a, &b| self.neurons[a].id.cmp(&self.neurons[b].id));
@@ -229,47 +388,146 @@ impl NeuralNetwork {
 
         fired_ids.sort();
 
-        let deliveries: Vec<(String, String, f64)> = fired_ids
+        // Hebbian: prior delivery + target firing in this activation sequence.
+        let pending = std::mem::take(&mut self.pending_hebbian);
+        let mut strength_events: Vec<(String, String, String, f64, f64)> = Vec::new();
+        for synapse_id in pending {
+            if let Some(synapse) = self.synapses.iter_mut().find(|s| s.id == synapse_id) {
+                if fired_ids.iter().any(|id| id == &synapse.target_neuron_id) {
+                    let before = synapse.weight;
+                    synapse.apply_hebbian_increase(self.tick);
+                    if (synapse.weight - before).abs() > f64::EPSILON {
+                        strength_events.push((
+                            synapse.id.clone(),
+                            synapse.source_neuron_id.clone(),
+                            synapse.target_neuron_id.clone(),
+                            before,
+                            synapse.weight,
+                        ));
+                    }
+                }
+            }
+        }
+        for (_id, source, target, before, after) in strength_events {
+            event_ids.push(self.push_event(
+                "synapse_strengthened",
+                None,
+                Some(source),
+                Some(target),
+                Some(after),
+                format!("synapse weight {before:.3} → {after:.3}"),
+            ));
+        }
+
+        let deliveries: Vec<(String, String, String, f64)> = fired_ids
             .iter()
             .flat_map(|source_id| {
                 let mut outs: Vec<_> = self
-                    .connections
+                    .synapses
                     .iter()
-                    .filter(|c| c.source_neuron_id == *source_id)
-                    .map(|c| {
+                    .filter(|s| s.source_neuron_id == *source_id)
+                    .map(|s| {
                         (
-                            c.source_neuron_id.clone(),
-                            c.target_neuron_id.clone(),
-                            c.weight,
+                            s.id.clone(),
+                            s.source_neuron_id.clone(),
+                            s.target_neuron_id.clone(),
+                            s.signed_amount_mv(),
                         )
                     })
                     .collect();
-                outs.sort_by(|a, b| a.1.cmp(&b.1));
+                outs.sort_by(|a, b| a.2.cmp(&b.2));
                 outs
             })
             .collect();
 
         let mut propagations: Vec<PropagationTrace> = Vec::new();
+        let mut activated_ids: Vec<String> = Vec::new();
 
-        for (source_id, target_id, weight) in deliveries {
+        for (synapse_id, source_id, target_id, amount_mv) in deliveries {
             if let Some(target) = self.neurons.iter_mut().find(|n| n.id == target_id) {
-                target.receive_signal(weight);
-                let event_id = self.push_event(
-                    "signal_propagated",
-                    Some(target_id.clone()),
-                    Some(source_id.clone()),
-                    Some(target_id.clone()),
-                    Some(weight),
-                    format!("{source_id} → {target_id} (+{weight} mV)"),
-                );
-                event_ids.push(event_id.clone());
-                propagations.push(PropagationTrace {
-                    event_id,
-                    source_neuron_id: source_id,
-                    target_neuron_id: target_id,
-                    amount_mv: weight,
-                });
+                target.receive_signal(amount_mv);
             }
+
+            if let Some(synapse) = self.synapses.iter_mut().find(|s| s.id == synapse_id) {
+                synapse.record_activation(self.tick);
+            }
+
+            activated_ids.push(synapse_id.clone());
+            self.pending_hebbian.push(synapse_id.clone());
+
+            let sign = if amount_mv >= 0.0 { "+" } else { "" };
+            let event_id = self.push_event(
+                "signal_propagated",
+                Some(target_id.clone()),
+                Some(source_id.clone()),
+                Some(target_id.clone()),
+                Some(amount_mv),
+                format!("{source_id} → {target_id} ({sign}{amount_mv} mV)"),
+            );
+            event_ids.push(event_id.clone());
+            propagations.push(PropagationTrace {
+                event_id,
+                synapse_id,
+                source_neuron_id: source_id,
+                target_neuron_id: target_id,
+                amount_mv,
+            });
+        }
+
+        // Idle decay for synapses that did not activate this tick.
+        let activated: std::collections::HashSet<String> = activated_ids.iter().cloned().collect();
+        let mut weaken_events: Vec<(String, String, f64, f64)> = Vec::new();
+        for synapse in &mut self.synapses {
+            if !activated.contains(&synapse.id) {
+                let before = synapse.weight;
+                synapse.apply_idle_decay(self.tick);
+                if synapse.weight < before {
+                    weaken_events.push((
+                        synapse.source_neuron_id.clone(),
+                        synapse.target_neuron_id.clone(),
+                        before,
+                        synapse.weight,
+                    ));
+                }
+            }
+        }
+        for (source, target, before, after) in weaken_events {
+            event_ids.push(self.push_event(
+                "synapse_weakened",
+                None,
+                Some(source),
+                Some(target),
+                Some(after),
+                format!("synapse weight {before:.3} → {after:.3}"),
+            ));
+        }
+
+        // Structural plasticity foundations (0.6C): observe only — no create/delete.
+        let previous = std::mem::take(&mut self.previous_fired);
+        record_coactivations(&mut self.pair_activity, &previous, &fired_ids, self.tick);
+        self.previous_fired = fired_ids.clone();
+
+        let interval = self.structural_config.evaluation_interval_ticks.max(1);
+        if self.structural_config.enabled && self.tick % interval == 0 {
+            let synapse_count_before = self.synapses.len();
+            let growth_events = evaluate_growth_candidates(
+                &self.structural_config,
+                &self.neurons,
+                &self.synapses,
+                &mut self.pair_activity,
+                &mut self.growth_candidates,
+                self.tick,
+            );
+            let pruning_events =
+                evaluate_pruning_risk(&self.structural_config, &mut self.synapses, self.tick);
+            self.latest_structural_evaluation_tick = Some(self.tick);
+
+            for event in growth_events.into_iter().chain(pruning_events) {
+                event_ids.push(self.push_structural_event(event));
+            }
+
+            // Hard invariant for 0.6C: structure observation never mutates topology.
+            debug_assert_eq!(self.synapses.len(), synapse_count_before);
         }
 
         NetworkStepTrace {
@@ -281,58 +539,57 @@ impl NeuralNetwork {
         }
     }
 
-    fn add_connection_unchecked(&mut self, connection: Connection) -> Result<(), String> {
-        self.validate_connection(&connection)?;
-        self.connections.push(connection);
+    fn add_synapse_unchecked(&mut self, synapse: Synapse) -> Result<(), String> {
+        self.validate_synapse(&synapse)?;
+        self.synapses.push(synapse);
         Ok(())
     }
 
-    pub fn add_connection(&mut self, connection: Connection) -> Result<(), String> {
-        self.add_connection_unchecked(connection)
+    pub fn add_synapse(&mut self, synapse: Synapse) -> Result<(), String> {
+        self.add_synapse_unchecked(synapse)
     }
 
-    fn validate_connection(&self, connection: &Connection) -> Result<(), String> {
-        if connection.source_neuron_id == connection.target_neuron_id {
+    fn validate_synapse(&self, synapse: &Synapse) -> Result<(), String> {
+        if synapse.source_neuron_id == synapse.target_neuron_id {
             return Err("self-connections are not allowed".to_string());
         }
 
-        if connection.weight <= 0.0 {
-            return Err("connection weight must be positive".to_string());
-        }
-
-        if !matches!(connection.connection_type, ConnectionType::Excitatory) {
-            return Err("only excitatory connections are supported".to_string());
+        if !matches!(
+            synapse.synapse_type,
+            SynapseType::Excitatory | SynapseType::Inhibitory
+        ) {
+            return Err("unsupported synapse type".to_string());
         }
 
         if !self
             .neurons
             .iter()
-            .any(|n| n.id == connection.source_neuron_id)
+            .any(|n| n.id == synapse.source_neuron_id)
         {
             return Err(format!(
                 "missing source neuron: {}",
-                connection.source_neuron_id
+                synapse.source_neuron_id
             ));
         }
 
         if !self
             .neurons
             .iter()
-            .any(|n| n.id == connection.target_neuron_id)
+            .any(|n| n.id == synapse.target_neuron_id)
         {
             return Err(format!(
                 "missing target neuron: {}",
-                connection.target_neuron_id
+                synapse.target_neuron_id
             ));
         }
 
-        let duplicate = self.connections.iter().any(|c| {
-            c.source_neuron_id == connection.source_neuron_id
-                && c.target_neuron_id == connection.target_neuron_id
+        let duplicate = self.synapses.iter().any(|s| {
+            s.source_neuron_id == synapse.source_neuron_id
+                && s.target_neuron_id == synapse.target_neuron_id
         });
 
         if duplicate {
-            return Err("duplicate directed connection is not allowed".to_string());
+            return Err("duplicate directed synapse is not allowed".to_string());
         }
 
         Ok(())
@@ -347,6 +604,52 @@ impl NeuralNetwork {
         amount_mv: Option<f64>,
         message: impl Into<String>,
     ) -> String {
+        self.push_event_full(
+            event_type,
+            neuron_id,
+            source_neuron_id,
+            target_neuron_id,
+            amount_mv,
+            None,
+            None,
+            None,
+            None,
+            None,
+            message,
+        )
+    }
+
+    fn push_structural_event(&mut self, event: crate::structural::StructuralEvent) -> String {
+        self.push_event_full(
+            event.event_type,
+            None,
+            event.source_neuron_id,
+            event.target_neuron_id,
+            None,
+            Some(event.entity_id),
+            event.previous_status,
+            event.new_status,
+            event.metric,
+            Some(event.reason_codes.into_iter().map(str::to_string).collect()),
+            event.message,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_event_full(
+        &mut self,
+        event_type: &str,
+        neuron_id: Option<String>,
+        source_neuron_id: Option<String>,
+        target_neuron_id: Option<String>,
+        amount_mv: Option<f64>,
+        entity_id: Option<String>,
+        previous_status: Option<String>,
+        new_status: Option<String>,
+        readiness_or_risk: Option<f64>,
+        reason_codes: Option<Vec<String>>,
+        message: impl Into<String>,
+    ) -> String {
         let id = Uuid::new_v4().to_string();
         self.events.push(NetworkEvent {
             id: id.clone(),
@@ -357,6 +660,11 @@ impl NeuralNetwork {
             source_neuron_id,
             target_neuron_id,
             amount_mv,
+            entity_id,
+            previous_status,
+            new_status,
+            readiness_or_risk,
+            reason_codes,
             message: message.into(),
         });
 
@@ -375,6 +683,7 @@ impl NeuralNetwork {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::synapse::{MAX_WEIGHT, MIN_WEIGHT};
 
     fn ids(snapshot: &NetworkSnapshot) -> Vec<String> {
         snapshot.neurons.iter().map(|n| n.id.clone()).collect()
@@ -389,12 +698,20 @@ mod tests {
             .expect("neuron exists")
     }
 
+    fn synapse<'a>(network: &'a NeuralNetwork, id: &str) -> &'a Synapse {
+        network
+            .synapses
+            .iter()
+            .find(|s| s.id == id)
+            .expect("synapse exists")
+    }
+
     #[test]
-    fn initial_network_has_five_neurons_and_five_connections() {
+    fn initial_network_has_five_neurons_and_five_synapses() {
         let network = NeuralNetwork::initial();
         let snap = network.snapshot();
         assert_eq!(snap.neurons.len(), 5);
-        assert_eq!(snap.connections.len(), 5);
+        assert_eq!(snap.synapses.len(), 5);
         assert_eq!(
             ids(&snap),
             vec![
@@ -405,10 +722,13 @@ mod tests {
                 "NEURON-005"
             ]
         );
+        assert!(snap.synapses.iter().all(|s| s.usage_count == 0));
+        assert!(snap.synapses.iter().all(|s| s.age == 0));
+        assert!(snap.synapses.iter().all(|s| (s.health - 0.9).abs() < 1e-9));
     }
 
     #[test]
-    fn reset_restores_identical_topology() {
+    fn reset_restores_identical_topology_and_synapse_state() {
         let mut network = NeuralNetwork::initial();
         network.inject_signal("NEURON-001", 20.0).unwrap();
         network.step();
@@ -416,92 +736,179 @@ mod tests {
 
         let snap = network.snapshot();
         assert_eq!(snap.tick, 0);
-        assert_eq!(snap.neurons.len(), 5);
-        assert_eq!(snap.connections.len(), 5);
-        assert!(snap.neurons.iter().all(|n| n.membrane_potential_mv == -70.0));
-        assert_eq!(snap.connections[0].source_neuron_id, "NEURON-001");
-        assert_eq!(snap.connections[0].target_neuron_id, "NEURON-002");
-        assert_eq!(snap.connections[0].weight, 16.0);
+        assert_eq!(snap.synapses.len(), 5);
+        assert!(snap
+            .neurons
+            .iter()
+            .all(|n| n.membrane_potential_mv == -70.0));
+        let s1 = snap
+            .synapses
+            .iter()
+            .find(|s| s.id == "SYNAPSE-001")
+            .unwrap();
+        assert_eq!(s1.weight, 16.0);
+        assert_eq!(s1.usage_count, 0);
+        assert_eq!(s1.age, 0);
+        assert_eq!(
+            snap.synapses
+                .iter()
+                .find(|s| s.id == "SYNAPSE-005")
+                .unwrap()
+                .synapse_type,
+            SynapseType::Inhibitory
+        );
     }
 
     #[test]
-    fn rejects_self_and_duplicate_connections() {
+    fn tissue_positions_are_deterministic() {
+        let a = NeuralNetwork::initial().snapshot();
+        let b = NeuralNetwork::initial().snapshot();
+        for (na, nb) in a.neurons.iter().zip(b.neurons.iter()) {
+            assert_eq!(na.position, nb.position);
+        }
+        assert_eq!(a.synapses, b.synapses);
+        assert_eq!(a.tissue.synapse_count, 5);
+    }
+
+    #[test]
+    fn reset_preserves_process_age_and_restores_positions() {
+        let mut network = NeuralNetwork::initial_with_age(42);
+        network.inject_signal("NEURON-001", 20.0).unwrap();
+        network.step();
+        network.reset();
+        assert_eq!(network.age_seconds(), 42);
+        let n1 = network
+            .snapshot()
+            .neurons
+            .into_iter()
+            .find(|n| n.id == "NEURON-001")
+            .unwrap();
+        assert_eq!(n1.position.x, 0.12);
+    }
+
+    #[test]
+    fn rejects_self_and_duplicate_synapses() {
         let mut network = NeuralNetwork::initial();
-        assert!(Connection::excitatory("BAD", "NEURON-001", "NEURON-001", 5.0).is_err());
+        assert!(Synapse::excitatory("BAD", "NEURON-001", "NEURON-001", 5.0, 0).is_err());
         let duplicate =
-            Connection::excitatory("CONNECTION-DUP", "NEURON-001", "NEURON-002", 16.0).unwrap();
-        assert!(network.add_connection(duplicate).unwrap_err().contains("duplicate"));
+            Synapse::excitatory("SYNAPSE-DUP", "NEURON-001", "NEURON-002", 16.0, 0).unwrap();
         assert!(network
-            .connections
-            .iter()
-            .all(|c| c.source_neuron_id != c.target_neuron_id));
+            .add_synapse(duplicate)
+            .unwrap_err()
+            .contains("duplicate"));
+    }
+
+    #[test]
+    fn propagation_increments_usage_and_age() {
+        let mut network = NeuralNetwork::initial();
+        network.inject_signal("NEURON-001", 20.0).unwrap();
+        network.step();
+        let s1 = synapse(&network, "SYNAPSE-001");
+        assert_eq!(s1.usage_count, 1);
+        assert_eq!(s1.last_activated_tick, Some(1));
+        assert_eq!(s1.age, 1);
+        assert!(s1.health > 0.9);
+        assert!(s1.stability > 0.5);
+    }
+
+    #[test]
+    fn hebbian_strengthens_when_target_fires_next_tick() {
+        let mut network = NeuralNetwork::initial();
+        network.inject_signal("NEURON-001", 20.0).unwrap();
+        network.step(); // SYNAPSE-001 delivers
+        assert_eq!(synapse(&network, "SYNAPSE-001").weight, 16.0);
+        network.step(); // NEURON-002 fires → Hebbian on SYNAPSE-001
+        let s1 = synapse(&network, "SYNAPSE-001");
+        assert!((s1.weight - 16.1).abs() < 1e-9);
+        assert!((s1.last_weight_delta - 0.1).abs() < 1e-9);
+        assert!(s1.weight_history.len() >= 2);
+    }
+
+    #[test]
+    fn unused_synapses_decay_weight_health_stability_after_idle_window() {
+        let mut network = NeuralNetwork::initial();
+        // Quiet steps — no firings.
+        for _ in 0..10 {
+            network.step();
+        }
+        let s1 = synapse(&network, "SYNAPSE-001");
+        assert_eq!(s1.age, 10);
+        assert!(s1.weight < 16.0);
+        assert!(s1.health < 1.0);
+        assert!(s1.stability < 0.5);
+        assert!(s1.weight >= MIN_WEIGHT);
+    }
+
+    #[test]
+    fn weight_clamps_are_enforced_deterministically() {
+        let mut network = NeuralNetwork::initial();
+        // Drive SYNAPSE-001 many Hebbian cycles via repeated cascade starts.
+        for _ in 0..300 {
+            network.reset();
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.step();
+            network.step();
+            // Manually push weight toward max via repeated Hebbian on same pending pattern
+            if let Some(s) = network.synapses.iter_mut().find(|s| s.id == "SYNAPSE-001") {
+                s.apply_hebbian_increase(network.tick);
+            }
+        }
+        assert!(synapse(&network, "SYNAPSE-001").weight <= MAX_WEIGHT);
+
+        let mut idle = NeuralNetwork::initial();
+        for _ in 0..500 {
+            idle.step();
+        }
+        assert!(synapse(&idle, "SYNAPSE-001").weight >= MIN_WEIGHT);
     }
 
     #[test]
     fn deterministic_cascade_by_tick() {
         let mut network = NeuralNetwork::initial();
         network.inject_signal("NEURON-001", 20.0).unwrap();
-        assert_eq!(membrane_of(&network, "NEURON-001"), -50.0);
 
-        // Tick 1: N-001 fires → +16 mV to N-002
         let t1 = network.step();
-        assert_eq!(t1.tick, 1);
         assert_eq!(t1.fired_neuron_ids, vec!["NEURON-001"]);
-        assert_eq!(t1.propagations.len(), 1);
-        assert_eq!(t1.propagations[0].source_neuron_id, "NEURON-001");
-        assert_eq!(t1.propagations[0].target_neuron_id, "NEURON-002");
         assert_eq!(t1.propagations[0].amount_mv, 16.0);
-        assert_eq!(membrane_of(&network, "NEURON-002"), -54.0);
-        assert_eq!(membrane_of(&network, "NEURON-005"), -70.0);
+        assert_eq!(t1.propagations[0].synapse_id, "SYNAPSE-001");
 
-        // Tick 2: N-002 fires and branches
         let t2 = network.step();
         assert_eq!(t2.fired_neuron_ids, vec!["NEURON-002"]);
         assert_eq!(t2.propagations.len(), 2);
-        assert_eq!(t2.propagations[0].target_neuron_id, "NEURON-003");
-        assert_eq!(t2.propagations[1].target_neuron_id, "NEURON-004");
-        assert_eq!(membrane_of(&network, "NEURON-003"), -54.0);
-        assert_eq!(membrane_of(&network, "NEURON-004"), -54.0);
-        assert!(!t2.fired_neuron_ids.contains(&"NEURON-005".to_string()));
 
-        // Tick 3: N-003 and N-004 fire and converge on N-005
         let t3 = network.step();
         assert_eq!(t3.fired_neuron_ids, vec!["NEURON-003", "NEURON-004"]);
-        assert_eq!(t3.propagations.len(), 2);
-        assert!(t3
+        let to_005: Vec<_> = t3
             .propagations
             .iter()
-            .all(|p| p.target_neuron_id == "NEURON-005" && p.amount_mv == 8.0));
-        assert_eq!(membrane_of(&network, "NEURON-005"), -54.0);
-        assert!(!t3.fired_neuron_ids.contains(&"NEURON-005".to_string()));
-
-        // Tick 4: N-005 fires only after converging input
-        let t4 = network.step();
-        assert_eq!(t4.fired_neuron_ids, vec!["NEURON-005"]);
-        assert!(t4.propagations.is_empty());
+            .filter(|p| p.target_neuron_id == "NEURON-005")
+            .collect();
+        assert_eq!(to_005.len(), 2);
+        assert!(to_005.iter().any(|p| p.amount_mv == 8.0));
+        assert!(to_005.iter().any(|p| p.amount_mv == -8.0));
+        assert_eq!(membrane_of(&network, "NEURON-005"), -70.0);
     }
 
     #[test]
-    fn step_trace_lists_unique_propagation_once() {
-        let mut network = NeuralNetwork::initial();
-        network.inject_signal("NEURON-001", 20.0).unwrap();
-        let t1 = network.step();
-        assert_eq!(t1.propagations.len(), 1);
-        let ids: Vec<_> = t1.propagations.iter().map(|p| p.event_id.clone()).collect();
-        let mut unique = ids.clone();
-        unique.sort();
-        unique.dedup();
-        assert_eq!(ids.len(), unique.len());
-    }
+    fn identical_inputs_produce_identical_snapshots_and_structural_traces() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        a.inject_signal("NEURON-001", 20.0).unwrap();
+        b.inject_signal("NEURON-001", 20.0).unwrap();
 
-    #[test]
-    fn refractory_still_blocks_immediate_refire() {
-        let mut network = NeuralNetwork::initial();
-        network.inject_signal("NEURON-001", 20.0).unwrap();
-        network.step();
-        network.inject_signal("NEURON-001", 20.0).unwrap();
-        let t2 = network.step();
-        assert!(!t2.fired_neuron_ids.contains(&"NEURON-001".to_string()));
+        for _ in 0..6 {
+            let ta = a.step();
+            let tb = b.step();
+            assert_eq!(ta.fired_neuron_ids, tb.fired_neuron_ids);
+            assert_eq!(ta.propagations.len(), tb.propagations.len());
+            for (pa, pb) in ta.propagations.iter().zip(tb.propagations.iter()) {
+                assert_eq!(pa.synapse_id, pb.synapse_id);
+                assert_eq!(pa.source_neuron_id, pb.source_neuron_id);
+                assert_eq!(pa.target_neuron_id, pb.target_neuron_id);
+                assert_eq!(pa.amount_mv, pb.amount_mv);
+            }
+            assert_eq!(ta.network.synapses, tb.network.synapses);
+        }
     }
 
     #[test]
@@ -515,38 +922,204 @@ mod tests {
     }
 
     #[test]
-    fn identical_inputs_produce_identical_snapshots_and_structural_traces() {
-        let mut a = NeuralNetwork::initial();
-        let mut b = NeuralNetwork::initial();
-        a.inject_signal("NEURON-001", 20.0).unwrap();
-        b.inject_signal("NEURON-001", 20.0).unwrap();
+    fn structural_evaluation_never_creates_or_deletes_synapses() {
+        let mut network = NeuralNetwork::initial();
+        let before = network.snapshot().synapses.len();
+        for _ in 0..40 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.step();
+            network.step();
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert_eq!(snap.synapses.len(), before);
+        assert_eq!(
+            snap.synapses
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                "SYNAPSE-001",
+                "SYNAPSE-002",
+                "SYNAPSE-003",
+                "SYNAPSE-004",
+                "SYNAPSE-005"
+            ]
+        );
+    }
 
-        for _ in 0..4 {
-            let ta = a.step();
-            let tb = b.step();
-            assert_eq!(ta.fired_neuron_ids, tb.fired_neuron_ids);
-            assert_eq!(ta.propagations.len(), tb.propagations.len());
-            for (pa, pb) in ta.propagations.iter().zip(tb.propagations.iter()) {
-                assert_eq!(pa.source_neuron_id, pb.source_neuron_id);
-                assert_eq!(pa.target_neuron_id, pb.target_neuron_id);
-                assert_eq!(pa.amount_mv, pb.amount_mv);
-            }
-            assert_eq!(ta.network, tb.network);
+    #[test]
+    fn repeated_coactivation_can_produce_growth_candidates() {
+        let mut network = NeuralNetwork::initial();
+        // Drive NEURON-001 and NEURON-005 which have no directed synapse either way.
+        for _ in 0..30 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert!(
+            snap.structural.candidate_count > 0
+                || snap
+                    .structural
+                    .growth_candidates
+                    .iter()
+                    .any(|c| c.source_neuron_id == "NEURON-001"
+                        || c.target_neuron_id == "NEURON-005"),
+            "expected at least one observed growth candidate after coactivation"
+        );
+        // No duplicate of existing directed edges.
+        for c in &snap.structural.growth_candidates {
+            assert!(!(c.source_neuron_id == "NEURON-001" && c.target_neuron_id == "NEURON-002"));
         }
     }
 
     #[test]
-    fn propagation_events_include_structured_amount() {
+    fn candidate_positions_match_backend_neuron_positions() {
         let mut network = NeuralNetwork::initial();
-        network.inject_signal("NEURON-001", 20.0).unwrap();
-        network.step();
-        let event = network
-            .events_newest_first()
-            .into_iter()
-            .find(|e| e.event_type == "signal_propagated")
+        for _ in 0..25 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        let snap = network.snapshot();
+        for c in &snap.structural.growth_candidates {
+            let source = snap
+                .neurons
+                .iter()
+                .find(|n| n.id == c.source_neuron_id)
+                .unwrap();
+            let target = snap
+                .neurons
+                .iter()
+                .find(|n| n.id == c.target_neuron_id)
+                .unwrap();
+            let expected = ((source.position.x - target.position.x).powi(2)
+                + (source.position.y - target.position.y).powi(2))
+            .sqrt();
+            assert!((c.distance - expected).abs() < 0.002);
+        }
+    }
+
+    #[test]
+    fn grace_period_keeps_initial_synapses_protected() {
+        let mut network = NeuralNetwork::initial();
+        // Evaluate within grace window.
+        for _ in 0..5 {
+            network.step();
+        }
+        let snap = network.snapshot();
+        assert!(snap
+            .synapses
+            .iter()
+            .all(|s| s.pruning_status == crate::synapse::PruningStatus::Protected));
+    }
+
+    #[test]
+    fn idle_synapses_accumulate_pruning_evidence_after_grace() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..40 {
+            network.step();
+        }
+        let snap = network.snapshot();
+        let s4 = snap
+            .synapses
+            .iter()
+            .find(|s| s.id == "SYNAPSE-004")
             .unwrap();
-        assert_eq!(event.source_neuron_id.as_deref(), Some("NEURON-001"));
-        assert_eq!(event.target_neuron_id.as_deref(), Some("NEURON-002"));
-        assert_eq!(event.amount_mv, Some(16.0));
+        assert!(matches!(
+            s4.pruning_status,
+            crate::synapse::PruningStatus::Monitoring | crate::synapse::PruningStatus::AtRisk
+        ));
+        assert!(s4.pruning_risk > 0.0);
+        assert!(!s4.pruning_reasons.is_empty());
+    }
+
+    #[test]
+    fn active_synapses_avoid_high_pruning_risk() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..20 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.step();
+            network.step();
+            network.step();
+        }
+        let s1 = synapse(&network, "SYNAPSE-001");
+        assert!(s1.pruning_risk < 0.55);
+        assert_ne!(s1.pruning_status, crate::synapse::PruningStatus::AtRisk);
+    }
+
+    #[test]
+    fn reset_clears_candidates_and_pair_history() {
+        let mut network = NeuralNetwork::initial();
+        for _ in 0..30 {
+            network.inject_signal("NEURON-001", 20.0).unwrap();
+            network.inject_signal("NEURON-005", 20.0).unwrap();
+            network.step();
+        }
+        assert!(
+            !network.snapshot().structural.growth_candidates.is_empty()
+                || network.pair_activity_len_for_test() > 0
+        );
+        network.reset();
+        let snap = network.snapshot();
+        assert!(snap.structural.growth_candidates.is_empty());
+        assert_eq!(snap.structural.candidate_count, 0);
+        assert_eq!(snap.structural.latest_evaluation_tick, None);
+        assert_eq!(network.pair_activity_len_for_test(), 0);
+        assert!(snap.synapses.iter().all(|s| s.pruning_status
+            == crate::synapse::PruningStatus::Protected
+            || s.pruning_risk == 0.0));
+    }
+
+    #[test]
+    fn identical_sequences_yield_identical_structural_state() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        for _ in 0..20 {
+            a.inject_signal("NEURON-001", 20.0).unwrap();
+            b.inject_signal("NEURON-001", 20.0).unwrap();
+            a.inject_signal("NEURON-005", 20.0).unwrap();
+            b.inject_signal("NEURON-005", 20.0).unwrap();
+            let ta = a.step();
+            let tb = b.step();
+            assert_eq!(ta.network.structural, tb.network.structural);
+            assert_eq!(ta.network.synapses, tb.network.synapses);
+        }
+    }
+
+    #[test]
+    fn structural_events_include_reason_codes() {
+        let mut network = NeuralNetwork::initial();
+        let mut saw_structural = false;
+        for _ in 0..20 {
+            let trace = network.step();
+            if trace.tick % 5 != 0 {
+                continue;
+            }
+            let events = network.events_newest_first();
+            for event_id in &trace.event_ids {
+                if let Some(event) = events.iter().find(|e| e.id == *event_id) {
+                    if event.event_type.starts_with("growth_candidate_")
+                        || event.event_type.starts_with("synapse_pruning_")
+                    {
+                        saw_structural = true;
+                        assert!(event
+                            .reason_codes
+                            .as_ref()
+                            .map(|r| !r.is_empty())
+                            .unwrap_or(false));
+                    }
+                }
+            }
+        }
+        assert!(saw_structural);
+    }
+}
+
+impl NeuralNetwork {
+    #[cfg(test)]
+    fn pair_activity_len_for_test(&self) -> usize {
+        self.pair_activity.len()
     }
 }

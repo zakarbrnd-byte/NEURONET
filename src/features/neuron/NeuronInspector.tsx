@@ -1,15 +1,15 @@
 import { NeuronStatus } from "./NeuronStatus";
 import type {
-  ConnectionSnapshot,
   NetworkEvent,
   NeuronSnapshot,
+  SynapseSnapshot,
 } from "../../types/neural";
 
 interface NeuronInspectorProps {
   open: boolean;
   neuron: NeuronSnapshot | null;
   networkTick: number;
-  connections: ConnectionSnapshot[];
+  connections: SynapseSnapshot[];
   events: NetworkEvent[];
   busy: boolean;
   stimulateDisabled: boolean;

@@ -1,4 +1,5 @@
-import type { ConnectionStatus } from "../types/neural";
+import type { ConnectionStatus, TissueInfo } from "../types/neural";
+import { formatAge } from "../types/neural";
 
 interface StatusBarProps {
   version: string;
@@ -6,6 +7,7 @@ interface StatusBarProps {
   networkTick: number;
   running: boolean;
   error: string | null;
+  tissue: TissueInfo | null;
   onRetry: () => void;
 }
 
@@ -21,6 +23,7 @@ export function StatusBar({
   networkTick,
   running,
   error,
+  tissue,
   onRetry,
 }: StatusBarProps) {
   return (
@@ -29,6 +32,35 @@ export function StatusBar({
         <span className="status-bar-title">NEURONET</span>
         <span className="status-bar-version">{version}</span>
       </div>
+
+      <p className="status-bar-tissue-label" data-testid="tissue-label">
+        {tissue?.label ?? "Artificial Neural Tissue"}
+      </p>
+
+      <div className="status-bar-tissue" data-testid="tissue-stats" aria-label="Tissue summary">
+        <span className="status-bar-item">
+          {tissue?.alive !== false ? "Alive" : "Offline"}
+        </span>
+        <span className="status-bar-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="status-bar-item">Cells {tissue?.cellCount ?? "—"}</span>
+        <span className="status-bar-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="status-bar-item">Synapses {tissue?.synapseCount ?? "—"}</span>
+        <span className="status-bar-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="status-bar-item">{tissue?.region ?? "—"}</span>
+        <span className="status-bar-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="status-bar-item">
+          Age {tissue ? formatAge(tissue.ageSeconds) : "—"}
+        </span>
+      </div>
+
       <div className="status-bar-meta">
         <span className={`status-dot status-dot-${status}`} aria-hidden="true" />
         <span className="status-bar-item">{statusLabel(status)}</span>

@@ -1,6 +1,10 @@
-# NEURONET Backend (0.5)
+# NEURONET Backend (0.6B)
 
-Rust neural core. Source of truth for neurons, connections, stepping, and events.
+**NEURONET — A Digital Nervous System.**
+
+Rust neural core. Source of truth for neurons, **living synapses**, tissue geometry, stepping, and events.
+
+Read first: [`../NEURONET.md`](../NEURONET.md).
 
 ## Local
 
@@ -9,34 +13,12 @@ cargo run
 cargo test
 ```
 
-Listens on `0.0.0.0`.
+Health version: `0.6B`.
 
-Port resolution:
+`GET /api/network` returns `synapses` (not passive connections): weight, usage, health, stability, age, history.
 
-1. `PORT` (cloud hosts)
-2. `NEURONET_PORT` (optional local override)
-3. default `3000`
-
-## Observatory network
-
-Five deterministic neurons with branching and convergence.
-
-`POST /api/network/step` returns a structured step trace:
-
-- `tick`
-- `firedNeuronIds`
-- `propagations` (`eventId`, `sourceNeuronId`, `targetNeuronId`, `amountMv`)
-- `eventIds`
-- `network`
+Plasticity is deterministic Hebbian + idle decay. No randomness.
 
 ## Public host
 
 Render Blueprint: `../render.yaml` + `Dockerfile`
-
-CORS allow-list should include:
-
-```text
-https://zakarbrnd-byte.github.io
-```
-
-In-memory state resets when the host restarts.

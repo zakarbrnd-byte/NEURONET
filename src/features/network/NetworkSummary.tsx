@@ -33,7 +33,7 @@ export function NetworkSummary({
         </div>
         <div className="status-row">
           <dt>Total Connections</dt>
-          <dd>{network?.connections.length ?? 0}</dd>
+          <dd>{network?.synapses.length ?? 0}</dd>
         </div>
         <div className="status-row">
           <dt>Fired This Tick</dt>

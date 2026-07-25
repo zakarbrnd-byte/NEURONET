@@ -1,6 +1,7 @@
 //! HTTP API for the NEURONET neural core.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -18,6 +19,8 @@ pub type SharedNetwork = Arc<Mutex<NeuralNetwork>>;
 #[derive(Clone)]
 pub struct AppState {
     pub network: SharedNetwork,
+    /// Process start time — tissue Age in Mission Control.
+    pub started_at: Instant,
 }
 
 #[derive(Serialize)]
@@ -25,6 +28,7 @@ pub struct AppState {
 struct HealthResponse {
     status: &'static str,
     version: &'static str,
+    age_seconds: u64,
 }
 
 #[derive(Deserialize)]
@@ -71,14 +75,22 @@ pub fn build_cors(allowed_origins: &[String]) -> CorsLayer {
         .allow_headers([axum::http::header::CONTENT_TYPE])
 }
 
-async fn health() -> Json<HealthResponse> {
+async fn refresh_age(state: &AppState) {
+    let age = state.started_at.elapsed().as_secs();
+    let mut network = state.network.lock().await;
+    network.set_age_seconds(age);
+}
+
+async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.5",
+        version: "0.6C",
+        age_seconds: state.started_at.elapsed().as_secs(),
     })
 }
 
 async fn get_network(State(state): State<AppState>) -> Json<NetworkSnapshot> {
+    refresh_age(&state).await;
     let network = state.network.lock().await;
     Json(network.snapshot())
 }
@@ -93,6 +105,7 @@ async fn inject_signal(
     Path(id): Path<String>,
     Json(body): Json<SignalRequest>,
 ) -> impl IntoResponse {
+    refresh_age(&state).await;
     let mut network = state.network.lock().await;
     match network.inject_signal(&id, body.amount_mv) {
         Ok(()) => (StatusCode::OK, Json(network.snapshot())).into_response(),
@@ -105,11 +118,13 @@ async fn inject_signal(
 }
 
 async fn step_network(State(state): State<AppState>) -> Json<NetworkStepTrace> {
+    refresh_age(&state).await;
     let mut network = state.network.lock().await;
     Json(network.step())
 }
 
 async fn reset_network(State(state): State<AppState>) -> Json<NetworkSnapshot> {
+    refresh_age(&state).await;
     let mut network = state.network.lock().await;
     network.reset();
     Json(network.snapshot())
@@ -126,6 +141,7 @@ mod tests {
     fn test_app() -> Router {
         let state = AppState {
             network: Arc::new(Mutex::new(NeuralNetwork::initial())),
+            started_at: Instant::now(),
         };
         app(state, CorsLayer::permissive())
     }
@@ -136,7 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint_reports_version_0_5() {
+    async fn health_endpoint_reports_version_0_6c() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -150,11 +166,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.5");
+        assert_eq!(json["version"], "0.6C");
+        assert!(json["ageSeconds"].as_u64().is_some());
     }
 
     #[tokio::test]
-    async fn network_endpoint_returns_five_neurons_and_connections() {
+    async fn network_endpoint_returns_tissue_and_synapse_fields() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -168,7 +185,38 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
+        assert_eq!(json["synapses"].as_array().unwrap().len(), 5);
+        assert_eq!(json["tissue"]["label"], "Artificial Neural Tissue");
+        assert_eq!(json["tissue"]["region"], "Observatory Cortex");
+        assert_eq!(json["tissue"]["cellCount"], 5);
+        assert_eq!(json["tissue"]["synapseCount"], 5);
+        assert_eq!(json["tissue"]["alive"], true);
+        let n4 = json["neurons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "NEURON-004")
+            .unwrap();
+        assert_eq!(n4["cellType"], "inhibitory");
+        assert_eq!(n4["position"]["x"], 0.60);
+        assert_eq!(n4["position"]["y"], 0.72);
+        let s5 = json["synapses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"] == "SYNAPSE-005")
+            .unwrap();
+        assert_eq!(s5["type"], "inhibitory");
+        assert_eq!(s5["usageCount"], 0);
+        assert_eq!(s5["stability"], 0.5);
+        assert_eq!(s5["health"], 0.9);
+        assert_eq!(s5["pruningStatus"], "protected");
+        assert!(json["structural"]["config"]["enabled"].as_bool().unwrap());
+        assert_eq!(json["structural"]["candidateCount"], 0);
+        assert!(json["structural"]["growthCandidates"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
@@ -225,6 +273,7 @@ mod tests {
     async fn step_returns_structured_trace_and_shared_state_persists() {
         let state = AppState {
             network: Arc::new(Mutex::new(NeuralNetwork::initial())),
+            started_at: Instant::now(),
         };
         let app = app(state.clone(), CorsLayer::permissive());
 
@@ -296,7 +345,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn network_reset_restores_topology() {
+    async fn network_reset_restores_topology_and_positions() {
         let app = test_app();
         let _ = app
             .clone()
@@ -325,6 +374,23 @@ mod tests {
         let json = body_json(reset).await;
         assert_eq!(json["tick"], 0);
         assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
+        assert_eq!(json["synapses"].as_array().unwrap().len(), 5);
+        let n1 = json["neurons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "NEURON-001")
+            .unwrap();
+        assert_eq!(n1["position"]["x"], 0.12);
+        assert_eq!(n1["position"]["y"], 0.50);
+        assert_eq!(n1["membranePotentialMv"], -70.0);
+        let s1 = json["synapses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == "SYNAPSE-001")
+            .unwrap();
+        assert_eq!(s1["weight"], 16.0);
+        assert_eq!(s1["usageCount"], 0);
     }
 }

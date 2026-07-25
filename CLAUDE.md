@@ -1,12 +1,19 @@
 # CLAUDE.md — Guidance for coding agents
 
-NEURONET is early. Keep it beginner-friendly.
+**NEURONET — A Digital Nervous System.**
+
+Read [`NEURONET.md`](NEURONET.md) first. It is the project constitution.
+
+Then read [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md).
 
 ## What this project is
 
-NEURONET is not a chatbot and not an LLM wrapper.
+NEURONET is an experimental Artificial Nervous System project.
 
-It explores whether cognition can emerge from biologically-inspired computational principles.
+It is not a chatbot, not an LLM, and not a text prediction system.
+
+We are not programming intelligence.  
+We are cultivating the conditions from which intelligence may emerge.
 
 ## Rules
 
@@ -16,10 +23,26 @@ It explores whether cognition can emerge from biologically-inspired computationa
 4. Animate a connection only from a structured backend propagation event.
 5. Do not introduce AI or cognition claims without evidence.
 6. Preserve mobile Chrome compatibility and the Render + GitHub Pages deployment path.
-7. Prefer simple, readable code.
+7. Prefer simple, readable code that increases biological plausibility.
+8. Before implementing, answer: “Does this make NEURONET behave more like a living nervous system?” If no, do not implement it.
+9. Do not implement memory, learning, plasticity, body, prediction, or cognition ahead of their roadmap milestones.
+10. Distinguish Implemented / Approximation / Future work in docs and comments.
 
 ## Current milestone
 
-**0.5 Network Dynamics Observatory**
+**Shipped:** 0.6C Structural Plasticity Foundations  
 
-Rust neural core with a five-neuron branching/convergence network. React observatory with tick traces.
+**Next development target: 0.6D Structural Growth**
+
+0.6C observes candidates and pruning risk only — it does not create or delete synapses.  
+Do not implement synapse create/delete, body, memory, or cognition unless that milestone is explicitly requested.
+
+## Canonical docs
+
+1. [`NEURONET.md`](NEURONET.md) — Constitution (read first)
+2. [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md)
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+4. [`docs/SCIENTIFIC_MODEL.md`](docs/SCIENTIFIC_MODEL.md)
+5. [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md)
+6. [`ROADMAP.md`](ROADMAP.md)
+7. [`README.md`](README.md)
