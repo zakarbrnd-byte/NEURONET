@@ -1163,12 +1163,12 @@ describe("Mission Control page", () => {
       };
     });
     await renderConnectedApp();
-    await user.click(screen.getByRole("button", { name: "Controls" }));
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
     expect(screen.getByTestId("observer-status-panel")).toBeInTheDocument();
     const quickBar = screen.getByTestId("quick-action-bar");
     await user.click(within(quickBar).getByRole("button", { name: "Continuous run" }));
     await waitFor(() => expect(calls).toBeGreaterThanOrEqual(3), { timeout: 5000 });
-    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByTestId("observer-sim-state")).toHaveTextContent("Running");
     await user.click(within(quickBar).getByRole("button", { name: "Pause sequence" }));
     expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused");
   });

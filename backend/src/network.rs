@@ -2708,10 +2708,7 @@ mod tests {
             .unwrap();
         step_n(&mut network, 10);
         let after = network.snapshot().synapses.len();
-        assert_eq!(
-            before, after,
-            "one short inactive interval must not prune"
-        );
+        assert_eq!(before, after, "one short inactive interval must not prune");
     }
 }
 

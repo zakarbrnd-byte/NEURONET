@@ -164,7 +164,7 @@ describe("runAutonomousLoop", () => {
   it("continues through zero firing, zero propagation, and no environment event", async () => {
     const controller = new AbortController();
     let steps = 0;
-    const inFlight = { value: 0; max: 0 };
+    const inFlight = { value: 0, max: 0 };
 
     const stopPromise = new Promise<string>((resolve) => {
       void runAutonomousLoop({
@@ -185,7 +185,7 @@ describe("runAutonomousLoop", () => {
           // Explicit quiet empty StepTrace
           expect(trace.firedNeuronIds).toHaveLength(0);
           expect(trace.propagations).toHaveLength(0);
-          expect(trace.environmentTrace.eventsGenerated).toHaveLength(0);
+          expect(trace.environmentTrace?.eventsGenerated ?? []).toHaveLength(0);
           return { ok: true, trace } satisfies StepResult<NetworkStepTrace>;
         },
         onStop: (reason) => resolve(reason),
