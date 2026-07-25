@@ -20,6 +20,7 @@ import type {
 import {
   countDepolarized,
   networkIsQuiet,
+  shortNeuronId,
   timelineSummary,
 } from "./types/neural";
 
@@ -28,6 +29,16 @@ const STRONG_SIGNAL_MV = 20;
 const MAX_AUTO_STEPS = 12;
 const STEP_DELAY_MS = 800;
 const MAX_TIMELINE = 20;
+const STIM_FEEDBACK_MS = 1600;
+
+type StimulateOptions = {
+  /** When false, keep the current selection (long-press path). Default true. */
+  selectNeuron?: boolean;
+  /** When false, do not open the inspector (long-press path). Default true. */
+  openInspector?: boolean;
+  /** Show brief toast + neuron flash after a successful inject. */
+  showStimFeedback?: boolean;
+};
 
 export default function App() {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
@@ -37,6 +48,8 @@ export default function App() {
   const [selectedNeuronId, setSelectedNeuronId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [pressingNeuronId, setPressingNeuronId] = useState<string | null>(null);
+  const [flashedNeuronId, setFlashedNeuronId] = useState<string | null>(null);
+  const [stimToast, setStimToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [autoStep, setAutoStep] = useState(0);
@@ -51,6 +64,8 @@ export default function App() {
   const autoStepRef = useRef(0);
   const networkRef = useRef<NetworkSnapshot | null>(null);
   const lastTraceRef = useRef<NetworkStepTrace | null>(null);
+  const stimInFlightRef = useRef(false);
+  const stimFeedbackTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     busyRef.current = busy;
@@ -79,6 +94,27 @@ export default function App() {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (stimFeedbackTimerRef.current !== null) {
+        window.clearTimeout(stimFeedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  function showStimulationFeedback(neuronId: string, amountMv: number) {
+    if (stimFeedbackTimerRef.current !== null) {
+      window.clearTimeout(stimFeedbackTimerRef.current);
+    }
+    setFlashedNeuronId(neuronId);
+    setStimToast(`${shortNeuronId(neuronId)} stimulated +${amountMv} mV`);
+    stimFeedbackTimerRef.current = window.setTimeout(() => {
+      setFlashedNeuronId(null);
+      setStimToast(null);
+      stimFeedbackTimerRef.current = null;
+    }, STIM_FEEDBACK_MS);
+  }
 
   async function loadFromBackend() {
     if (!neuralApi.hasConfiguredBackend()) {
@@ -183,22 +219,44 @@ export default function App() {
     }
   }
 
-  async function stimulateNeuron(neuronId: string, amountMv: number) {
-    if (busyRef.current || runningRef.current || status !== "connected") {
+  async function stimulateNeuron(
+    neuronId: string,
+    amountMv: number,
+    options: StimulateOptions = {},
+  ) {
+    const selectNeuron = options.selectNeuron !== false;
+    const openInspector = options.openInspector !== false;
+    const showStimFeedback = options.showStimFeedback === true;
+
+    if (
+      busyRef.current ||
+      runningRef.current ||
+      stimInFlightRef.current ||
+      status !== "connected"
+    ) {
       return;
     }
 
+    stimInFlightRef.current = true;
     setBusy(true);
     busyRef.current = true;
     setError(null);
-    setSelectedNeuronId(neuronId);
-    setInspectorOpen(true);
+
+    if (selectNeuron) {
+      setSelectedNeuronId(neuronId);
+    }
+    if (openInspector) {
+      setInspectorOpen(true);
+    }
 
     try {
       const snapshot = await neuralApi.injectSignal(neuronId, amountMv);
       setNetwork(snapshot);
       setActivePropagations([]);
       await refreshEvents();
+      if (showStimFeedback) {
+        showStimulationFeedback(neuronId, amountMv);
+      }
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Request failed";
@@ -207,10 +265,19 @@ export default function App() {
         setStatus("unavailable");
       }
     } finally {
+      stimInFlightRef.current = false;
       setBusy(false);
       busyRef.current = false;
       setPressingNeuronId(null);
     }
+  }
+
+  function handleLongPressStimulate(neuronId: string) {
+    void stimulateNeuron(neuronId, WEAK_SIGNAL_MV, {
+      selectNeuron: false,
+      openInspector: false,
+      showStimFeedback: true,
+    });
   }
 
   async function handleReset() {
@@ -328,8 +395,9 @@ export default function App() {
             reducedMotion={reducedMotion}
             interactionDisabled={status !== "connected" || busy || running}
             pressingNeuronId={pressingNeuronId}
+            flashedNeuronId={flashedNeuronId}
             onSelectNeuron={handleSelectNeuron}
-            onLongPressStimulate={(neuronId) => void stimulateNeuron(neuronId, WEAK_SIGNAL_MV)}
+            onLongPressStimulate={handleLongPressStimulate}
             onPressVisualChange={setPressingNeuronId}
           />
         ) : (
@@ -340,6 +408,12 @@ export default function App() {
             </p>
           </section>
         )}
+
+        {stimToast ? (
+          <p className="stim-toast" role="status" aria-live="polite">
+            {stimToast}
+          </p>
+        ) : null}
 
         <NetworkSummary
           network={network}

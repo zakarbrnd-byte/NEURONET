@@ -1,4 +1,9 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type {
   ConnectionSnapshot,
   NeuronSnapshot,
@@ -14,6 +19,7 @@ interface NetworkViewProps {
   reducedMotion: boolean;
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
+  flashedNeuronId: string | null;
   onSelectNeuron: (neuronId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
@@ -24,8 +30,11 @@ interface Point {
   y: number;
 }
 
-const LONG_PRESS_MS = 500;
-const MOVE_TOLERANCE_PX = 12;
+export const LONG_PRESS_MS = 500;
+/** Movement tolerance in CSS pixels (client coordinates). */
+export const MOVE_TOLERANCE_PX = 10;
+/** Hit-target radius in SVG units → ≥44×44 CSS px at 1:1 viewBox scale. */
+export const HIT_TARGET_RADIUS = 22;
 
 const CANONICAL_LAYOUT: Record<string, Point> = {
   "NEURON-001": { x: 36, y: 120 },
@@ -62,14 +71,18 @@ function stateLabel(state: ReturnType<typeof electricalState>): string {
   return "•";
 }
 
-interface PressSession {
-  neuronId: string;
+interface GestureState {
   pointerId: number;
+  neuronId: string;
   startX: number;
   startY: number;
-  timer: number;
-  stimulated: boolean;
-  cancelled: boolean;
+  startTime: number;
+  timerId: number | null;
+  moved: boolean;
+  canceled: boolean;
+  longPressCompleted: boolean;
+  consumed: boolean;
+  stimulateRequested: boolean;
 }
 
 export function NetworkView({
@@ -80,6 +93,7 @@ export function NetworkView({
   reducedMotion,
   interactionDisabled,
   pressingNeuronId,
+  flashedNeuronId,
   onSelectNeuron,
   onLongPressStimulate,
   onPressVisualChange,
@@ -87,7 +101,9 @@ export function NetworkView({
   const width = 324;
   const height = 240;
   const positions = layoutFor(neurons, width, height);
-  const pressRef = useRef<PressSession | null>(null);
+  const gestureRef = useRef<GestureState | null>(null);
+  /** Survives cleanup so a synthetic click after long-press is ignored. */
+  const suppressNextClickRef = useRef(false);
   const [localPressingId, setLocalPressingId] = useState<string | null>(null);
 
   const activePressId = pressingNeuronId ?? localPressingId;
@@ -99,10 +115,11 @@ export function NetworkView({
     ]),
   );
 
-  function clearPressTimer() {
-    const session = pressRef.current;
-    if (session) {
-      window.clearTimeout(session.timer);
+  function clearLongPressTimer() {
+    const gesture = gestureRef.current;
+    if (gesture?.timerId != null) {
+      window.clearTimeout(gesture.timerId);
+      gesture.timerId = null;
     }
   }
 
@@ -111,77 +128,159 @@ export function NetworkView({
     onPressVisualChange(null);
   }
 
-  function beginPress(neuronId: string, event: ReactPointerEvent<SVGCircleElement>) {
+  /** Single cleanup path for ending a gesture (keeps suppress flag if consumed). */
+  function cleanupGesture(options?: { keepSuppress?: boolean }) {
+    clearLongPressTimer();
+    const consumed = gestureRef.current?.consumed === true;
+    gestureRef.current = null;
+    endPressVisual();
+    if (options?.keepSuppress || consumed) {
+      suppressNextClickRef.current = true;
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+      gestureRef.current = null;
+    };
+  }, []);
+
+  function onPointerDown(neuronId: string, event: ReactPointerEvent<SVGGElement>) {
     if (interactionDisabled) {
       return;
     }
 
-    clearPressTimer();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    // Pointer down never selects, never opens inspector, never injects.
+    event.preventDefault();
+    event.stopPropagation();
 
-    const timer = window.setTimeout(() => {
-      const session = pressRef.current;
-      if (!session || session.cancelled || session.neuronId !== neuronId) {
-        return;
-      }
-      session.stimulated = true;
-      onLongPressStimulate(neuronId);
-    }, LONG_PRESS_MS);
+    clearLongPressTimer();
+    suppressNextClickRef.current = false;
 
-    pressRef.current = {
-      neuronId,
+    const target = event.currentTarget;
+    target.setPointerCapture?.(event.pointerId);
+
+    const gesture: GestureState = {
       pointerId: event.pointerId,
+      neuronId,
       startX: event.clientX,
       startY: event.clientY,
-      timer,
-      stimulated: false,
-      cancelled: false,
+      startTime: performance.now(),
+      timerId: null,
+      moved: false,
+      canceled: false,
+      longPressCompleted: false,
+      consumed: false,
+      stimulateRequested: false,
     };
+    gestureRef.current = gesture;
+
+    gesture.timerId = window.setTimeout(() => {
+      const current = gestureRef.current;
+      if (
+        !current ||
+        current.pointerId !== gesture.pointerId ||
+        current.neuronId !== neuronId ||
+        current.canceled ||
+        current.moved ||
+        current.stimulateRequested
+      ) {
+        return;
+      }
+
+      current.longPressCompleted = true;
+      current.consumed = true;
+      current.stimulateRequested = true;
+      suppressNextClickRef.current = true;
+      current.timerId = null;
+      onLongPressStimulate(neuronId);
+    }, LONG_PRESS_MS);
 
     setLocalPressingId(neuronId);
     onPressVisualChange(neuronId);
   }
 
-  function movePress(event: ReactPointerEvent<SVGCircleElement>) {
-    const session = pressRef.current;
-    if (!session || session.pointerId !== event.pointerId || session.cancelled) {
+  function onPointerMove(event: ReactPointerEvent<SVGGElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+    if (gesture.canceled || gesture.consumed || gesture.moved) {
       return;
     }
 
-    const dx = event.clientX - session.startX;
-    const dy = event.clientY - session.startY;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
     if (Math.hypot(dx, dy) > MOVE_TOLERANCE_PX) {
-      session.cancelled = true;
-      clearPressTimer();
+      gesture.moved = true;
+      clearLongPressTimer();
       endPressVisual();
     }
   }
 
-  function finishPress(event: ReactPointerEvent<SVGCircleElement>) {
-    const session = pressRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
+  function onPointerUp(event: ReactPointerEvent<SVGGElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
       return;
     }
 
-    clearPressTimer();
-    pressRef.current = null;
-    endPressVisual();
+    event.preventDefault();
+    event.stopPropagation();
 
-    // Normal tap: select only. Never inject on tap.
-    if (!session.stimulated && !session.cancelled) {
-      onSelectNeuron(session.neuronId);
+    const elapsed = performance.now() - gesture.startTime;
+    const isShortTap =
+      !gesture.longPressCompleted &&
+      !gesture.consumed &&
+      !gesture.canceled &&
+      !gesture.moved &&
+      elapsed < LONG_PRESS_MS;
+
+    if (gesture.consumed || gesture.longPressCompleted) {
+      // Long press already stimulated — release only cleans up.
+      cleanupGesture({ keepSuppress: true });
+      return;
+    }
+
+    const neuronId = gesture.neuronId;
+    cleanupGesture();
+
+    if (isShortTap) {
+      onSelectNeuron(neuronId);
     }
   }
 
-  function cancelPress(event: ReactPointerEvent<SVGCircleElement>) {
-    const session = pressRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
+  function onPointerCancel(event: ReactPointerEvent<SVGGElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
       return;
     }
-    session.cancelled = true;
-    clearPressTimer();
-    pressRef.current = null;
-    endPressVisual();
+    event.preventDefault();
+    event.stopPropagation();
+    gesture.canceled = true;
+    cleanupGesture({ keepSuppress: gesture.consumed });
+  }
+
+  function onLostPointerCapture(event: ReactPointerEvent<SVGGElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+    // Capture loss without a prior up/cancel — treat as cancel.
+    gesture.canceled = true;
+    cleanupGesture({ keepSuppress: gesture.consumed });
+  }
+
+  function onSyntheticClick(event: React.MouseEvent<SVGGElement>) {
+    // Never use click for touch selection. Only suppress after a consumed long press.
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   return (
@@ -256,7 +355,7 @@ export function NetworkView({
                         />
                       </circle>
                     ) : null}
-                    <text x={midX} y={midY - 8} className="network-pulse-label">
+                    <text x={midX} y={midY - 8} className="network-pulse-label" pointerEvents="none">
                       +{pulse.amountMv} mV
                     </text>
                   </>
@@ -274,36 +373,83 @@ export function NetworkView({
             const state = electricalState(neuron);
             const selected = neuron.id === selectedNeuronId;
             const pressing = neuron.id === activePressId;
+            const flashed = neuron.id === flashedNeuronId;
+            const nodeRadius = pressing ? 26 : selected ? 24 : 22;
 
             return (
-              <g key={neuron.id} className="network-node-group">
+              <g
+                key={neuron.id}
+                className={`neuron-hit-target network-node-group ${selected ? "is-selected" : ""} ${pressing ? "is-pressing" : ""} ${flashed ? "is-flashed" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Select ${neuron.id}, ${state}, ${neuron.membranePotentialMv.toFixed(0)} mV. Long press to stimulate +5 mV.`}
+                onPointerDown={(event) => onPointerDown(neuron.id, event)}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
+                onLostPointerCapture={onLostPointerCapture}
+                onClick={onSyntheticClick}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    // Keyboard selects only — never stimulates.
+                    onSelectNeuron(neuron.id);
+                  }
+                }}
+              >
+                {/* Invisible ≥44×44 hit target; receives all pointer events. */}
+                <circle
+                  className="network-hit-area"
+                  cx={point.x}
+                  cy={point.y}
+                  r={HIT_TARGET_RADIUS}
+                />
+                {pressing ? (
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={30}
+                    className="network-hold-ring"
+                    pointerEvents="none"
+                    style={{
+                      animationDuration: reducedMotion ? "0ms" : `${LONG_PRESS_MS}ms`,
+                    }}
+                  />
+                ) : null}
                 <circle
                   cx={point.x}
                   cy={point.y}
-                  r={pressing ? 26 : selected ? 24 : 22}
-                  className={`network-node state-${state.toLowerCase()} ${selected ? "selected" : ""} ${pressing ? "pressing" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Select ${neuron.id}, ${state}, ${neuron.membranePotentialMv.toFixed(0)} mV. Long press to stimulate +5 mV.`}
-                  style={{ touchAction: "none" }}
-                  onPointerDown={(event) => beginPress(neuron.id, event)}
-                  onPointerMove={movePress}
-                  onPointerUp={finishPress}
-                  onPointerCancel={cancelPress}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onSelectNeuron(neuron.id);
-                    }
-                  }}
+                  r={nodeRadius}
+                  className={`network-node state-${state.toLowerCase()} ${selected ? "selected" : ""} ${pressing ? "pressing" : ""} ${flashed ? "flashed" : ""}`}
+                  pointerEvents="none"
                 />
-                <text x={point.x} y={point.y - 2} className="network-node-id">
+                <text
+                  x={point.x}
+                  y={point.y - 2}
+                  className="network-node-id"
+                  pointerEvents="none"
+                >
                   {shortNeuronId(neuron.id)}
                 </text>
-                <text x={point.x} y={point.y + 11} className="network-node-mv">
+                <text
+                  x={point.x}
+                  y={point.y + 11}
+                  className="network-node-mv"
+                  pointerEvents="none"
+                >
                   {neuron.membranePotentialMv.toFixed(0)}
                 </text>
-                <text x={point.x + 18} y={point.y - 14} className="network-state-mark">
+                <text
+                  x={point.x + 18}
+                  y={point.y - 14}
+                  className="network-state-mark"
+                  pointerEvents="none"
+                >
                   {stateLabel(state)}
                 </text>
               </g>

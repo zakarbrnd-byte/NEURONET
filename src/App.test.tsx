@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { ApiError, neuralApi } from "./services/neuralApi";
 
 const snapshot = {
   tick: 0,
@@ -104,12 +105,10 @@ vi.mock("./services/neuralApi", () => {
           message: "Injected +5 mV into NEURON-002",
         },
       ]),
-      injectSignal: vi.fn(async (_id: string, amountMv: number) => ({
+      injectSignal: vi.fn(async (id: string, amountMv: number) => ({
         ...snapshot,
         neurons: snapshot.neurons.map((neuron) =>
-          neuron.id === "NEURON-002"
-            ? { ...neuron, membranePotentialMv: -70 + amountMv }
-            : neuron,
+          neuron.id === id ? { ...neuron, membranePotentialMv: -70 + amountMv } : neuron,
         ),
       })),
       stepNetwork: vi.fn(async () => stepTrace),
@@ -118,34 +117,101 @@ vi.mock("./services/neuralApi", () => {
   };
 });
 
-import { neuralApi } from "./services/neuralApi";
+function neuronTarget(container: HTMLElement, id: string) {
+  return container.querySelector(`[aria-label^="Select ${id}"]`) as Element;
+}
 
-describe("App observatory direct interaction", () => {
+describe("App observatory touch interaction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
+    vi.mocked(neuralApi.injectSignal).mockImplementation(async (id: string, amountMv: number) => ({
+      ...snapshot,
+      neurons: snapshot.neurons.map((neuron) =>
+        neuron.id === id ? { ...neuron, membranePotentialMv: -70 + amountMv } : neuron,
+      ),
+    }));
   });
 
-  it("opens inspector on tap without injecting", async () => {
-    const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
-
-    const node = container.querySelector('[aria-label^="Select NEURON-004"]') as Element;
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
-
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Direct electrode-style stimulation")).toBeInTheDocument();
-    expect(screen.getByText("NEURON-004")).toBeInTheDocument();
-    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
-  });
-
-  it("long press injects +5 mV through the backend and keeps inspector open", async () => {
+  it("1–2. pointer down / hold under 500ms does not open the inspector", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { container } = render(<App />);
     await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
 
-    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+    const node = neuronTarget(container, "NEURON-004");
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it("3. short pointer down + up opens the inspector once without inject", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const node = neuronTarget(container, "NEURON-004");
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.click(node);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("NEURON-004")).toBeInTheDocument();
+    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
+  });
+
+  it("4–6. long press injects once, never opens inspector, keeps prior selection", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const first = neuronTarget(container, "NEURON-001");
+    fireEvent.pointerDown(first, { pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(first, { pointerId: 1, clientX: 5, clientY: 5 });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("NEURON-001")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const node = neuronTarget(container, "NEURON-002");
+    fireEvent.pointerDown(node, { pointerId: 2, clientX: 8, clientY: 8 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledTimes(1));
+    expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 5);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.pointerUp(node, { pointerId: 2, clientX: 8, clientY: 8 });
+    fireEvent.click(node);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByText("N-002 stimulated +5 mV")).toBeInTheDocument();
+    expect(neuronTarget(container, "NEURON-001").classList.contains("is-selected")).toBe(true);
+    expect(neuronTarget(container, "NEURON-002").classList.contains("is-selected")).toBe(false);
+    expect(neuronTarget(container, "NEURON-002").classList.contains("is-flashed")).toBe(true);
+
+    vi.useRealTimers();
+  });
+
+  it("failed stimulation does not open the inspector", async () => {
+    vi.mocked(neuralApi.injectSignal).mockRejectedValueOnce(new ApiError("Injection failed", 500));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const node = neuronTarget(container, "NEURON-002");
     fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
     await act(async () => {
       vi.advanceTimersByTime(500);
@@ -153,16 +219,34 @@ describe("App observatory direct interaction", () => {
     fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
 
     await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 5));
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("-65.0 mV")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Injection failed");
+
     vi.useRealTimers();
+  });
+
+  it("12. Enter and Space open the inspector without stimulation", async () => {
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
+
+    const node = neuronTarget(container, "NEURON-004");
+    fireEvent.keyDown(node, { key: "Enter" });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    fireEvent.keyDown(node, { key: " " });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(neuralApi.injectSignal).not.toHaveBeenCalled();
   });
 
   it("inspector strong stimulus calls the API", async () => {
     const { container } = render(<App />);
     await waitFor(() => expect(screen.getByText("Backend Connected")).toBeInTheDocument());
 
-    const node = container.querySelector('[aria-label^="Select NEURON-002"]') as Element;
+    const node = neuronTarget(container, "NEURON-002");
     fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
     fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
 
