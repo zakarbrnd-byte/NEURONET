@@ -14,6 +14,10 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
 };
 
 function makeNeuron(id: string, overrides: Record<string, unknown> = {}) {
+  const cellType = id === "NEURON-004" ? ("inhibitory" as const) : ("excitatory" as const);
+  const somaRadius = 0.035;
+  const dendriteRadius = 0.09;
+  const axonLength = 0.22;
   return {
     id,
     restingPotentialMv: -70,
@@ -27,14 +31,78 @@ function makeNeuron(id: string, overrides: Record<string, unknown> = {}) {
     position: POSITIONS[id],
     region: "Observatory Cortex",
     layer: id === "NEURON-005" ? 3 : id === "NEURON-003" || id === "NEURON-004" ? 2 : 1,
-    cellType: id === "NEURON-004" ? ("inhibitory" as const) : ("excitatory" as const),
+    cellType,
     dnaId: id.replace("NEURON-", "DNA-"),
-    somaRadius: 0.035,
-    dendriteRadius: 0.09,
-    axonLength: 0.22,
+    somaRadius,
+    dendriteRadius,
+    axonLength,
+    lifecycle: "settled" as const,
+    developmentalAge: 0,
+    phaseAge: 0,
+    birthTick: 0,
+    settledTick: 0,
+    targetPosition: null,
+    originalTargetPosition: null,
+    migrationPath: null,
+    migrationProgress: 1,
+    migrationDistance: 0,
+    morphologyProgress: 1,
+    cellTypeAssigned: cellType,
+    electricallyEligibleFromTick: 0,
+    structurallyEligibleFromTick: 0,
+    developmentalOrigin: "initial_tissue",
+    matureMorphology: {
+      somaRadius,
+      dendriteRadius,
+      axonReach: axonLength,
+    },
+    blockingConditions: [] as string[],
     ...overrides,
   };
 }
+
+const defaultDevelopment = {
+  enabled: true,
+  totalCellCount: 5,
+  settledNeuronCount: 5,
+  developingCellCount: 0,
+  populationCapacity: 8,
+  latestBirthTick: null as number | null,
+  latestDevelopmentEvaluationTick: 6 as number | null,
+  nextBirthEligibilityTick: 30 as number | null,
+  currentLifecycleActivity: "idle",
+  progenitorZone: {
+    id: "progenitor-zone",
+    name: "Simplified Progenitor Zone",
+    xMin: 0.1,
+    xMax: 0.9,
+    yMin: 0.82,
+    yMax: 0.96,
+    description: "Simplified birth band — not anatomical germinal zone.",
+  },
+  settlementZones: [
+    {
+      id: "settlement-zone",
+      name: "Settlement Zone",
+      xMin: 0.08,
+      xMax: 0.92,
+      yMin: 0.12,
+      yMax: 0.78,
+      description: "Allowed settlement band for newly developed neurons.",
+    },
+  ],
+  config: {
+    maximumTotalNeurons: 8,
+    maximumConcurrentDevelopingCells: 1,
+    firstBirthTick: 30,
+    minimumBirthIntervalTicks: 35,
+    maturationDurationTicks: 8,
+    differentiationDurationTicks: 4,
+    migrationDurationTicks: 16,
+    settlingDurationTicks: 4,
+    targetExcitatoryRatio: 0.75,
+  },
+};
 
 function makeSynapse(
   id: string,
@@ -180,6 +248,7 @@ const snapshot = {
     },
     history: [],
   },
+  development: defaultDevelopment,
 };
 
 const stepTrace = {
@@ -229,7 +298,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6D", ageSeconds: 12 })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.7", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -260,7 +329,7 @@ describe("Mission Control page", () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
     vi.mocked(neuralApi.getHealth).mockResolvedValue({
       status: "ok",
-      version: "0.6D",
+      version: "0.7",
       ageSeconds: 12,
     });
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
@@ -282,7 +351,9 @@ describe("Mission Control page", () => {
   it("renders MissionControl as the sole app layout", async () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
-    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent("Version 0.6D");
+    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
+      "Developmental Neural Tissue · Version 0.7",
+    );
   });
 
   it("opens Synapse Inspector when a connection is selected", async () => {
@@ -352,7 +423,7 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.6D")).toBeInTheDocument();
+    expect(within(header).getByText("0.7")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
   });
@@ -486,17 +557,20 @@ describe("Mission Control page", () => {
   });
 
 
-  it("shows Version 0.6D birth/pruning marker and topology counters from backend", async () => {
+  it("shows Version 0.7 developmental marker and topology counters from backend", async () => {
     const user = userEvent.setup();
     await renderConnectedApp();
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Synapse Birth and Pruning · Version 0.6D",
+      "Developmental Neural Tissue · Version 0.7",
     );
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
     expect(screen.getByTestId("topology-summary")).toBeInTheDocument();
     expect(screen.getByTestId("topology-synapse-count")).toHaveTextContent("5");
     expect(screen.getByTestId("topology-created-count")).toHaveTextContent("0");
+    expect(screen.getByTestId("tissue-progenitor-zone")).toHaveTextContent(
+      "Simplified Progenitor Zone",
+    );
   });
 
   it("keeps candidates dashed until a confirmed backend birth appears as a real synapse", async () => {
@@ -638,5 +712,219 @@ describe("Mission Control page", () => {
       ).toBeGreaterThan(0),
     );
     unmount();
+  });
+
+  it("shows Development summary population and activity from backend", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    await user.click(screen.getByRole("tab", { name: "Structure" }));
+    expect(screen.getByTestId("development-summary-controls")).toBeInTheDocument();
+    expect(screen.getByTestId("development-population")).toHaveTextContent("5/8");
+    expect(screen.getByTestId("development-developing-count")).toHaveTextContent("0");
+    expect(screen.getByTestId("development-settled-count")).toHaveTextContent("5");
+    expect(screen.getByTestId("development-next-birth")).toHaveTextContent("Tick 30");
+    expect(screen.getByTestId("development-lifecycle-activity")).toHaveTextContent("idle");
+  });
+
+  it("renders developing cells distinctly with backend positions and migration paths", async () => {
+    const user = userEvent.setup();
+    const migrating = makeNeuron("NEURON-006", {
+      position: { x: 0.4, y: 0.7 },
+      lifecycle: "migrating",
+      developmentalAge: 12,
+      phaseAge: 4,
+      birthTick: 30,
+      settledTick: null,
+      targetPosition: { x: 0.5, y: 0.35 },
+      originalTargetPosition: { x: 0.5, y: 0.35 },
+      migrationPath: {
+        waypoints: [
+          { x: 0.4, y: 0.7 },
+          { x: 0.45, y: 0.52 },
+          { x: 0.5, y: 0.35 },
+        ],
+        currentSegment: 1,
+      },
+      migrationProgress: 0.42,
+      migrationDistance: 0.38,
+      morphologyProgress: 0.6,
+      cellTypeAssigned: "excitatory",
+      electricallyEligibleFromTick: null,
+      structurallyEligibleFromTick: null,
+      developmentalOrigin: "neural_progenitor",
+    });
+    const maturing = makeNeuron("NEURON-007", {
+      position: { x: 0.55, y: 0.88 },
+      lifecycle: "maturing",
+      developmentalAge: 3,
+      phaseAge: 3,
+      birthTick: 40,
+      settledTick: null,
+      migrationProgress: 0,
+      morphologyProgress: 0.2,
+      cellTypeAssigned: null,
+      electricallyEligibleFromTick: null,
+      structurallyEligibleFromTick: null,
+      developmentalOrigin: "neural_progenitor",
+      somaRadius: 0.018,
+      dendriteRadius: 0.03,
+    });
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue({
+      ...snapshot,
+      neurons: [...snapshot.neurons, migrating, maturing],
+      tissue: { ...snapshot.tissue, cellCount: 7 },
+      development: {
+        ...defaultDevelopment,
+        totalCellCount: 7,
+        settledNeuronCount: 5,
+        developingCellCount: 2,
+        latestBirthTick: 40,
+        nextBirthEligibilityTick: 75,
+        currentLifecycleActivity: "NEURON-006:Migrating, NEURON-007:Maturing",
+      },
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+
+    const migratingCell = screen.getByTestId("tissue-cell-NEURON-006");
+    expect(migratingCell).toHaveAttribute("data-developing", "true");
+    expect(migratingCell).toHaveAttribute("data-lifecycle", "migrating");
+    expect(migratingCell).toHaveAttribute("data-pos-x", "0.4");
+    expect(migratingCell).toHaveAttribute("data-pos-y", "0.7");
+    expect(screen.getByTestId("tissue-migration-path-NEURON-006")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-migration-progress-NEURON-006")).toHaveTextContent("42%");
+    expect(screen.getByTestId("tissue-maturing-seed-NEURON-007")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-maturing-ring-NEURON-007")).toBeInTheDocument();
+  });
+
+  it("hides progenitor zone and developing markers when development data is absent", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue({
+      ...snapshot,
+      development: null,
+      neurons: [
+        ...snapshot.neurons,
+        makeNeuron("NEURON-006", {
+          position: { x: 0.5, y: 0.9 },
+          lifecycle: "maturing",
+          electricallyEligibleFromTick: null,
+          settledTick: null,
+          developmentalOrigin: "neural_progenitor",
+        }),
+      ],
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("tissue-view")).toHaveAttribute("data-has-development", "false");
+    expect(screen.queryByTestId("tissue-progenitor-zone")).not.toBeInTheDocument();
+    expect(screen.getByTestId("tissue-cell-NEURON-006")).toHaveAttribute(
+      "data-developing",
+      "false",
+    );
+  });
+
+  it("shows lifecycle inspector without stimulation for developing cells", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue({
+      ...snapshot,
+      neurons: [
+        ...snapshot.neurons,
+        makeNeuron("NEURON-006", {
+          position: { x: 0.5, y: 0.88 },
+          lifecycle: "differentiating",
+          birthTick: 30,
+          settledTick: null,
+          cellTypeAssigned: "inhibitory",
+          electricallyEligibleFromTick: null,
+          developmentalOrigin: "neural_progenitor",
+          migrationProgress: 0,
+        }),
+      ],
+      development: {
+        ...defaultDevelopment,
+        totalCellCount: 6,
+        developingCellCount: 1,
+        settledNeuronCount: 5,
+      },
+    });
+    const { container } = await renderConnectedApp();
+    const target = neuronTarget(container, "NEURON-006");
+    fireEvent.pointerDown(target, { pointerId: 9, button: 0, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(target, { pointerId: 9, button: 0, clientX: 5, clientY: 5 });
+    expect(await screen.findByTestId("lifecycle-inspector")).toBeVisible();
+    expect(screen.getByTestId("lifecycle-state")).toHaveTextContent("differentiating");
+    expect(screen.getByTestId("lifecycle-no-stim-note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Weak Signal/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    expect(screen.getByRole("button", { name: "Weak Signal +5 mV" })).toBeDisabled();
+  });
+
+  it("uses structured development timeline filters for birth and migration events", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([
+      {
+        id: "evt-dev-1",
+        timestamp: "2026-01-01T00:00:00Z",
+        networkTick: 30,
+        type: "progenitor_born",
+        neuronId: "NEURON-006",
+        entityId: "NEURON-006",
+        newStatus: "maturing",
+        reasonCodes: ["BirthEligible"],
+        message: "born",
+      },
+      {
+        id: "evt-dev-2",
+        timestamp: "2026-01-01T00:00:01Z",
+        networkTick: 42,
+        type: "migration_started",
+        neuronId: "NEURON-006",
+        entityId: "NEURON-006",
+        previousStatus: "differentiating",
+        newStatus: "migrating",
+        reasonCodes: [],
+        message: "migrating",
+      },
+      {
+        id: "evt-dev-3",
+        timestamp: "2026-01-01T00:00:02Z",
+        networkTick: 60,
+        type: "population_capacity_reached",
+        reasonCodes: ["PopulationCapacity"],
+        message: "Population capacity reached (8/8).",
+      },
+    ]);
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    await user.click(screen.getByTestId("timeline-filter-devBirth"));
+    expect(await screen.findByTestId("timeline-development-item")).toHaveTextContent(
+      "Simplified Progenitor Zone",
+    );
+    await user.click(screen.getByTestId("timeline-filter-migration"));
+    expect(await screen.findByTestId("timeline-development-item")).toHaveTextContent(
+      "began migration",
+    );
+    await user.click(screen.getByTestId("timeline-filter-capacity"));
+    expect(await screen.findByTestId("timeline-development-item")).toHaveTextContent(
+      "Population capacity reached",
+    );
+  });
+
+  it("pause keeps sequence paused so development does not advance without ticks", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Run sequence" }));
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    const stepsWhileRunning = vi.mocked(neuralApi.stepNetwork).mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Pause sequence" }));
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(vi.mocked(neuralApi.stepNetwork).mock.calls.length).toBe(stepsWhileRunning);
   });
 });

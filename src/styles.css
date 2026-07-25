@@ -1486,3 +1486,107 @@ body {
     animation: none;
   }
 }
+
+/* ========== Developmental Neural Tissue (0.7) ========== */
+
+.tissue-progenitor-zone-rect {
+  fill: color-mix(in srgb, #6b7c5c 12%, transparent);
+  stroke: color-mix(in srgb, #6b7c5c 45%, transparent);
+  stroke-width: 0.35;
+  stroke-dasharray: 1.4 1.1;
+}
+
+.tissue-progenitor-zone-label {
+  fill: color-mix(in srgb, #9aab8c 80%, var(--text-muted));
+  font-size: 2.1px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.tissue-migration-path {
+  stroke: #7a8f6e;
+  stroke-width: 0.55;
+  stroke-dasharray: 1.6 1.1;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.tissue-migration-target {
+  fill: none;
+  stroke: #7a8f6e;
+  stroke-width: 0.35;
+}
+
+.tissue-migration-progress-label {
+  fill: #9aab8c;
+  font-size: 2px;
+  font-weight: 600;
+}
+
+.tissue-lifecycle-ring {
+  fill: none;
+  stroke-width: 0.4;
+}
+
+.tissue-maturing-ring {
+  stroke: color-mix(in srgb, #8a9a7a 70%, transparent);
+  stroke-dasharray: 1.2 0.9;
+}
+
+.tissue-maturing-seed {
+  fill: #c8d4bc;
+  stroke: #3a4634;
+  stroke-width: 0.3;
+}
+
+.tissue-settling-ring {
+  stroke: #8a9a7a;
+  stroke-dasharray: 0.6 0.6;
+}
+
+.tissue-migrating-ring {
+  stroke: color-mix(in srgb, #7a8f6e 65%, transparent);
+  stroke-dasharray: 1 1.2;
+}
+
+.tissue-type-badge {
+  fill: #c9d2b8;
+  font-size: 2px;
+  font-weight: 700;
+  text-anchor: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tissue-cell.is-developing .tissue-soma {
+  fill: #d5dfd0;
+}
+
+.tissue-cell.lifecycle-differentiating .tissue-soma {
+  fill: #d8d4c4;
+}
+
+.legend-zone {
+  background: color-mix(in srgb, #6b7c5c 35%, transparent);
+  border: 1px dashed color-mix(in srgb, #6b7c5c 55%, transparent);
+  height: 8px;
+}
+
+.state-badge.state-lifecycle-maturing,
+.state-badge.state-lifecycle-differentiating,
+.state-badge.state-lifecycle-migrating,
+.state-badge.state-lifecycle-settling,
+.state-badge.state-lifecycle-quiescent {
+  background: color-mix(in srgb, #6b7c5c 22%, transparent);
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.development-controls {
+  margin-bottom: 12px;
+}
+
+.timeline-development {
+  border-left: 2px solid color-mix(in srgb, #6b7c5c 55%, transparent);
+  padding-left: 8px;
+}

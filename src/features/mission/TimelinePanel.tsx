@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { NetworkEvent, TimelineEntry } from "../../types/neural";
 import {
+  isDevelopmentalEventType,
   isStructuralEventType,
   shortNeuronId,
   structuralEventPlainSummary,
@@ -23,7 +24,48 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: "birth", label: "Synapse born" },
   { id: "prune", label: "Synapse pruned" },
   { id: "blocked", label: "Blocked" },
+  { id: "devBirth", label: "Birth" },
+  { id: "differentiation", label: "Differentiation" },
+  { id: "migration", label: "Migration" },
+  { id: "settlement", label: "Settlement" },
+  { id: "capacity", label: "Capacity" },
 ];
+
+const STRUCTURAL_FILTERS: TimelineFilter[] = [
+  "candidates",
+  "maturation",
+  "pruning",
+  "birth",
+  "prune",
+  "blocked",
+];
+
+const DEVELOPMENT_FILTERS: TimelineFilter[] = [
+  "devBirth",
+  "differentiation",
+  "migration",
+  "settlement",
+  "capacity",
+];
+
+function matchesDevelopmentFilter(type: string, filter: TimelineFilter): boolean {
+  if (filter === "devBirth") {
+    return type === "progenitor_born" || type === "maturation_started";
+  }
+  if (filter === "differentiation") {
+    return type === "differentiation_started" || type === "cell_type_assigned";
+  }
+  if (filter === "migration") {
+    return type.startsWith("migration_");
+  }
+  if (filter === "settlement") {
+    return type === "settling_started" || type === "neuron_settled";
+  }
+  if (filter === "capacity") {
+    return type === "population_capacity_reached" || type === "development_blocked";
+  }
+  return false;
+}
 
 function matchesFilter(
   entry: TimelineEntry,
@@ -37,28 +79,27 @@ function matchesFilter(
     return (
       entry.firedNeuronIds.length === 0 &&
       entry.propagations.length === 0 &&
-      !tickEvents.some((event) => isStructuralEventType(event.type))
+      !tickEvents.some(
+        (event) => isStructuralEventType(event.type) || isDevelopmentalEventType(event.type),
+      )
     );
   }
-  if (filter === "candidates") {
-    return tickEvents.some((event) => event.type.startsWith("growth_candidate_"));
+  if (STRUCTURAL_FILTERS.includes(filter) || DEVELOPMENT_FILTERS.includes(filter)) {
+    return false;
   }
-  if (filter === "maturation") {
-    return tickEvents.some((event) => event.type === "growth_candidate_maturing");
+  return false;
+}
+
+function matchesStructuralListFilter(type: string, filter: TimelineFilter): boolean {
+  if (filter === "candidates") return type.startsWith("growth_candidate_");
+  if (filter === "maturation") return type === "growth_candidate_maturing";
+  if (filter === "pruning") return type.startsWith("synapse_pruning_");
+  if (filter === "birth") return type === "synapse_created";
+  if (filter === "prune") return type === "synapse_pruned";
+  if (filter === "blocked") {
+    return type === "candidate_creation_blocked" || type === "pruning_blocked";
   }
-  if (filter === "pruning") {
-    return tickEvents.some((event) => event.type.startsWith("synapse_pruning_"));
-  }
-  if (filter === "birth") {
-    return tickEvents.some((event) => event.type === "synapse_created");
-  }
-  if (filter === "prune") {
-    return tickEvents.some((event) => event.type === "synapse_pruned");
-  }
-  return tickEvents.some(
-    (event) =>
-      event.type === "candidate_creation_blocked" || event.type === "pruning_blocked",
-  );
+  return false;
 }
 
 export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
@@ -66,7 +107,9 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
   const eventsByTick = useMemo(() => {
     const map = new Map<number, NetworkEvent[]>();
     for (const event of events) {
-      if (!isStructuralEventType(event.type)) continue;
+      if (!isStructuralEventType(event.type) && !isDevelopmentalEventType(event.type)) {
+        continue;
+      }
       const list = map.get(event.networkTick) ?? [];
       list.push(event);
       map.set(event.networkTick, list);
@@ -75,40 +118,20 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
   }, [events]);
 
   const visible = useMemo(() => {
-    if (
-      filter === "candidates" ||
-      filter === "maturation" ||
-      filter === "pruning" ||
-      filter === "birth" ||
-      filter === "prune" ||
-      filter === "blocked"
-    ) {
-      const structural = events
+    if (STRUCTURAL_FILTERS.includes(filter) || DEVELOPMENT_FILTERS.includes(filter)) {
+      const filtered = events
         .filter((event) => {
-          if (filter === "candidates") {
-            return event.type.startsWith("growth_candidate_");
+          if (DEVELOPMENT_FILTERS.includes(filter)) {
+            return matchesDevelopmentFilter(event.type, filter);
           }
-          if (filter === "maturation") {
-            return event.type === "growth_candidate_maturing";
-          }
-          if (filter === "pruning") {
-            return event.type.startsWith("synapse_pruning_");
-          }
-          if (filter === "birth") {
-            return event.type === "synapse_created";
-          }
-          if (filter === "prune") {
-            return event.type === "synapse_pruned";
-          }
-          return (
-            event.type === "candidate_creation_blocked" || event.type === "pruning_blocked"
-          );
+          return matchesStructuralListFilter(event.type, filter);
         })
         .slice(0, 20);
-      return structural.map((event) => ({
-        kind: "structural" as const,
-        event,
-      }));
+      return filtered.map((event) =>
+        isDevelopmentalEventType(event.type)
+          ? { kind: "development" as const, event }
+          : { kind: "structural" as const, event },
+      );
     }
 
     return entries
@@ -142,13 +165,21 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
       ) : (
         <ol className="timeline-list">
           {visible.map((item) => {
-            if (item.kind === "structural") {
+            if (item.kind !== "tick") {
               const event = item.event;
               return (
                 <li
                   key={event.id}
-                  className="timeline-item timeline-structural"
-                  data-testid="timeline-structural-item"
+                  className={`timeline-item ${
+                    item.kind === "development"
+                      ? "timeline-development"
+                      : "timeline-structural"
+                  }`}
+                  data-testid={
+                    item.kind === "development"
+                      ? "timeline-development-item"
+                      : "timeline-structural-item"
+                  }
                 >
                   <div className="timeline-title">Tick {event.networkTick}</div>
                   <div>{structuralEventPlainSummary(event)}</div>
@@ -170,7 +201,7 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
             }
 
             const entry = item.entry;
-            const structural = eventsByTick.get(entry.tick) ?? [];
+            const observatory = eventsByTick.get(entry.tick) ?? [];
             return (
               <li key={`tick-${entry.tick}-${entry.summary}`} className="timeline-item">
                 <div className="timeline-title">Tick {entry.tick}</div>
@@ -194,8 +225,15 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
                 ) : (
                   <div className="timeline-detail">Signals: none</div>
                 )}
-                {structural.map((event) => (
-                  <div key={event.id} className="timeline-detail timeline-structural-detail">
+                {observatory.map((event) => (
+                  <div
+                    key={event.id}
+                    className={`timeline-detail ${
+                      isDevelopmentalEventType(event.type)
+                        ? "timeline-development-detail"
+                        : "timeline-structural-detail"
+                    }`}
+                  >
                     {structuralEventPlainSummary(event)}
                   </div>
                 ))}

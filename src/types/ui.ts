@@ -26,6 +26,11 @@ export type TimelineFilter =
   | "pruning"
   | "birth"
   | "prune"
-  | "blocked";
+  | "blocked"
+  | "devBirth"
+  | "differentiation"
+  | "migration"
+  | "settlement"
+  | "capacity";
 
 export type ControlsCategory = "stimulus" | "time" | "structure" | "reset";

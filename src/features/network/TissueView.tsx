@@ -5,13 +5,15 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
+  DevelopmentSummary,
   GrowthCandidate,
+  LifecycleState,
   NeuronSnapshot,
   PropagationTrace,
   SynapseSnapshot,
   TopologySummary,
 } from "../../types/neural";
-import { electricalState, shortNeuronId } from "../../types/neural";
+import { electricalState, neuronIsDeveloping, shortNeuronId } from "../../types/neural";
 import type { TissueDisplayMode } from "../../types/ui";
 import {
   HIT_TARGET_RADIUS,
@@ -36,6 +38,7 @@ interface TissueViewProps {
   bornSynapseIds?: string[];
   pruningSynapseIds?: string[];
   topology?: TopologySummary | null;
+  development?: DevelopmentSummary | null;
   onSelectNeuron: (neuronId: string) => void;
   onSelectSynapse?: (synapseId: string) => void;
   onSelectCandidate?: (candidateId: string) => void;
@@ -99,6 +102,21 @@ function axonPath(from: Point, to: Point, fromRadius: number, toRadius: number):
   return `M ${start.x} ${start.y} Q ${cx} ${cy} ${end.x} ${end.y}`;
 }
 
+function migrationPathD(waypoints: Array<{ x: number; y: number }>): string {
+  if (waypoints.length === 0) return "";
+  return waypoints
+    .map((wp, index) => {
+      const x = wp.x * WIDTH;
+      const y = wp.y * HEIGHT;
+      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+    })
+    .join(" ");
+}
+
+function lifecycleClass(lifecycle: LifecycleState): string {
+  return `lifecycle-${lifecycle}`;
+}
+
 export function TissueView({
   neurons,
   synapses,
@@ -116,6 +134,7 @@ export function TissueView({
   bornSynapseIds = [],
   pruningSynapseIds = [],
   topology = null,
+  development = null,
   onSelectNeuron,
   onSelectSynapse,
   onSelectCandidate,
@@ -161,7 +180,7 @@ export function TissueView({
   const onPointerDown = (event: ReactPointerEvent<SVGGElement>, neuronId: string) => {
     if (interactionDisabled || event.button !== 0) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
 
     clearGestureTimer();
     const timerId = window.setTimeout(() => {
@@ -242,12 +261,15 @@ export function TissueView({
   const showPulse = displayMode === "activity";
   const emphasizeMorphology = displayMode === "structure" || displayMode === "development";
   const showDevelopment = displayMode === "development";
+  const showDevViz = showDevelopment && development != null;
+  const progenitorZone = development?.progenitorZone ?? null;
 
   return (
     <div
       className={`tissue-view mode-${displayMode}`}
       data-testid="tissue-view"
       data-display-mode={displayMode}
+      data-has-development={showDevViz ? "true" : "false"}
       onClickCapture={onClickCapture}
     >
       <div
@@ -271,9 +293,9 @@ export function TissueView({
         ))}
       </div>
       <p className="tissue-hint">
-        Fixed cell positions from the backend · Tap: Inspect · Hold: Stimulate +5 mV
+        Backend cell positions · Tap: Inspect · Hold: Stimulate +5 mV (settled)
         {showDevelopment
-          ? " · Dashed paths are growth candidates (not synapses)"
+          ? " · Dashed paths are growth candidates · Migration paths from backend"
           : ""}
       </p>
       <svg
@@ -316,6 +338,73 @@ export function TissueView({
             <rect width="1" height="2" fill="currentColor" opacity="0.85" />
           </pattern>
         </defs>
+
+        {showDevViz && progenitorZone ? (
+          <g
+            className="tissue-progenitor-zone"
+            data-testid="tissue-progenitor-zone"
+            pointerEvents="none"
+          >
+            <rect
+              x={progenitorZone.xMin * WIDTH}
+              y={progenitorZone.yMin * HEIGHT}
+              width={(progenitorZone.xMax - progenitorZone.xMin) * WIDTH}
+              height={(progenitorZone.yMax - progenitorZone.yMin) * HEIGHT}
+              className="tissue-progenitor-zone-rect"
+            />
+            <text
+              x={((progenitorZone.xMin + progenitorZone.xMax) / 2) * WIDTH}
+              y={progenitorZone.yMin * HEIGHT + 3.2}
+              className="tissue-progenitor-zone-label"
+              textAnchor="middle"
+            >
+              Simplified Progenitor Zone
+            </text>
+          </g>
+        ) : null}
+
+        {showDevViz
+          ? neurons
+              .filter(
+                (neuron) =>
+                  neuron.lifecycle === "migrating" &&
+                  neuron.migrationPath &&
+                  neuron.migrationPath.waypoints.length > 0,
+              )
+              .map((neuron) => {
+                const path = neuron.migrationPath!;
+                const d = migrationPathD(path.waypoints);
+                const target = neuron.targetPosition;
+                return (
+                  <g
+                    key={`mig-${neuron.id}`}
+                    className="tissue-migration-group"
+                    data-testid={`tissue-migration-path-${neuron.id}`}
+                    pointerEvents="none"
+                  >
+                    <path d={d} className="tissue-migration-path" fill="none" />
+                    {target ? (
+                      <circle
+                        cx={target.x * WIDTH}
+                        cy={target.y * HEIGHT}
+                        r={1.1}
+                        className="tissue-migration-target"
+                        data-testid={`tissue-migration-target-${neuron.id}`}
+                      />
+                    ) : null}
+                    <text
+                      x={neuron.position.x * WIDTH}
+                      y={neuron.position.y * HEIGHT - (neuron.somaRadius * WIDTH + 4)}
+                      className="tissue-migration-progress-label"
+                      textAnchor="middle"
+                      data-testid={`tissue-migration-progress-${neuron.id}`}
+                    >
+                      {Math.round(neuron.migrationProgress * 100)}%
+                    </text>
+                  </g>
+                );
+              })
+          : null}
 
         {synapses.map((synapse) => {
           const source = byId.get(synapse.sourceNeuronId);
@@ -514,15 +603,23 @@ export function TissueView({
           const state = electricalState(neuron);
           const inhibitory = neuron.cellType === "inhibitory";
           const axonReach = neuron.axonLength * WIDTH;
+          const developing = showDevViz && neuronIsDeveloping(neuron);
+          const lifecycle = neuron.lifecycle;
 
           return (
             <g
               key={neuron.id}
               className={`tissue-cell ${inhibitory ? "is-inhibitory" : "is-excitatory"} ${
                 selected ? "is-selected" : ""
-              } ${pressing ? "is-pressing" : ""} ${flashed ? "is-flashed" : ""} state-${state.toLowerCase()}`}
+              } ${pressing ? "is-pressing" : ""} ${flashed ? "is-flashed" : ""} state-${state.toLowerCase()} ${
+                developing ? `is-developing ${lifecycleClass(lifecycle)}` : ""
+              }`}
               data-testid={`tissue-cell-${neuron.id}`}
               data-cell-type={neuron.cellType}
+              data-lifecycle={lifecycle}
+              data-developing={developing ? "true" : "false"}
+              data-pos-x={neuron.position.x}
+              data-pos-y={neuron.position.y}
               transform={`translate(${point.x} ${point.y})`}
               onPointerDown={(event) => onPointerDown(event, neuron.id)}
               onPointerMove={onPointerMove}
@@ -535,20 +632,67 @@ export function TissueView({
                 className="tissue-hit"
                 fill="transparent"
               />
-              {emphasizeMorphology ? (
+              {emphasizeMorphology && !developing ? (
                 <circle
                   r={axonReach}
                   className="tissue-axon-reach"
                   pointerEvents="none"
                 />
               ) : null}
-              <circle r={dendrite} className="tissue-dendrite" pointerEvents="none" />
-              <circle r={soma} className="tissue-soma" pointerEvents="none" />
+              {developing && lifecycle === "maturing" ? (
+                <>
+                  <circle
+                    r={soma + 2.2}
+                    className="tissue-lifecycle-ring tissue-maturing-ring"
+                    pointerEvents="none"
+                    data-testid={`tissue-maturing-ring-${neuron.id}`}
+                  />
+                  <circle
+                    r={Math.max(1.2, soma * 0.55)}
+                    className="tissue-maturing-seed"
+                    pointerEvents="none"
+                    data-testid={`tissue-maturing-seed-${neuron.id}`}
+                  />
+                </>
+              ) : null}
+              {developing && lifecycle === "settling" ? (
+                <circle
+                  r={soma + 2.4}
+                  className="tissue-lifecycle-ring tissue-settling-ring"
+                  pointerEvents="none"
+                  data-testid={`tissue-settling-ring-${neuron.id}`}
+                />
+              ) : null}
+              {developing && lifecycle === "migrating" ? (
+                <circle
+                  r={soma + 1.8}
+                  className="tissue-lifecycle-ring tissue-migrating-ring"
+                  pointerEvents="none"
+                />
+              ) : null}
+              {!(developing && lifecycle === "maturing") ? (
+                <>
+                  <circle r={dendrite} className="tissue-dendrite" pointerEvents="none" />
+                  <circle r={soma} className="tissue-soma" pointerEvents="none" />
+                </>
+              ) : null}
+              {developing && lifecycle === "differentiating" ? (
+                <text
+                  y={-(soma + 3.2)}
+                  className="tissue-type-badge"
+                  pointerEvents="none"
+                  data-testid={`tissue-type-badge-${neuron.id}`}
+                >
+                  {neuron.cellTypeAssigned ?? "…"}
+                </text>
+              ) : null}
               <text y={soma + 3.5} className="tissue-label" pointerEvents="none">
                 {shortNeuronId(neuron.id)}
               </text>
               <text y={soma + 6.2} className="tissue-sublabel" pointerEvents="none">
-                {inhibitory ? "Inh" : "Exc"} · {neuron.membranePotentialMv.toFixed(0)} mV
+                {developing
+                  ? lifecycle
+                  : `${inhibitory ? "Inh" : "Exc"} · ${neuron.membranePotentialMv.toFixed(0)} mV`}
               </text>
             </g>
           );
@@ -601,7 +745,14 @@ export function TissueView({
             <li>
               <span className="legend-swatch legend-warning">!</span> Warning marker: pruning risk
             </li>
-            <li>Topology may change only after confirmed backend birth/pruning (0.6D)</li>
+            {showDevViz ? (
+              <li>
+                <span className="legend-swatch legend-zone" /> Simplified Progenitor Zone (backend)
+              </li>
+            ) : null}
+            <li>
+              Topology and development change only after confirmed backend ticks (0.7)
+            </li>
           </ul>
         </>
       ) : null}

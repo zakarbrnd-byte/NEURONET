@@ -22,8 +22,9 @@ import type {
 } from "../types/neural";
 import {
   countDepolarized,
-  isStructuralEventType,
+  isObservatoryEventType,
   networkIsQuiet,
+  neuronIsElectricallyEligible,
   shortNeuronId,
   timelineSummary,
 } from "../types/neural";
@@ -292,6 +293,14 @@ export function MissionControl() {
       return;
     }
 
+    const target = networkRef.current?.neurons.find((n) => n.id === neuronId);
+    const tick = networkRef.current?.tick ?? 0;
+    if (target && !neuronIsElectricallyEligible(target, tick)) {
+      if (selectNeuron) setSelectedNeuronId(neuronId);
+      if (openPanel) setActivePanel("node");
+      return;
+    }
+
     stimInFlightRef.current = true;
     setBusy(true);
     busyRef.current = true;
@@ -328,6 +337,13 @@ export function MissionControl() {
   }
 
   function handleLongPressStimulate(neuronId: string) {
+    const neuron = networkRef.current?.neurons.find((n) => n.id === neuronId);
+    const tick = networkRef.current?.tick ?? 0;
+    if (!neuron || !neuronIsElectricallyEligible(neuron, tick)) {
+      setSelectedNeuronId(neuronId);
+      setActivePanel("node");
+      return;
+    }
     void stimulateNeuron(neuronId, WEAK_SIGNAL_MV, {
       selectNeuron: false,
       openPanel: false,
@@ -514,7 +530,7 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.6D"
+          version="0.7"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
@@ -523,7 +539,7 @@ export function MissionControl() {
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Synapse Birth and Pruning · Version 0.6D
+          Developmental Neural Tissue · Version 0.7
         </p>
       </header>
 
@@ -556,6 +572,7 @@ export function MissionControl() {
                 bornSynapseIds={bornSynapseIds}
                 pruningSynapseIds={pruningSynapseIds}
                 topology={network.structural.topology}
+                development={network.development ?? null}
                 onSelectNeuron={handleSelectNeuron}
                 onSelectSynapse={handleSelectSynapse}
                 onSelectCandidate={handleSelectCandidate}
@@ -657,7 +674,7 @@ export function MissionControl() {
           {activePanel === "timeline" ? (
             <TimelinePanel
               entries={timeline}
-              events={events.filter((event) => isStructuralEventType(event.type))}
+              events={events.filter((event) => isObservatoryEventType(event.type))}
             />
           ) : null}
           {activePanel === "controls" ? (
@@ -669,8 +686,18 @@ export function MissionControl() {
               autoStep={autoStep}
               maxAutoSteps={MAX_AUTO_STEPS}
               structural={network?.structural ?? null}
+              development={network?.development ?? null}
+              stimulateDisabled={
+                selectedNeuron
+                  ? !neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                  : false
+              }
               onStimulateWeak={() => {
-                if (selectedNeuronId) {
+                if (
+                  selectedNeuronId &&
+                  selectedNeuron &&
+                  neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                ) {
                   void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV, {
                     selectNeuron: false,
                     openPanel: false,
@@ -678,7 +705,11 @@ export function MissionControl() {
                 }
               }}
               onStimulateStrong={() => {
-                if (selectedNeuronId) {
+                if (
+                  selectedNeuronId &&
+                  selectedNeuron &&
+                  neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                ) {
                   void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV, {
                     selectNeuron: false,
                     openPanel: false,
