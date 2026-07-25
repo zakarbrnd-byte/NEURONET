@@ -12,14 +12,15 @@ It explores whether cognition can emerge from biologically-inspired computationa
 
 1. Make only one small milestone at a time.
 2. Introduce one biological principle per milestone when advancing the model.
-3. Do not introduce backend technology until requested.
-4. Do not introduce AI or cognition claims without evidence.
-5. Explain major code changes clearly.
-6. Preserve mobile Chrome compatibility and GitHub Pages deployment.
-7. Keep neuron business rules inside `BiologicalNode`, not in React components.
+3. The backend owns simulation state. The frontend only observes and sends commands.
+4. Do not invent neuron or connection state in the browser.
+5. Do not introduce AI or cognition claims without evidence.
+6. Explain major code changes clearly.
+7. Preserve mobile Chrome compatibility and GitHub Pages static deployment.
+8. Prefer simple, readable code over clever abstractions.
 
 ## Current milestone
 
-**0.3 Biological Neuron**
+**0.4 Backend Neural Core and Network View**
 
-React + TypeScript + Vite + plain CSS. One local `BiologicalNode`. No backend.
+Rust + Axum neural core. React observatory. No database. No WebSockets.

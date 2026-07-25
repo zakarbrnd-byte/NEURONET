@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+backend/target/
+target/
 
 # Local env
 .env

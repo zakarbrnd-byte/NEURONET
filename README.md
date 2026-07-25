@@ -1,103 +1,78 @@
 # NEURONET
 
-**Version 0.3 — Biological Neuron**
+**Version 0.4 — Backend Neural Core and Network View**
 
-NEURONET is an experimental project exploring whether cognition can emerge from biologically-inspired computational principles.
+NEURONET explores whether cognition can emerge from biologically-inspired computational principles.
 
-It is **not** a chatbot, **not** an LLM, and **not** trying to imitate ChatGPT.
+It is **not** a chatbot and **not** an LLM.
 
-This milestone introduces one biological principle: a single simplified neuron that can receive signals, accumulate activation, fire, rest, and recover.
+## Architecture
 
-## What it does right now
+- The **Rust backend** owns the neural network, membrane potentials, firing, connections, and events.
+- The **React frontend** is an observatory. It draws backend snapshots and sends commands.
+- The frontend never invents neurons, connections, or firing results.
 
-The Chrome **Debug Board** lets you observe one local `BiologicalNode`:
+## What Version 0.4 includes
 
-- Version `0.3`, mode `Biological Neuron`
-- Neuron ID, Activation, Threshold, Energy, Fatigue, Refractory, Tick, Fired
-- Activity feed (newest first)
-- Buttons: **Inject Signal**, **Strong Signal**, **Next Tick**, **Reset**
+Backend neural core with a deterministic starter network:
 
-The neuron exists only in browser memory. Refreshing the page resets it. There is no backend.
+- `NEURON-001` → `NEURON-002`
+- `NEURON-002` → `NEURON-003`
 
-## What a Biological Neuron is
+Educational millivolt neuron values:
 
-`src/models/BiologicalNode.ts` is a beginner-friendly educational model of one neuron.
+- Resting potential: `-70 mV`
+- Fire threshold: `-55 mV`
+- Positive signals depolarize the membrane
 
-It owns its own values and behavior. The React UI only displays snapshots from `getData()`.
+Chrome Debug Board features:
 
-### Activation
+- SVG network view from `GET /api/network`
+- Neuron status panel with biological terms
+- Backend event feed
+- Weak Signal (`+5 mV`), Strong Signal (`+20 mV`), Next Network Tick, Reset Network
+- Connection status: Connected / Connecting / Backend Unavailable
 
-Current accumulated electrical potential. Signals raise activation. Each tick, unused activation decays slightly toward zero.
+This millivolt model is an **educational approximation**, not a complete biophysical simulation.
 
-### Threshold
+## Biological terms
 
-The activation level required to fire. Starts at `1.0`.
-
-### Fatigue
-
-Temporary exhaustion after firing. Fatigue recovers gradually during resting and recovery steps.
-
-### Refractory
-
-After firing, the neuron enters a short refractory period (`2` ticks). It cannot fire again until that countdown reaches zero.
-
-### Energy
-
-A simple visual indicator. Firing reduces energy by `1`. Energy never goes below `0`.
-
-## Important educational note
-
-This is only an **educational approximation** of a biological neuron.
-
-It is **not** intended to simulate all neuron biology. It is the minimum model that makes firing, resting, and recovery understandable in Chrome.
-
-## Try this sequence
-
-1. **Inject Signal** → activation becomes `0.35`
-2. **Next Tick** → activation decays; neuron does not fire
-3. **Strong Signal** → activation becomes `1.25`
-4. **Next Tick** → neuron fires; activation returns to `0`, energy `99`, fatigue `0.2`, refractory `2`
-
-## Folder structure
-
-```text
-NEURONET/
-├── src/
-│   ├── components/
-│   │   ├── Header.tsx
-│   │   ├── StatusCard.tsx
-│   │   └── ActivityFeed.tsx
-│   ├── data/
-│   │   └── initialActivity.ts
-│   ├── models/
-│   │   ├── BiologicalNode.ts
-│   │   └── BiologicalNode.test.ts
-│   ├── types/
-│   │   └── neuron.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── styles.css
-├── public/
-├── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── .github/workflows/deploy-pages.yml
-├── README.md
-├── ROADMAP.md
-├── .gitignore
-└── CLAUDE.md
-```
-
-## Install
-
-```bash
-npm install
-```
+| Term | Meaning in NEURONET 0.4 |
+| --- | --- |
+| Resting Potential | Quiet baseline membrane voltage (`-70 mV`) |
+| Current Membrane Potential | Present voltage of the selected neuron |
+| Fire Threshold | Voltage that triggers a spike (`-55 mV`) |
+| Refractory Period | Short rest after firing when the neuron cannot fire again |
+| Fatigue | Temporary exhaustion after firing |
+| Energy | Simple visual budget reduced by firing |
 
 ## Run locally
 
+### 1. Backend
+
 ```bash
+cd backend
+cargo run
+```
+
+Default URL:
+
+```text
+http://127.0.0.1:3000
+```
+
+Optional environment:
+
+```bash
+NEURONET_PORT=3000
+NEURONET_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+### 2. Frontend
+
+```bash
+cp .env.example .env
+npm install
 npm run dev
 ```
 
@@ -107,23 +82,79 @@ Open:
 http://localhost:5173/NEURONET/
 ```
 
-## Test
+`.env` should contain:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:3000
+```
+
+## Tests
 
 ```bash
 npm test
 ```
 
-## Build
+Or separately:
+
+```bash
+npm run test:frontend
+npm run test:backend
+```
+
+## Build frontend
 
 ```bash
 npm run build
 ```
 
-## GitHub Pages
+## GitHub Pages limitation
+
+GitHub Pages can host the React frontend, but **cannot run the Rust backend**.
+
+The public site:
 
 ```text
 https://zakarbrnd-byte.github.io/NEURONET/
 ```
 
-Deployed from `main` by `.github/workflows/deploy-pages.yml`.  
-Vite `base` remains `/NEURONET/`.
+will show **Backend Unavailable** unless a public backend URL is configured at build time with `VITE_API_BASE_URL`.
+
+The Pages deployment does **not** silently fall back to frontend simulation.
+
+## API overview
+
+- `GET /api/health`
+- `GET /api/network`
+- `GET /api/events`
+- `POST /api/neurons/:id/signals`
+- `POST /api/network/step`
+- `POST /api/network/reset`
+
+## Folder map
+
+```text
+NEURONET/
+├── backend/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       ├── lib.rs
+│       ├── api.rs
+│       ├── network.rs
+│       ├── neuron.rs
+│       └── connection.rs
+├── src/
+│   ├── components/
+│   ├── features/
+│   │   ├── neuron/
+│   │   └── network/
+│   ├── services/
+│   │   └── neuralApi.ts
+│   ├── types/
+│   │   └── neural.ts
+│   ├── App.tsx
+│   └── styles.css
+├── .env.example
+├── README.md
+└── ROADMAP.md
+```

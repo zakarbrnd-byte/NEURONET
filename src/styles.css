@@ -10,7 +10,12 @@
   --awake: #4caf82;
   --fired: #e2b34a;
   --quiet: #8b9aab;
+  --resting: #8b9aab;
+  --depolarizing: #4caf82;
+  --refractory: #7a8cff;
   --energy: #3d9cf0;
+  --danger: #d97b7b;
+  --ok: #4caf82;
   --radius: 12px;
   --space: 16px;
   --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -151,6 +156,151 @@ body {
 .state-quiet {
   background: rgba(139, 154, 171, 0.2);
   color: var(--quiet);
+}
+
+.state-resting {
+  background: rgba(139, 154, 171, 0.2);
+  color: var(--resting);
+}
+
+.state-depolarizing {
+  background: rgba(76, 175, 130, 0.2);
+  color: var(--depolarizing);
+}
+
+.state-refractory {
+  background: rgba(122, 140, 255, 0.2);
+  color: var(--refractory);
+}
+
+.hint {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.field-note {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.status-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.banner {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.banner p {
+  margin: 8px 0 12px;
+  color: var(--text-muted);
+}
+
+.banner-ok {
+  border-color: rgba(76, 175, 130, 0.45);
+  color: var(--ok);
+}
+
+.banner-warn {
+  border-color: rgba(226, 179, 74, 0.45);
+  color: var(--fired);
+}
+
+.banner-error {
+  border-color: rgba(217, 123, 123, 0.5);
+  color: var(--danger);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.inline-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.event-type {
+  color: var(--accent);
+}
+
+.network-svg-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.network-svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.network-link {
+  fill: none;
+  stroke: #6f8498;
+}
+
+.network-link-pulse {
+  stroke: var(--fired);
+}
+
+.network-arrow {
+  fill: #6f8498;
+}
+
+.network-node {
+  fill: #243040;
+  stroke: #6f8498;
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.network-node.state-resting {
+  fill: #243040;
+  stroke: #6f8498;
+}
+
+.network-node.state-depolarizing {
+  fill: #1f3d34;
+  stroke: var(--depolarizing);
+}
+
+.network-node.state-fired {
+  fill: #4a3a18;
+  stroke: var(--fired);
+}
+
+.network-node.state-refractory {
+  fill: #242848;
+  stroke: var(--refractory);
+}
+
+.network-node.selected {
+  stroke-width: 3;
+}
+
+.network-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: middle;
 }
 
 .energy-block {
