@@ -1,3 +1,4 @@
+import { MetricLabel } from "../../components/MetricLabel";
 import type { ConnectionStatus, NetworkSnapshot, NetworkStepTrace } from "../../types/neural";
 import { countDepolarized, countRefractory } from "../../types/neural";
 
@@ -24,7 +25,7 @@ export function NetworkSummary({
       </h2>
       <dl className="status-list">
         <div className="status-row">
-          <dt>Network Tick</dt>
+          <MetricLabel metric="networkTick" />
           <dd>{network?.tick ?? 0}</dd>
         </div>
         <div className="status-row">

@@ -1,3 +1,4 @@
+import { MetricLabel } from "../../components/MetricLabel";
 import type {
   ConnectionSnapshot,
   NetworkEvent,
@@ -72,10 +73,13 @@ export function NeuronStatus({
           </h2>
           <p className="hint">
             Values come from the Rust backend. Educational millivolt approximation only.
+            Tap the information icons for plain-language explanations.
           </p>
         </>
       ) : (
-        <p className="hint">Values come from the Rust backend.</p>
+        <p className="hint">
+          Values come from the Rust backend. Tap an information icon for a short explanation.
+        </p>
       )}
 
       <dl className="status-list">
@@ -89,58 +93,48 @@ export function NeuronStatus({
             <span className={`state-badge state-${state.toLowerCase()}`}>{state}</span>
           </dd>
         </div>
-        <div className="status-block">
-          <div className="status-row">
-            <dt>Resting Potential</dt>
-            <dd>{formatMv(neuron.restingPotentialMv)}</dd>
-          </div>
-          <p className="field-note">Quiet baseline of this neuron.</p>
-        </div>
-        <div className="status-block">
-          <div className="status-row">
-            <dt>Current Membrane Potential</dt>
-            <dd>{formatMv(neuron.membranePotentialMv)}</dd>
-          </div>
-          <p className="field-note">
-            {distance > 0
-              ? `The neuron is ${distance.toFixed(1)} mV away from firing.`
-              : "The membrane is at or above the fire threshold."}
-          </p>
+        <div className="status-row">
+          <MetricLabel metric="restingPotential" />
+          <dd>{formatMv(neuron.restingPotentialMv)}</dd>
         </div>
         <div className="status-row">
-          <dt>Fire Threshold</dt>
+          <MetricLabel metric="currentMembranePotential" />
+          <dd>{formatMv(neuron.membranePotentialMv)}</dd>
+        </div>
+        <div className="status-row">
+          <MetricLabel metric="fireThreshold" />
           <dd>{formatMv(neuron.thresholdMv)}</dd>
         </div>
         <div className="status-row">
-          <dt>Distance to Threshold</dt>
+          <MetricLabel metric="distanceToThreshold" />
           <dd>{formatMv(distance)}</dd>
         </div>
         <div className="status-row">
-          <dt>Energy</dt>
+          <MetricLabel metric="energy" />
           <dd>{formatNumber(neuron.energy)}%</dd>
         </div>
         <div className="status-row">
-          <dt>Fatigue</dt>
+          <MetricLabel metric="fatigue" />
           <dd>{formatNumber(neuron.fatigue)}</dd>
         </div>
         <div className="status-row">
-          <dt>Refractory Ticks</dt>
+          <MetricLabel metric="refractoryTicks" />
           <dd>{neuron.refractoryTicks}</dd>
         </div>
         <div className="status-row">
-          <dt>Fired During Latest Tick</dt>
+          <MetricLabel metric="firedDuringLastTick" />
           <dd>{neuron.fired ? "true" : "false"}</dd>
         </div>
         <div className="status-row">
-          <dt>Incoming Connections</dt>
+          <MetricLabel metric="incomingConnections" />
           <dd>{incoming}</dd>
         </div>
         <div className="status-row">
-          <dt>Outgoing Connections</dt>
+          <MetricLabel metric="outgoingConnections" />
           <dd>{outgoing}</dd>
         </div>
         <div className="status-row">
-          <dt>Latest Received Signal</dt>
+          <MetricLabel metric="latestReceivedSignal" />
           <dd>
             {latestReceived?.amountMv != null
               ? `+${latestReceived.amountMv} mV`
@@ -148,15 +142,15 @@ export function NeuronStatus({
           </dd>
         </div>
         <div className="status-row">
-          <dt>Latest Firing Tick</dt>
+          <MetricLabel metric="latestFiringTick" />
           <dd>{latestFire ? latestFire.networkTick : "None"}</dd>
         </div>
         <div className="status-row">
-          <dt>Neuron Tick</dt>
+          <MetricLabel metric="neuronTick" />
           <dd>{neuron.tick}</dd>
         </div>
         <div className="status-row">
-          <dt>Network Tick</dt>
+          <MetricLabel metric="networkTick" />
           <dd>{networkTick}</dd>
         </div>
       </dl>

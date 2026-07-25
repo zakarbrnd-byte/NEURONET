@@ -3,6 +3,7 @@ import { Header } from "./components/Header";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { Controls } from "./components/Controls";
 import { ActivityFeed } from "./components/ActivityFeed";
+import { ReadingGuide } from "./components/ReadingGuide";
 import { NetworkView } from "./features/network/NetworkView";
 import { Timeline } from "./features/network/Timeline";
 import { CausalPanel } from "./features/network/CausalPanel";
@@ -340,6 +341,8 @@ export default function App() {
             </p>
           </section>
         )}
+
+        <ReadingGuide />
 
         <NetworkSummary
           network={network}
