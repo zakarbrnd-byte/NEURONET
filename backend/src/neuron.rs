@@ -5,9 +5,10 @@
 //! visible and testable.
 //!
 //! Version 0.6A adds fixed physical tissue properties (position, morphology,
-//! cell type). Positions never move. No growth, learning, or memory.
+//! cell type). Version 0.7 adds a simplified developmental lifecycle:
+//! only developing cells migrate; settled somas stay fixed.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Membrane potential moves this many mV toward rest each recovery step.
 pub const RECOVERY_MV: f64 = 2.0;
@@ -29,19 +30,70 @@ pub const MIN_MEMBRANE_MV: f64 = -90.0;
 pub const MAX_MEMBRANE_MV: f64 = 40.0;
 
 /// Normalized tissue coordinates in \[0, 1\].
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
     pub x: f64,
     pub y: f64,
 }
 
+/// Alias used by the developmental subsystem.
+pub type TissuePosition = Position;
+
 /// Excitatory or inhibitory cell identity (deterministic tissue role).
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum CellType {
     Excitatory,
     Inhibitory,
+}
+
+/// Simplified developmental lifecycle (Version 0.7).
+///
+/// Transitions:
+/// Quiescent → Maturing → Differentiating → Migrating → Settling → Settled
+///
+/// Newly born progenitors begin in Maturing. Settled cells never migrate.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LifecycleState {
+    Quiescent,
+    Maturing,
+    Differentiating,
+    Migrating,
+    Settling,
+    #[default]
+    Settled,
+}
+
+/// Deterministic migration path waypoints (normalized tissue space).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationPath {
+    pub waypoints: Vec<Position>,
+    pub current_segment: usize,
+}
+
+/// Named tissue region (progenitor / settlement zones).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TissueRegion {
+    pub id: String,
+    pub name: String,
+    pub x_min: f64,
+    pub x_max: f64,
+    pub y_min: f64,
+    pub y_max: f64,
+    pub description: String,
+}
+
+/// Mature morphology targets stored from birth / seed.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MorphologyProfile {
+    pub soma_radius: f64,
+    pub dendrite_radius: f64,
+    pub axon_reach: f64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -64,6 +116,24 @@ pub struct Neuron {
     pub soma_radius: f64,
     pub dendrite_radius: f64,
     pub axon_length: f64,
+    // --- Developmental fields (0.7) ---
+    pub lifecycle: LifecycleState,
+    pub developmental_age: u64,
+    pub phase_age: u64,
+    pub birth_tick: u64,
+    pub settled_tick: Option<u64>,
+    pub target_position: Option<Position>,
+    pub original_target_position: Option<Position>,
+    pub migration_path: Option<MigrationPath>,
+    pub migration_progress: f64,
+    pub migration_distance: f64,
+    pub morphology_progress: f64,
+    pub cell_type_assigned: Option<CellType>,
+    pub electrically_eligible_from_tick: Option<u64>,
+    pub structurally_eligible_from_tick: Option<u64>,
+    pub developmental_origin: String,
+    pub mature_morphology: MorphologyProfile,
+    pub blocking_conditions: Vec<String>,
 }
 
 /// Deterministic tissue seed for the observatory cortex.
@@ -96,6 +166,11 @@ impl Neuron {
     }
 
     pub fn with_tissue(id: impl Into<String>, seed: TissueSeed) -> Self {
+        let mature = MorphologyProfile {
+            soma_radius: seed.soma_radius,
+            dendrite_radius: seed.dendrite_radius,
+            axon_reach: seed.axon_length,
+        };
         Self {
             id: id.into(),
             resting_potential_mv: -70.0,
@@ -114,15 +189,145 @@ impl Neuron {
             soma_radius: seed.soma_radius,
             dendrite_radius: seed.dendrite_radius,
             axon_length: seed.axon_length,
+            lifecycle: LifecycleState::Settled,
+            developmental_age: 0,
+            phase_age: 0,
+            birth_tick: 0,
+            settled_tick: Some(0),
+            target_position: None,
+            original_target_position: None,
+            migration_path: None,
+            migration_progress: 1.0,
+            migration_distance: 0.0,
+            morphology_progress: 1.0,
+            cell_type_assigned: Some(seed.cell_type),
+            electrically_eligible_from_tick: Some(0),
+            structurally_eligible_from_tick: Some(0),
+            developmental_origin: "initial_tissue".into(),
+            mature_morphology: mature,
+            blocking_conditions: Vec::new(),
         }
+    }
+
+    /// Test/demo helper: settled neuron with numeric id.
+    pub fn new_settled_demo(number: u32, cell_type: CellType, x: f64, y: f64, layer: u32) -> Self {
+        Self::with_tissue(
+            format!("NEURON-{number:03}"),
+            TissueSeed {
+                position: Position { x, y },
+                region: "Observatory Cortex",
+                layer,
+                cell_type,
+                dna_id: "DNA-DEMO",
+                soma_radius: 0.035,
+                dendrite_radius: 0.09,
+                axon_length: 0.22,
+            },
+        )
+    }
+
+    /// Birth a neural progenitor (permanent NEURON-NNN identity from birth).
+    pub fn progenitor_birth(number: u32, birth_tick: u64, position: Position) -> Self {
+        let mature = MorphologyProfile {
+            soma_radius: 0.034,
+            dendrite_radius: 0.088,
+            axon_reach: 0.24,
+        };
+        Self {
+            id: format!("NEURON-{number:03}"),
+            resting_potential_mv: -70.0,
+            membrane_potential_mv: -70.0,
+            threshold_mv: -55.0,
+            energy: 100.0,
+            fatigue: 0.0,
+            refractory_ticks: 0,
+            fired: false,
+            tick: birth_tick,
+            position,
+            region: "Observatory Cortex".into(),
+            layer: 1,
+            cell_type: CellType::Excitatory, // provisional until differentiation
+            dna_id: format!("DNA-{number:03}"),
+            soma_radius: 0.018,
+            dendrite_radius: 0.0,
+            axon_length: 0.0,
+            lifecycle: LifecycleState::Maturing,
+            developmental_age: 0,
+            phase_age: 0,
+            birth_tick,
+            settled_tick: None,
+            target_position: None,
+            original_target_position: None,
+            migration_path: None,
+            migration_progress: 0.0,
+            migration_distance: 0.0,
+            morphology_progress: 0.0,
+            cell_type_assigned: None,
+            electrically_eligible_from_tick: None,
+            structurally_eligible_from_tick: None,
+            developmental_origin: "neural_progenitor".into(),
+            mature_morphology: mature,
+            blocking_conditions: Vec::new(),
+        }
+    }
+
+    pub fn mature_morphology(&self) -> MorphologyProfile {
+        self.mature_morphology
+    }
+
+    pub fn apply_morphology(
+        &mut self,
+        soma_radius: f64,
+        dendrite_radius: f64,
+        axon_reach: f64,
+        morphology_progress: f64,
+    ) {
+        self.soma_radius = soma_radius;
+        self.dendrite_radius = dendrite_radius;
+        self.axon_length = axon_reach;
+        self.morphology_progress = morphology_progress.clamp(0.0, 1.0);
+    }
+
+    pub fn is_developing(&self) -> bool {
+        !matches!(
+            self.lifecycle,
+            LifecycleState::Settled | LifecycleState::Quiescent
+        )
+    }
+
+    pub fn is_electrically_eligible(&self, network_tick: u64) -> bool {
+        self.lifecycle == LifecycleState::Settled
+            && self
+                .electrically_eligible_from_tick
+                .map(|t| network_tick >= t)
+                .unwrap_or(false)
+    }
+
+    pub fn is_structurally_eligible(&self, network_tick: u64) -> bool {
+        self.lifecycle == LifecycleState::Settled
+            && self
+                .structurally_eligible_from_tick
+                .map(|t| network_tick >= t)
+                .unwrap_or(false)
     }
 
     /// Apply a synaptic or electrode signal.
     ///
     /// Positive amounts depolarize. Negative amounts hyperpolarize (inhibition).
     /// Zero is ignored. Electrode injection remains positive-only at the API.
+    /// Developing / electrically ineligible cells ignore signals.
     pub fn receive_signal(&mut self, amount_mv: f64) {
         if amount_mv == 0.0 {
+            return;
+        }
+        if self.lifecycle != LifecycleState::Settled {
+            return;
+        }
+        if let Some(from) = self.electrically_eligible_from_tick {
+            if self.tick < from {
+                return;
+            }
+        } else {
             return;
         }
 
@@ -132,9 +337,14 @@ impl Neuron {
 
     /// Advance this neuron by exactly one tick.
     ///
-    /// Returns a simple outcome label for event logging.
+    /// Developing and not-yet-eligible settled cells do not fire.
     pub fn step(&mut self) -> NeuronStepResult {
         self.tick = self.tick.saturating_add(1);
+
+        if !self.is_electrically_eligible(self.tick) {
+            self.fired = false;
+            return NeuronStepResult::Resting;
+        }
 
         if self.refractory_ticks > 0 {
             self.refractory_ticks -= 1;
@@ -218,6 +428,7 @@ mod tests {
         assert!(!neuron.fired);
         assert_eq!(neuron.tick, 0);
         assert_eq!(neuron.cell_type, CellType::Excitatory);
+        assert_eq!(neuron.lifecycle, LifecycleState::Settled);
     }
 
     #[test]
@@ -319,5 +530,21 @@ mod tests {
         assert_eq!(neuron.soma_radius, 0.032);
         assert_eq!(neuron.dendrite_radius, 0.085);
         assert_eq!(neuron.axon_length, 0.28);
+    }
+
+    #[test]
+    fn developing_cell_cannot_fire() {
+        let mut cell = Neuron::progenitor_birth(6, 30, Position { x: 0.5, y: 0.9 });
+        cell.membrane_potential_mv = -40.0;
+        let result = cell.step();
+        assert_eq!(result, NeuronStepResult::Resting);
+        assert!(!cell.fired);
+    }
+
+    #[test]
+    fn developing_cell_ignores_stimulation() {
+        let mut cell = Neuron::progenitor_birth(6, 30, Position { x: 0.5, y: 0.9 });
+        cell.receive_signal(20.0);
+        assert_eq!(cell.membrane_potential_mv, -70.0);
     }
 }
