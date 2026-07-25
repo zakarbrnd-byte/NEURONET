@@ -128,9 +128,9 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.8.1 Autonomous Observation Stabilization**
+**Shipped runtime:** **0.8.2 Adjustable Simulation Speed** (frontend) on backend **0.8.1**
 
-Sensory input enters through backend receptors. Continuous Run survives quiet ticks.
-Balanced calibration can birth synapses without early pruning collapse.
+Simulation speed only paces when Mission Control requests the next backend tick.
+It must never alter membrane math, schedules, or determinism.
 Do not implement real device sensors, homeostasis, or cognition unless explicitly asked.
 Next candidates: **0.8B Homeostatic Regulation** or **0.9 Embodied Sensory Surface** (neither started).

@@ -497,6 +497,7 @@ vi.mock("./services/neuralApi", () => {
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
       getHealth: vi.fn(async () => ({ status: "ok", version: "0.8.1", ageSeconds: 12 })),
+      // Backend remains 0.8.1 for this frontend-only speed patch.
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -531,6 +532,7 @@ describe("Mission Control page", () => {
       version: "0.8.1",
       ageSeconds: 12,
     });
+    window.localStorage.clear();
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
     vi.mocked(neuralApi.getEvents).mockResolvedValue([]);
     vi.mocked(neuralApi.injectSignal).mockImplementation(async (id: string, amountMv: number) => ({
@@ -552,7 +554,10 @@ describe("Mission Control page", () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Autonomous Observation Stabilization · Version 0.8.1",
+      "Adjustable Simulation Speed · Version 0.8.2",
+    );
+    expect(screen.getByTestId("backend-version-note")).toHaveTextContent(
+      "Frontend 0.8.2 · Backend 0.8.1",
     );
   });
 
@@ -624,7 +629,7 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.8.1")).toBeInTheDocument();
+    expect(within(header).getByText("0.8.2")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
   });
@@ -763,11 +768,11 @@ describe("Mission Control page", () => {
   });
 
 
-  it("shows Version 0.8.1 sensory marker and topology counters from backend", async () => {
+  it("shows Version 0.8.2 speed marker and topology counters from backend", async () => {
     const user = userEvent.setup();
     await renderConnectedApp();
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Autonomous Observation Stabilization · Version 0.8.1",
+      "Adjustable Simulation Speed · Version 0.8.2",
     );
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
@@ -1166,11 +1171,80 @@ describe("Mission Control page", () => {
     await user.click(screen.getByRole("button", { name: "Simulation controls" }));
     expect(screen.getByTestId("observer-status-panel")).toBeInTheDocument();
     const quickBar = screen.getByTestId("quick-action-bar");
+    await user.click(within(quickBar).getByTestId("speed-control-trigger"));
+    await user.click(screen.getByTestId("speed-option-max"));
     await user.click(within(quickBar).getByRole("button", { name: "Continuous run" }));
     await waitFor(() => expect(calls).toBeGreaterThanOrEqual(3), { timeout: 5000 });
     expect(screen.getByTestId("observer-sim-state")).toHaveTextContent("Running");
     await user.click(within(quickBar).getByRole("button", { name: "Pause sequence" }));
     expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused");
+  });
+
+  it("exposes speed presets with default 1× and persists selection", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    const trigger = screen.getByTestId("speed-control-trigger");
+    expect(trigger).toHaveAccessibleName(/Simulation speed 1×/);
+    expect(screen.getByTestId("speed-control-value")).toHaveTextContent("1×");
+    await user.click(trigger);
+    expect(screen.getByTestId("speed-control-menu")).toBeInTheDocument();
+    for (const id of ["0.5x", "1x", "2x", "5x", "10x", "max"]) {
+      expect(screen.getByTestId(`speed-option-${id}`)).toBeInTheDocument();
+    }
+    await user.click(screen.getByTestId("speed-option-10x"));
+    expect(screen.getByTestId("speed-control-value")).toHaveTextContent("10×");
+    expect(window.localStorage.getItem("neuronet.simulationSpeed")).toBe("10x");
+    expect(screen.getByTestId("mission-control")).toHaveAttribute("data-layout", "viewport-locked");
+  });
+
+  it("changes speed while running and keeps Max pausable with observer metrics", async () => {
+    const user = userEvent.setup();
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    let calls = 0;
+    vi.mocked(neuralApi.stepNetwork).mockImplementation(async () => {
+      concurrent += 1;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      concurrent -= 1;
+      calls += 1;
+      return {
+        ...stepTrace,
+        tick: snapshot.tick + calls,
+        firedNeuronIds: [],
+        propagations: [],
+        network: { ...snapshot, tick: snapshot.tick + calls },
+      };
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    const quickBar = screen.getByTestId("quick-action-bar");
+    await user.click(within(quickBar).getByTestId("speed-control-trigger"));
+    await user.click(screen.getByTestId("speed-option-max"));
+    await user.click(within(quickBar).getByRole("button", { name: "Continuous run" }));
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
+    // Change speed while running — must not reset.
+    await user.click(within(quickBar).getByTestId("speed-control-trigger"));
+    await user.click(screen.getByTestId("speed-option-5x"));
+    expect(screen.getByTestId("observer-selected-speed")).toHaveTextContent("5×");
+    expect(screen.getByTestId("observer-render-mode")).toHaveTextContent("Short");
+    expect(vi.mocked(neuralApi.resetNetwork)).not.toHaveBeenCalled();
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(4));
+    expect(maxConcurrent).toBe(1);
+    const pauseBtn = await within(quickBar).findByRole("button", { name: "Pause sequence" });
+    await user.click(pauseBtn);
+    await waitFor(() =>
+      expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused"),
+    );
+    expect(screen.getByTestId("observer-backend-latency")).not.toHaveTextContent("—");
+  });
+
+  it("reload restores speed but remains paused", async () => {
+    window.localStorage.setItem("neuronet.simulationSpeed", "2x");
+    await renderConnectedApp();
+    expect(screen.getByTestId("speed-control-value")).toHaveTextContent("2×");
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(vi.mocked(neuralApi.stepNetwork)).not.toHaveBeenCalled();
   });
 
   it("exposes Sensory display mode with backend receptors and distinct sensory paths", async () => {

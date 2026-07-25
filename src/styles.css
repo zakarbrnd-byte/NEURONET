@@ -338,6 +338,7 @@ body {
 /* ========== Quick actions ========== */
 
 .quick-actions {
+  position: relative;
   display: flex;
   gap: 8px;
   padding: 8px 12px 4px;
@@ -666,6 +667,13 @@ body {
   margin-top: 0;
 }
 
+.backend-version-note {
+  margin: 0;
+  padding: 0 12px 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 #observation-limit {
   display: block;
   width: 100%;
@@ -677,6 +685,101 @@ body {
   background: transparent;
   color: var(--text);
   font: inherit;
+}
+
+.speed-control {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 72px;
+}
+
+.speed-control-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.speed-control-trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.speed-control-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.speed-control-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.speed-control-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  min-width: 168px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel, #12151c);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 35%, transparent);
+}
+
+.speed-control:not(.is-compact) .speed-control-menu {
+  bottom: auto;
+  top: calc(100% + 6px);
+  left: 0;
+  transform: none;
+  width: 100%;
+}
+
+.speed-control-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.speed-control-option.is-selected,
+.speed-control-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-weight: 700;
+}
+
+.speed-control-option:hover,
+.speed-control-option:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
 }
 
 .segmented-item {

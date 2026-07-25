@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| **Current version** | **0.8.1 Autonomous Observation Stabilization** |
+| **Current version** | **0.8.2 Adjustable Simulation Speed** (frontend; backend 0.8.1) |
 | **Next** | **0.8B Homeostatic Regulation** or **0.9 Embodied Sensory Surface** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
@@ -40,7 +40,7 @@ Deterministic progenitor birth → settlement at demo scale.
 
 Experiment: [`docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md).
 
-### 0.8.1 Autonomous Observation Stabilization ✅ ← CURRENT
+### 0.8.1 Autonomous Observation Stabilization ✅
 
 | | |
 | --- | --- |
@@ -49,6 +49,16 @@ Experiment: [`docs/experiments/0.8_AUTONOMOUS_SENSORY_ENVIRONMENT.md`](docs/expe
 | **Observable outcome** | Pause reasons; Observer Status; synapse birth within 300 ticks under Balanced. |
 
 Experiment: [`docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md`](docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md).
+
+### 0.8.2 Adjustable Simulation Speed ✅ ← CURRENT
+
+| | |
+| --- | --- |
+| **Purpose** | User-controlled step pacing (0.5×–Max) without changing tick biology. |
+| **Backend** | Remains 0.8.1 — frontend-only control/observability. |
+| **Observable outcome** | Speed selector; actual ticks/s; latency; render modes; mid-run speed change. |
+
+Experiment: [`docs/experiments/0.8.2_ADJUSTABLE_SIMULATION_SPEED.md`](docs/experiments/0.8.2_ADJUSTABLE_SIMULATION_SPEED.md).
 
 ---
 
