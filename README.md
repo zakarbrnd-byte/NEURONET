@@ -64,8 +64,10 @@ http://127.0.0.1:3000
 Optional environment:
 
 ```bash
+PORT=3000
+# or
 NEURONET_PORT=3000
-NEURONET_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+NEURONET_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://zakarbrnd-byte.github.io
 ```
 
 ### 2. Frontend
@@ -107,19 +109,99 @@ npm run test:backend
 npm run build
 ```
 
-## GitHub Pages limitation
+## Public deployment (Render + GitHub Pages)
 
-GitHub Pages can host the React frontend, but **cannot run the Rust backend**.
+GitHub Pages hosts the React observatory. It **cannot** run the Rust backend.
 
-The public site:
+Selected backend host: **Render** (free web service, Docker blueprint in `render.yaml`).
+
+### How deployment works
+
+1. Render builds `backend/Dockerfile` and runs one persistent-ish free web service.
+2. That service exposes the existing Axum API over HTTPS.
+3. GitHub Pages builds the frontend with `VITE_API_BASE_URL` pointing at the Render URL.
+4. The browser calls the real backend. There is no frontend simulation fallback.
+
+Backend state is **in memory**. When Render restarts or the free service wakes from sleep, the network resets to the deterministic three-neuron starter state.
+
+### Deploy the backend on Render (phone-friendly)
+
+1. Open [https://render.com](https://render.com) and sign in with GitHub.
+2. Tap **New +** → **Blueprint**.
+3. Select the `NEURONET` repository.
+4. Apply the Blueprint (`render.yaml`).
+5. Wait until the `neuronet-backend` service is Live.
+6. Open the service URL and add `/api/health`.
+
+Example:
+
+```text
+https://neuronet-backend.onrender.com/api/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "ok",
+  "version": "0.4"
+}
+```
+
+Also check:
+
+```text
+https://YOUR-RENDER-URL/api/network
+```
+
+You should see three neurons and two connections.
+
+### Required environment variables
+
+Backend (set by `render.yaml` / Render):
+
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | Provided automatically by Render |
+| `NEURONET_CORS_ORIGINS` | Defaults in Blueprint to `https://zakarbrnd-byte.github.io` |
+| `RUST_LOG` | Optional logging level |
+
+Frontend build (GitHub Actions):
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE_URL` | Public HTTPS backend base URL, no trailing slash |
+
+### Set `VITE_API_BASE_URL` in GitHub
+
+1. Open the GitHub repo on your phone or computer.
+2. Go to **Settings → Secrets and variables → Actions → Variables**.
+3. Tap **New repository variable**.
+4. Name: `VITE_API_BASE_URL`
+5. Value: your Render URL, for example `https://neuronet-backend.onrender.com`
+6. Save.
+
+### Redeploy the frontend
+
+1. GitHub → **Actions**
+2. Open **Deploy to GitHub Pages**
+3. Tap **Run workflow** → **Run workflow**
+
+Or push any commit to `main`.
+
+After deploy, open:
 
 ```text
 https://zakarbrnd-byte.github.io/NEURONET/
 ```
 
-will show **Backend Unavailable** unless a public backend URL is configured at build time with `VITE_API_BASE_URL`.
+You should see **Backend Connected**, three neurons, two connections, working signal/tick controls, and backend events.
 
-The Pages deployment does **not** silently fall back to frontend simulation.
+### Test health quickly
+
+```bash
+curl https://YOUR-RENDER-URL/api/health
+```
 
 ## API overview
 

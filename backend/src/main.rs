@@ -13,14 +13,23 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
         .init();
 
-    let port: u16 = std::env::var("NEURONET_PORT")
+    // Cloud hosts (Render, Railway, Fly) provide PORT.
+    // Local development can use PORT or NEURONET_PORT; default is 3000.
+    let port: u16 = std::env::var("PORT")
+        .or_else(|_| std::env::var("NEURONET_PORT"))
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(3000);
 
+    // Explicit allow-list only. Do not use wildcard CORS in production.
     let origins = std::env::var("NEURONET_CORS_ORIGINS")
         .unwrap_or_else(|_| {
-            "http://localhost:5173,http://127.0.0.1:5173".to_string()
+            [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://zakarbrnd-byte.github.io",
+            ]
+            .join(",")
         })
         .split(',')
         .map(|s| s.trim().to_string())
