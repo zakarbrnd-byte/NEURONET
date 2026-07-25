@@ -1397,6 +1397,9 @@ mod tests {
     #[test]
     fn unused_synapses_decay_weight_health_stability_after_idle_window() {
         let mut network = NeuralNetwork::initial();
+        network
+            .set_environment_controls(Some(false), None, None, None, None)
+            .unwrap();
         // Quiet steps — no firings.
         for _ in 0..10 {
             network.step();
@@ -1913,6 +1916,10 @@ mod tests {
     #[test]
     fn idle_synapses_accumulate_pruning_evidence_after_grace() {
         let mut network = NeuralNetwork::initial();
+        // Disable environment so sensory activity does not refresh synapse usage.
+        network
+            .set_environment_controls(Some(false), None, None, None, None)
+            .unwrap();
         for _ in 0..40 {
             network.step();
         }

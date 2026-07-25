@@ -983,12 +983,13 @@ fn initial_patterns(config: &EnvironmentConfig) -> Vec<SensoryPattern> {
                 PatternStep {
                     offset_ticks: 0,
                     receptor_id: "RECEPTOR-A".into(),
-                    magnitude_mv: 12.0,
+                    // +16 crosses −70 → −55 threshold on NEURON-001 via SENSORY-002.
+                    magnitude_mv: 16.0,
                 },
                 PatternStep {
                     offset_ticks: 1,
                     receptor_id: "RECEPTOR-B".into(),
-                    magnitude_mv: 6.0,
+                    magnitude_mv: 8.0,
                 },
             ],
             repetition_interval_ticks: config.pattern_a_interval_ticks,
@@ -1006,12 +1007,13 @@ fn initial_patterns(config: &EnvironmentConfig) -> Vec<SensoryPattern> {
                 PatternStep {
                     offset_ticks: 0,
                     receptor_id: "RECEPTOR-B".into(),
-                    magnitude_mv: 12.0,
+                    // Full-strength B channel fires NEURON-002 via SENSORY-004.
+                    magnitude_mv: 16.0,
                 },
                 PatternStep {
                     offset_ticks: 2,
                     receptor_id: "RECEPTOR-A".into(),
-                    magnitude_mv: 4.0,
+                    magnitude_mv: 6.0,
                 },
             ],
             repetition_interval_ticks: config.pattern_b_interval_ticks,
