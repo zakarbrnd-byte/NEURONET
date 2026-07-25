@@ -20,6 +20,9 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: "candidates", label: "Candidates" },
   { id: "maturation", label: "Maturation" },
   { id: "pruning", label: "Pruning Risk" },
+  { id: "birth", label: "Synapse born" },
+  { id: "prune", label: "Synapse pruned" },
+  { id: "blocked", label: "Blocked" },
 ];
 
 function matchesFilter(
@@ -43,7 +46,19 @@ function matchesFilter(
   if (filter === "maturation") {
     return tickEvents.some((event) => event.type === "growth_candidate_maturing");
   }
-  return tickEvents.some((event) => event.type.startsWith("synapse_pruning_"));
+  if (filter === "pruning") {
+    return tickEvents.some((event) => event.type.startsWith("synapse_pruning_"));
+  }
+  if (filter === "birth") {
+    return tickEvents.some((event) => event.type === "synapse_created");
+  }
+  if (filter === "prune") {
+    return tickEvents.some((event) => event.type === "synapse_pruned");
+  }
+  return tickEvents.some(
+    (event) =>
+      event.type === "candidate_creation_blocked" || event.type === "pruning_blocked",
+  );
 }
 
 export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
@@ -63,7 +78,10 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
     if (
       filter === "candidates" ||
       filter === "maturation" ||
-      filter === "pruning"
+      filter === "pruning" ||
+      filter === "birth" ||
+      filter === "prune" ||
+      filter === "blocked"
     ) {
       const structural = events
         .filter((event) => {
@@ -73,7 +91,18 @@ export function TimelinePanel({ entries, events = [] }: TimelinePanelProps) {
           if (filter === "maturation") {
             return event.type === "growth_candidate_maturing";
           }
-          return event.type.startsWith("synapse_pruning_");
+          if (filter === "pruning") {
+            return event.type.startsWith("synapse_pruning_");
+          }
+          if (filter === "birth") {
+            return event.type === "synapse_created";
+          }
+          if (filter === "prune") {
+            return event.type === "synapse_pruned";
+          }
+          return (
+            event.type === "candidate_creation_blocked" || event.type === "pruning_blocked"
+          );
         })
         .slice(0, 20);
       return structural.map((event) => ({

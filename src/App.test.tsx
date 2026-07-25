@@ -72,6 +72,16 @@ function makeSynapse(
     protectedUntilTick: 10,
     pruningStatus: "protected" as const,
     pruningReasons: ["grace_period"],
+    structurallyProtected: id === "SYNAPSE-001" || id === "SYNAPSE-002",
+    protectionReason:
+      id === "SYNAPSE-001"
+        ? "backbone_input_pathway"
+        : id === "SYNAPSE-002"
+          ? "backbone_cascade"
+          : null,
+    originCandidateId: null,
+    eligibleFromTick: 0,
+    atRiskEvals: 0,
   };
 }
 
@@ -105,6 +115,11 @@ const snapshot = {
       lowHealthTicks: 3,
       protectedUntilTick: 10,
       pruningReasons: ["low_weight", "prolonged_inactivity"],
+      structurallyProtected: false,
+      protectionReason: null,
+      originCandidateId: null,
+      eligibleFromTick: 0,
+      atRiskEvals: 2,
     },
     makeSynapse("SYNAPSE-005", "NEURON-004", "NEURON-005", 8, "inhibitory"),
   ],
@@ -115,21 +130,32 @@ const snapshot = {
       maxCandidateDistance: 0.55,
       minimumCoactivationScore: 2,
       candidateMaturationTicks: 3,
+      creationReadinessThreshold: 0.9,
+      creationHoldEvals: 1,
       pruningWeightThreshold: 6,
       pruningHealthThreshold: 0.55,
       pruningInactivityTicks: 12,
       pruningGraceTicks: 10,
+      pruningCommitRiskThreshold: 0.7,
+      pruningLowWeightDuration: 4,
+      pruningLowHealthDuration: 4,
+      pruningSustainedAtRiskEvals: 2,
       maxCandidates: 8,
+      minTotalSynapses: 3,
+      maxTotalSynapses: 12,
+      maxOutgoingPerNeuron: 3,
+      maxIncomingPerNeuron: 3,
+      preserveDemoPath: true,
     },
     growthCandidates: [
       {
-        id: "CANDIDATE-NEURON-001-NEURON-005",
-        sourceNeuronId: "NEURON-001",
-        targetNeuronId: "NEURON-005",
+        id: "CANDIDATE-NEURON-002-NEURON-001",
+        sourceNeuronId: "NEURON-002",
+        targetNeuronId: "NEURON-001",
         proposedConnectionType: "excitatory" as const,
-        distance: 0.76,
-        coactivationScore: 3.5,
-        structuralCompatibility: 0.42,
+        distance: 0.2,
+        coactivationScore: 5.5,
+        structuralCompatibility: 0.7,
         readiness: 0.61,
         status: "eligible" as const,
         createdTick: 10,
@@ -142,6 +168,17 @@ const snapshot = {
     latestEvaluationTick: 15,
     candidateCount: 1,
     atRiskSynapseCount: 1,
+    topology: {
+      cellCount: 5,
+      synapseCount: 5,
+      candidateCount: 1,
+      atRiskSynapseCount: 1,
+      createdThisSession: 0,
+      prunedThisSession: 0,
+      maxSynapseCapacity: 12,
+      minSynapseFloor: 3,
+    },
+    history: [],
   },
 };
 
@@ -192,7 +229,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6C", ageSeconds: 12 })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6D", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -223,7 +260,7 @@ describe("Mission Control page", () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
     vi.mocked(neuralApi.getHealth).mockResolvedValue({
       status: "ok",
-      version: "0.6C",
+      version: "0.6D",
       ageSeconds: 12,
     });
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
@@ -245,7 +282,7 @@ describe("Mission Control page", () => {
   it("renders MissionControl as the sole app layout", async () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
-    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent("Version 0.6C");
+    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent("Version 0.6D");
   });
 
   it("opens Synapse Inspector when a connection is selected", async () => {
@@ -315,7 +352,7 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.6C")).toBeInTheDocument();
+    expect(within(header).getByText("0.6D")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
   });
@@ -331,7 +368,7 @@ describe("Mission Control page", () => {
       "development",
     );
     const candidate = screen.getByTestId(
-      "tissue-candidate-CANDIDATE-NEURON-001-NEURON-005",
+      "tissue-candidate-CANDIDATE-NEURON-002-NEURON-001",
     );
     expect(candidate).toBeInTheDocument();
     expect(candidate.querySelector(".tissue-candidate-path")).toHaveAttribute(
@@ -349,7 +386,7 @@ describe("Mission Control page", () => {
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
     await user.click(
-      screen.getByLabelText("Inspect growth candidate CANDIDATE-NEURON-001-NEURON-005"),
+      screen.getByLabelText("Inspect growth candidate CANDIDATE-NEURON-002-NEURON-001"),
     );
     expect(await screen.findByRole("dialog", { name: "Growth Candidate" })).toBeVisible();
     expect(screen.getByTestId("growth-candidate-panel")).toHaveTextContent("Readiness");
@@ -358,7 +395,7 @@ describe("Mission Control page", () => {
       "repeated coactivation",
     );
     expect(screen.getByTestId("candidate-observe-only")).toHaveTextContent(
-      "does not create synapses",
+      "backend alone may birth",
     );
     expect(screen.queryByRole("button", { name: /create synapse/i })).not.toBeInTheDocument();
   });
@@ -444,8 +481,147 @@ describe("Mission Control page", () => {
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
     expect(
-      screen.queryByTestId("tissue-candidate-CANDIDATE-NEURON-001-NEURON-005"),
+      screen.queryByTestId("tissue-candidate-CANDIDATE-NEURON-002-NEURON-001"),
     ).not.toBeInTheDocument();
+  });
+
+
+  it("shows Version 0.6D birth/pruning marker and topology counters from backend", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
+      "Synapse Birth and Pruning · Version 0.6D",
+    );
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("topology-summary")).toBeInTheDocument();
+    expect(screen.getByTestId("topology-synapse-count")).toHaveTextContent("5");
+    expect(screen.getByTestId("topology-created-count")).toHaveTextContent("0");
+  });
+
+  it("keeps candidates dashed until a confirmed backend birth appears as a real synapse", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    const candidate = screen.getByTestId("tissue-candidate-CANDIDATE-NEURON-002-NEURON-001");
+    expect(candidate.querySelector(".tissue-candidate-path")).toHaveAttribute("stroke-dasharray");
+    expect(screen.queryByTestId("tissue-synapse-SYNAPSE-0006")).not.toBeInTheDocument();
+
+    const bornSnapshot = {
+      ...snapshot,
+      synapses: [
+        ...snapshot.synapses,
+        {
+          ...makeSynapse("SYNAPSE-0006", "NEURON-002", "NEURON-001", 8, "excitatory"),
+          originCandidateId: "CANDIDATE-NEURON-002-NEURON-001",
+          eligibleFromTick: 16,
+          creationTick: 15,
+        },
+      ],
+      structural: {
+        ...snapshot.structural,
+        growthCandidates: [],
+        candidateCount: 0,
+        topology: {
+          ...snapshot.structural.topology,
+          synapseCount: 6,
+          candidateCount: 0,
+          createdThisSession: 1,
+        },
+      },
+    };
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue(bornSnapshot);
+    vi.mocked(neuralApi.stepNetwork).mockResolvedValue({
+      ...stepTrace,
+      network: bornSnapshot,
+      eventIds: ["evt-birth-1"],
+    });
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([
+      {
+        id: "evt-birth-1",
+        timestamp: "2026-01-01T00:00:00Z",
+        networkTick: 15,
+        type: "synapse_created",
+        synapseId: "SYNAPSE-0006",
+        candidateId: "CANDIDATE-NEURON-002-NEURON-001",
+        sourceNeuronId: "NEURON-002",
+        targetNeuronId: "NEURON-001",
+        connectionType: "excitatory",
+        reasonCodes: ["maturation_complete"],
+        synapseCountBefore: 5,
+        synapseCountAfter: 6,
+        message: "born",
+      },
+    ]);
+    await user.click(screen.getByRole("button", { name: "Step one tick" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tissue-synapse-SYNAPSE-0006")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("topology-created-count")).toHaveTextContent("1");
+    expect(
+      screen.queryByTestId("tissue-candidate-CANDIDATE-NEURON-002-NEURON-001"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("handles pruned selected synapse safely and shows structural birth timeline", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([
+      {
+        id: "evt-prune-1",
+        timestamp: "2026-01-01T00:00:00Z",
+        networkTick: 40,
+        type: "synapse_pruned",
+        synapseId: "SYNAPSE-005",
+        sourceNeuronId: "NEURON-004",
+        targetNeuronId: "NEURON-005",
+        reasonCodes: ["low_weight", "prolonged_inactivity"],
+        synapseCountBefore: 5,
+        synapseCountAfter: 4,
+        message: "pruned",
+      },
+      {
+        id: "evt-birth-2",
+        timestamp: "2026-01-01T00:00:01Z",
+        networkTick: 41,
+        type: "synapse_created",
+        synapseId: "SYNAPSE-0006",
+        sourceNeuronId: "NEURON-002",
+        targetNeuronId: "NEURON-001",
+        reasonCodes: ["maturation_complete"],
+        message: "born",
+      },
+    ]);
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByLabelText("Inspect synapse SYNAPSE-005"));
+    expect(await screen.findByTestId("synapse-panel")).toBeVisible();
+
+    const prunedNetwork = {
+      ...snapshot,
+      synapses: snapshot.synapses.filter((s) => s.id !== "SYNAPSE-005"),
+      structural: {
+        ...snapshot.structural,
+        topology: {
+          ...snapshot.structural.topology,
+          synapseCount: 4,
+          prunedThisSession: 1,
+        },
+      },
+    };
+    vi.mocked(neuralApi.stepNetwork).mockResolvedValue({
+      ...stepTrace,
+      network: prunedNetwork,
+      eventIds: ["evt-prune-1"],
+    });
+    await user.click(screen.getByRole("button", { name: "Step one tick" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("synapse-pruned-notice")).toHaveTextContent("pruned at Tick 40"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    await user.click(screen.getByTestId("timeline-filter-birth"));
+    expect(await screen.findByTestId("timeline-structural-item")).toHaveTextContent("Synapse born");
   });
 
   it("keeps the mission shell inside 100dvh and shows backend unavailable clearly", async () => {

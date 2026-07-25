@@ -9,6 +9,7 @@ import type {
   NeuronSnapshot,
   PropagationTrace,
   SynapseSnapshot,
+  TopologySummary,
 } from "../../types/neural";
 import { electricalState, shortNeuronId } from "../../types/neural";
 import type { TissueDisplayMode } from "../../types/ui";
@@ -32,6 +33,9 @@ interface TissueViewProps {
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
   flashedNeuronId: string | null;
+  bornSynapseIds?: string[];
+  pruningSynapseIds?: string[];
+  topology?: TopologySummary | null;
   onSelectNeuron: (neuronId: string) => void;
   onSelectSynapse?: (synapseId: string) => void;
   onSelectCandidate?: (candidateId: string) => void;
@@ -109,6 +113,9 @@ export function TissueView({
   interactionDisabled,
   pressingNeuronId,
   flashedNeuronId,
+  bornSynapseIds = [],
+  pruningSynapseIds = [],
+  topology = null,
   onSelectNeuron,
   onSelectSynapse,
   onSelectCandidate,
@@ -342,6 +349,8 @@ export function TissueView({
             (synapse.pruningStatus === "atRisk" || synapse.pruningRisk >= 0.55);
           const monitoring =
             showDevelopment && synapse.pruningStatus === "monitoring" && !atRisk;
+          const justBorn = bornSynapseIds.includes(synapse.id);
+          const pruningOut = pruningSynapseIds.includes(synapse.id);
           const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
 
           return (
@@ -349,9 +358,12 @@ export function TissueView({
               key={synapse.id}
               className={`tissue-axon-group ${selected ? "is-selected" : ""} ${strengthClass} ${
                 atRisk ? "is-pruning-risk" : ""
-              } ${monitoring ? "is-pruning-monitor" : ""}`}
+              } ${monitoring ? "is-pruning-monitor" : ""} ${
+                justBorn && !reducedMotion ? "is-synapse-born" : ""
+              } ${pruningOut && !reducedMotion ? "is-synapse-pruning" : ""}`}
               data-testid={`tissue-synapse-${synapse.id}`}
               data-pruning-status={synapse.pruningStatus}
+              data-born={justBorn ? "true" : "false"}
             >
               <path
                 d={d}
@@ -544,18 +556,54 @@ export function TissueView({
       </svg>
 
       {showDevelopment ? (
-        <ul className="tissue-dev-legend" data-testid="tissue-development-legend">
-          <li>
-            <span className="legend-swatch legend-solid" /> Solid path: existing synapse
-          </li>
-          <li>
-            <span className="legend-swatch legend-dashed" /> Dashed path: growth candidate
-          </li>
-          <li>
-            <span className="legend-swatch legend-warning">!</span> Warning marker: pruning risk
-          </li>
-          <li>No structural change occurs in Version 0.6C</li>
-        </ul>
+        <>
+          {topology ? (
+            <dl className="topology-summary" data-testid="topology-summary">
+              <div>
+                <dt>Cells</dt>
+                <dd>{topology.cellCount}</dd>
+              </div>
+              <div>
+                <dt>Synapses</dt>
+                <dd data-testid="topology-synapse-count">{topology.synapseCount}</dd>
+              </div>
+              <div>
+                <dt>Candidates</dt>
+                <dd>{topology.candidateCount}</dd>
+              </div>
+              <div>
+                <dt>At risk</dt>
+                <dd>{topology.atRiskSynapseCount}</dd>
+              </div>
+              <div>
+                <dt>Created</dt>
+                <dd data-testid="topology-created-count">{topology.createdThisSession}</dd>
+              </div>
+              <div>
+                <dt>Pruned</dt>
+                <dd data-testid="topology-pruned-count">{topology.prunedThisSession}</dd>
+              </div>
+              <div>
+                <dt>Capacity</dt>
+                <dd>
+                  {topology.synapseCount}/{topology.maxSynapseCapacity}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+          <ul className="tissue-dev-legend" data-testid="tissue-development-legend">
+            <li>
+              <span className="legend-swatch legend-solid" /> Solid path: existing synapse
+            </li>
+            <li>
+              <span className="legend-swatch legend-dashed" /> Dashed path: growth candidate
+            </li>
+            <li>
+              <span className="legend-swatch legend-warning">!</span> Warning marker: pruning risk
+            </li>
+            <li>Topology may change only after confirmed backend birth/pruning (0.6D)</li>
+          </ul>
+        </>
       ) : null}
     </div>
   );

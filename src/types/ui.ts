@@ -23,6 +23,9 @@ export type TimelineFilter =
   | "recovery"
   | "candidates"
   | "maturation"
-  | "pruning";
+  | "pruning"
+  | "birth"
+  | "prune"
+  | "blocked";
 
 export type ControlsCategory = "stimulus" | "time" | "structure" | "reset";

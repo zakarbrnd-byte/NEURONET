@@ -36,7 +36,7 @@ Always distinguish:
 | Living synapses (usage, health, stability, age) | Implemented (0.6B) |
 | Deterministic Hebbian weight change | Implemented (0.6B, approximation) |
 | Structural readiness / pruning risk observation | Implemented (0.6C, approximation) |
-| Synapse creation / deletion | Future work (0.6D+) |
+| Synapse creation / deletion (deterministic) | Implemented (0.6D, approximation) |
 | Body / sensors | Future work (0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |
 
@@ -120,9 +120,11 @@ It is **not** cortical tissue and **not** developmental morphogenesis.
 - Pruning-risk classification for existing synapses (grace-protected; no deletion).
 - Morphology reach uses normalized `axonLength` + `dendriteRadius` in the same space as positions.
 
-**Not implemented:** synapse creation, synapse deletion, axon outgrowth animation, neuron birth/death.
+**0.6D addition:** matured candidates may birth synapses; sustained at-risk evidence may prune unprotected synapses under topology limits. See [`experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
 
-Details: [`experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
+**Not implemented:** axon outgrowth morphogenesis, neuron birth/death, DNA mutation.
+
+Details (foundations): [`experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
 
 ---
 
@@ -145,9 +147,8 @@ It is **not** sensory transduction through receptors.
 | Milestone | Status / Intent |
 | --- | --- |
 | 0.6B Synaptic | Implemented — Hebbian / idle weight change on living synapses |
-| 0.6C Structural foundations | Implemented — observe candidates and pruning risk only |
-| 0.6D Structural growth | Future — create synapses from mature candidates |
-| Later pruning | Future — delete synapses from high pruning risk |
+| 0.6C Structural foundations | Implemented — observe candidates and pruning risk |
+| 0.6D Synapse birth and pruning | Implemented — deterministic create/delete under limits |
 
 Plasticity must remain backend-owned and Mission Control–observable.  
 Do not “learn” by silently editing UI state.

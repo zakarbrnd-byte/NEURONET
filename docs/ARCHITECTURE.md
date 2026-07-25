@@ -11,8 +11,8 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
 | [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md) | Model assumptions |
 | [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) | Contributor rules |
 
-**Shipped runtime target:** Version **0.6C Structural Plasticity Foundations**  
-(Observes growth candidates and pruning risk; does not create or delete synapses.)
+**Shipped runtime target:** Version **0.6D Synapse Birth and Pruning**  
+(Deterministic topology mutations via structural-commit phase.)
 
 ---
 
@@ -50,7 +50,7 @@ The Rust backend owns:
 | Membrane potential | Accumulation, threshold, firing decisions |
 | Tissue | Deterministic positions, region/layer/cell type |
 | Synaptic plasticity | Deterministic Hebbian / idle decay (0.6B) |
-| Structural plasticity | Growth candidates + pruning risk only (0.6C; no create/delete) |
+| Structural plasticity | Candidates, pruning risk, birth/prune commits (0.6D) |
 | Simulation | Discrete ticks, propagation, event logs, step traces |
 | Authority | All neural state mutations |
 

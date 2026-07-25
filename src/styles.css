@@ -1420,11 +1420,69 @@ body {
   margin-top: 8px;
 }
 
+.topology-summary {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.topology-summary > div {
+  display: flex;
+  gap: 4px;
+}
+
+.topology-summary dt {
+  font-weight: 600;
+}
+
+.topology-summary dd {
+  margin: 0;
+}
+
+.tissue-axon-group.is-synapse-born .tissue-axon {
+  animation: synapse-birth-grow 0.9s ease-out 1;
+}
+
+.tissue-axon-group.is-synapse-pruning .tissue-axon {
+  animation: synapse-prune-fade 0.8s ease-in 1 forwards;
+}
+
+@keyframes synapse-birth-grow {
+  0% {
+    stroke-dasharray: 2 8;
+    opacity: 0.2;
+  }
+  55% {
+    stroke-dasharray: 6 2;
+    opacity: 0.85;
+  }
+  100% {
+    stroke-dasharray: none;
+    opacity: 1;
+  }
+}
+
+@keyframes synapse-prune-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.05;
+    stroke-dasharray: 1.5 1.5;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .synapse-strengthening .network-link,
   .synapse-strengthening .tissue-axon,
   .synapse-weakening .network-link,
-  .synapse-weakening .tissue-axon {
+  .synapse-weakening .tissue-axon,
+  .tissue-axon-group.is-synapse-born .tissue-axon,
+  .tissue-axon-group.is-synapse-pruning .tissue-axon {
     animation: none;
   }
 }

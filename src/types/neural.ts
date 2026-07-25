@@ -36,7 +36,7 @@ export interface WeightHistoryEntry {
 export type PruningStatus = "stable" | "monitoring" | "atRisk" | "protected";
 export type CandidateStatus = "observing" | "eligible" | "maturing" | "blocked";
 
-/** Living synapse — first-class biological object (0.6B + pruning observation 0.6C). */
+/** Living synapse — first-class biological object (0.6B–0.6D). */
 export interface SynapseSnapshot {
   id: string;
   sourceNeuronId: string;
@@ -58,6 +58,11 @@ export interface SynapseSnapshot {
   protectedUntilTick: number;
   pruningStatus: PruningStatus;
   pruningReasons: string[];
+  structurallyProtected: boolean;
+  protectionReason: string | null;
+  originCandidateId: string | null;
+  eligibleFromTick: number;
+  atRiskEvals: number;
 }
 
 export interface StructuralConfigSummary {
@@ -66,14 +71,24 @@ export interface StructuralConfigSummary {
   maxCandidateDistance: number;
   minimumCoactivationScore: number;
   candidateMaturationTicks: number;
+  creationReadinessThreshold: number;
+  creationHoldEvals: number;
   pruningWeightThreshold: number;
   pruningHealthThreshold: number;
   pruningInactivityTicks: number;
   pruningGraceTicks: number;
+  pruningCommitRiskThreshold: number;
+  pruningLowWeightDuration: number;
+  pruningLowHealthDuration: number;
+  pruningSustainedAtRiskEvals: number;
   maxCandidates: number;
+  minTotalSynapses: number;
+  maxTotalSynapses: number;
+  maxOutgoingPerNeuron: number;
+  maxIncomingPerNeuron: number;
+  preserveDemoPath: boolean;
 }
 
-/** Prospective connection — observation only (0.6C does not create synapses). */
 export interface GrowthCandidate {
   id: string;
   sourceNeuronId: string;
@@ -91,12 +106,39 @@ export interface GrowthCandidate {
   blockingReasons: string[];
 }
 
+export interface TopologySummary {
+  cellCount: number;
+  synapseCount: number;
+  candidateCount: number;
+  atRiskSynapseCount: number;
+  createdThisSession: number;
+  prunedThisSession: number;
+  maxSynapseCapacity: number;
+  minSynapseFloor: number;
+}
+
+export interface StructuralHistoryEntry {
+  tick: number;
+  kind: string;
+  synapseId?: string | null;
+  candidateId?: string | null;
+  sourceNeuronId?: string | null;
+  targetNeuronId?: string | null;
+  connectionType?: SynapseType | null;
+  weight?: number | null;
+  reasonCodes: string[];
+  synapseCountBefore: number;
+  synapseCountAfter: number;
+}
+
 export interface StructuralSnapshot {
   config: StructuralConfigSummary;
   growthCandidates: GrowthCandidate[];
   latestEvaluationTick: number | null;
   candidateCount: number;
   atRiskSynapseCount: number;
+  topology: TopologySummary;
+  history: StructuralHistoryEntry[];
 }
 
 export interface TissueInfo {
@@ -146,6 +188,11 @@ export interface NetworkEvent {
   newStatus?: string;
   readinessOrRisk?: number;
   reasonCodes?: string[];
+  synapseId?: string;
+  candidateId?: string;
+  connectionType?: SynapseType;
+  synapseCountBefore?: number;
+  synapseCountAfter?: number;
   message: string;
 }
 
@@ -186,7 +233,12 @@ export function shortNeuronId(id: string): string {
 
 export function isStructuralEventType(type: string): boolean {
   return (
-    type.startsWith("growth_candidate_") || type.startsWith("synapse_pruning_")
+    type.startsWith("growth_candidate_") ||
+    type.startsWith("synapse_pruning_") ||
+    type === "synapse_created" ||
+    type === "synapse_pruned" ||
+    type === "candidate_creation_blocked" ||
+    type === "pruning_blocked"
   );
 }
 
@@ -208,6 +260,14 @@ export function structuralEventPlainSummary(event: NetworkEvent): string {
       return `Pruning risk increased for synapse ${source} → ${target}.`;
     case "synapse_pruning_risk_decreased":
       return `Pruning risk decreased for synapse ${source} → ${target}.`;
+    case "synapse_created":
+      return `Synapse born: ${source} → ${target}.`;
+    case "synapse_pruned":
+      return `Synapse pruned: ${source} → ${target}.`;
+    case "candidate_creation_blocked":
+      return `Synapse creation blocked for ${source} → ${target}.`;
+    case "pruning_blocked":
+      return `Pruning blocked for synapse ${source} → ${target}.`;
     default:
       return event.message;
   }

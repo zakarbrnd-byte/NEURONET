@@ -21,8 +21,8 @@ export function GrowthCandidatePanel({
   if (!candidate) {
     return (
       <p className="hint">
-        Tap a dashed growth-candidate path in Tissue Development mode to inspect prospective
-        structure. Observation only — no synapse is created in Version 0.6C.
+        Tap a dashed growth-candidate path in Tissue Development mode. Creation happens only
+        when the backend commits a matured candidate — never from this panel.
       </p>
     );
   }
@@ -112,7 +112,7 @@ export function GrowthCandidatePanel({
       </section>
 
       <p className="hint" data-testid="candidate-observe-only">
-        Observation only. Version 0.6C does not create synapses.
+        No manual create control. The backend alone may birth a synapse after maturation.
       </p>
     </div>
   );

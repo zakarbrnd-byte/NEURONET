@@ -136,7 +136,7 @@ export function ControlsPanel({
           >
             <h3 className="help-heading">Structural Plasticity</h3>
             <p className="hint">
-              Read-only observation. Version 0.6C does not create or delete synapses.
+              Read-only summary. Birth and pruning are backend-owned in Version 0.6D.
             </p>
             <dl className="status-list panel-metrics">
               <div className="status-row">
@@ -165,6 +165,25 @@ export function ControlsPanel({
                 <dt>At-risk synapses</dt>
                 <dd data-testid="structural-at-risk-count">
                   {structural?.atRiskSynapseCount ?? 0}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Created this session</dt>
+                <dd data-testid="structural-created-count">
+                  {structural?.topology.createdThisSession ?? 0}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Pruned this session</dt>
+                <dd data-testid="structural-pruned-count">
+                  {structural?.topology.prunedThisSession ?? 0}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Synapse capacity</dt>
+                <dd>
+                  {structural?.topology.synapseCount ?? 0}/
+                  {structural?.topology.maxSynapseCapacity ?? "—"}
                 </dd>
               </div>
             </dl>
@@ -232,8 +251,8 @@ export function ControlsPanel({
                 </div>
               </dl>
               <p className="hint">
-                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Structural Plasticity
-                Foundations · Version 0.6C
+                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Synapse Birth and
+                Pruning · Version 0.6D
               </p>
             </section>
           </>
