@@ -37,6 +37,7 @@ NEURONET/
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
+├── .github/workflows/deploy-pages.yml
 ├── README.md
 ├── ROADMAP.md
 ├── .gitignore
@@ -58,15 +59,27 @@ npm run dev
 Vite prints a local URL, usually:
 
 ```text
-http://localhost:5173
+http://localhost:5173/NEURONET/
 ```
 
 ## Open in Chrome
 
 1. Run `npm run dev`.
 2. Open Chrome.
-3. Go to `http://localhost:5173`.
-4. On a phone on the same network, use the Network URL Vite prints (for example `http://192.168.x.x:5173`), or any preview URL your host environment exposes.
+3. Go to `http://localhost:5173/NEURONET/`.
+4. On a phone on the same network, use the Network URL Vite prints, plus `/NEURONET/`.
+
+## GitHub Pages
+
+This project deploys from `main` with GitHub Actions (`.github/workflows/deploy-pages.yml`).
+
+After Pages is enabled for the repository (Settings → Pages → Source: **GitHub Actions**), the live Debug Board is:
+
+```text
+https://zakarbrnd-byte.github.io/NEURONET/
+```
+
+The Vite `base` path is set to `/NEURONET/` so asset URLs work on GitHub Pages.
 
 ## Build check
 
