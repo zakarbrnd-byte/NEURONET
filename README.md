@@ -5,41 +5,33 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.6C — Structural Plasticity Foundations** |
+| **Current version** | **0.6D — Synapse Birth and Pruning** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.6C Structural Plasticity Foundations
+## Current Version — 0.6D Synapse Birth and Pruning
 
-**Version 0.6C observes structural readiness and pruning risk.**  
-**It does not create or delete synapses.**
+**Version 0.6D allows deterministic topology change.**
 
-The backend evaluates:
+It still does not implement autonomous intelligence, body, memory, or realistic neurodevelopment.
 
-- which neuron pairs are plausible growth candidates
-- which existing synapses are stable, monitoring, or at risk
-- why those classifications were made (structured reason codes)
+The backend may:
 
-Tissue View adds a frontend-only display mode selector:
+- create a synapse from a fully matured growth candidate
+- prune an unprotected synapse after sustained pruning eligibility
 
-- **Activity** — firing and propagation emphasis
-- **Structure** — soma, dendritic fields, axons, synapse strength
-- **Development** — dashed growth candidates + pruning-risk markers
+All structural changes are backend-owned, slow, evidence-based, observable, and restored by reset. The frontend never forces create/delete.
 
-Mission Control never decides that a connection should grow or be pruned.
-
-**Not included:** synapse creation/deletion, axon geometry growth over time, neuron birth/death, DNA mutation, randomness, body, memory, cognition.
-
-See [`docs/experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md`](docs/experiments/0.6C_STRUCTURAL_PLASTICITY_FOUNDATIONS.md).
+See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
 
 ---
 
-## Prior: 0.6B Synaptic Plasticity
+## Prior: 0.6C Structural Plasticity Foundations
 
-Synapses remain first-class living objects (weight, usage, health, stability, age, Hebbian / idle adaptation). 0.6C adds observational structural state on top of that model.
+0.6C introduced growth candidates and pruning-risk observation. 0.6D commits those observations into topology mutations under explicit limits.
 
 ---
 
@@ -47,18 +39,17 @@ Synapses remain first-class living objects (weight, usage, health, stability, ag
 
 | View | Role |
 | --- | --- |
-| **Network View** | Schematic graph. Tap a neuron or a synapse. Stroke thickness follows weight. |
-| **Tissue View** | Fixed backend positions, morphology, E/I endings, Development candidates. |
+| **Network View** | Schematic graph. Tap neuron or synapse. |
+| **Tissue View** | Positions, morphology, Development candidates, birth/prune transitions. |
 
-Tap a connection/axon → **Synapse Inspector** (includes Development / pruning observation).  
-Tap a dashed candidate → **Growth Candidate Inspector** (observation only).
+Tissue Development mode shows topology counters from the backend snapshot.
 
 ---
 
 ## Architecture
 
-- The **Rust backend** owns neurons, living synapses, tissue geometry, synaptic plasticity, **structural development state**, ticks, and events.
-- **Mission Control** observes snapshots and step traces only.
+- The **Rust backend** owns neurons, living synapses, plasticity, structural evaluation, and mutation commits.
+- **Mission Control** observes snapshots/events and never invents topology.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -66,11 +57,11 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Observatory tissue
 
-Five neurons with living synapses `SYNAPSE-001`…`SYNAPSE-005`.  
-NEURON-004 / SYNAPSE-005 are inhibitory.
+Five initial synapses `SYNAPSE-001`…`SYNAPSE-005`.  
+`SYNAPSE-001` and `SYNAPSE-002` are structurally protected backbone pathways.  
+Dynamic IDs continue from `SYNAPSE-0006`.
 
-Reset restores identical tissue and baseline synapse state, clears growth candidates and pair history, and restores stable/protected pruning observation defaults.  
-Age of the tissue process continues across reset.
+Reset restores the original five-synapse tissue and ID counter.
 
 ## Run locally
 
@@ -102,5 +93,5 @@ npm test
 | Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
 | Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-Verification marker: **Structural Plasticity Foundations · Version 0.6C**  
-Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.6C
+Verification marker: **Synapse Birth and Pruning · Version 0.6D**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.6D

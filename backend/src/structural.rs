@@ -1,14 +1,20 @@
-//! Structural plasticity foundations (Version 0.6C).
+//! Structural plasticity (Versions 0.6C–0.6D).
 //!
-//! Observes where future growth or pruning *could* occur.
-//! Does NOT create or delete synapses.
+//! 0.6C: observe growth candidates and pruning risk.
+//! 0.6D: deterministic synapse birth and pruning via a structural-commit phase.
 //!
-//! All rules are deterministic educational approximations — not biological growth.
+//! Educational developmental approximation — not biological growth.
 
 use serde::Serialize;
 
 use crate::neuron::{CellType, Neuron};
 use crate::synapse::{PruningStatus, Synapse, SynapseType};
+
+/// Initial weight for newly born synapses (mV).
+pub const BIRTH_INITIAL_WEIGHT: f64 = 8.0;
+pub const MAX_STRUCTURAL_HISTORY: usize = 48;
+pub const DEMO_SOURCE_NEURON: &str = "NEURON-001";
+pub const DEMO_TARGET_NEURON: &str = "NEURON-005";
 
 /// Backend-owned structural plasticity configuration.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -21,12 +27,28 @@ pub struct StructuralPlasticityConfig {
     pub minimum_coactivation_score: f64,
     /// Consecutive evaluations above threshold before `maturing`.
     pub candidate_maturation_ticks: u64,
+    /// Readiness required before a maturing candidate may birth a synapse.
+    pub creation_readiness_threshold: f64,
+    /// Extra maturing evaluations required after first entering `maturing`.
+    pub creation_hold_evals: u64,
     pub pruning_weight_threshold: f64,
     pub pruning_health_threshold: f64,
     pub pruning_inactivity_ticks: u64,
     /// Synapses younger than this (age) stay `protected`.
     pub pruning_grace_ticks: u64,
+    /// Risk required before a prune mutation may be planned.
+    pub pruning_commit_risk_threshold: f64,
+    pub pruning_low_weight_duration: u64,
+    pub pruning_low_health_duration: u64,
+    /// Consecutive at-risk evaluations required before prune commit.
+    pub pruning_sustained_at_risk_evals: u64,
     pub max_candidates: usize,
+    pub min_total_synapses: usize,
+    pub max_total_synapses: usize,
+    pub max_outgoing_per_neuron: usize,
+    pub max_incoming_per_neuron: usize,
+    /// Preserve at least one directed path from demo input → output neuron.
+    pub preserve_demo_path: bool,
 }
 
 impl Default for StructuralPlasticityConfig {
@@ -37,11 +59,22 @@ impl Default for StructuralPlasticityConfig {
             max_candidate_distance: 0.55,
             minimum_coactivation_score: 2.0,
             candidate_maturation_ticks: 3,
+            creation_readiness_threshold: 0.90,
+            creation_hold_evals: 1,
             pruning_weight_threshold: 6.0,
             pruning_health_threshold: 0.55,
             pruning_inactivity_ticks: 12,
             pruning_grace_ticks: 10,
+            pruning_commit_risk_threshold: 0.70,
+            pruning_low_weight_duration: 4,
+            pruning_low_health_duration: 4,
+            pruning_sustained_at_risk_evals: 2,
             max_candidates: 8,
+            min_total_synapses: 3,
+            max_total_synapses: 12,
+            max_outgoing_per_neuron: 3,
+            max_incoming_per_neuron: 3,
+            preserve_demo_path: true,
         }
     }
 }
@@ -94,11 +127,22 @@ pub struct StructuralConfigSummary {
     pub max_candidate_distance: f64,
     pub minimum_coactivation_score: f64,
     pub candidate_maturation_ticks: u64,
+    pub creation_readiness_threshold: f64,
+    pub creation_hold_evals: u64,
     pub pruning_weight_threshold: f64,
     pub pruning_health_threshold: f64,
     pub pruning_inactivity_ticks: u64,
     pub pruning_grace_ticks: u64,
+    pub pruning_commit_risk_threshold: f64,
+    pub pruning_low_weight_duration: u64,
+    pub pruning_low_health_duration: u64,
+    pub pruning_sustained_at_risk_evals: u64,
     pub max_candidates: usize,
+    pub min_total_synapses: usize,
+    pub max_total_synapses: usize,
+    pub max_outgoing_per_neuron: usize,
+    pub max_incoming_per_neuron: usize,
+    pub preserve_demo_path: bool,
 }
 
 impl From<&StructuralPlasticityConfig> for StructuralConfigSummary {
@@ -109,13 +153,53 @@ impl From<&StructuralPlasticityConfig> for StructuralConfigSummary {
             max_candidate_distance: config.max_candidate_distance,
             minimum_coactivation_score: config.minimum_coactivation_score,
             candidate_maturation_ticks: config.candidate_maturation_ticks,
+            creation_readiness_threshold: config.creation_readiness_threshold,
+            creation_hold_evals: config.creation_hold_evals,
             pruning_weight_threshold: config.pruning_weight_threshold,
             pruning_health_threshold: config.pruning_health_threshold,
             pruning_inactivity_ticks: config.pruning_inactivity_ticks,
             pruning_grace_ticks: config.pruning_grace_ticks,
+            pruning_commit_risk_threshold: config.pruning_commit_risk_threshold,
+            pruning_low_weight_duration: config.pruning_low_weight_duration,
+            pruning_low_health_duration: config.pruning_low_health_duration,
+            pruning_sustained_at_risk_evals: config.pruning_sustained_at_risk_evals,
             max_candidates: config.max_candidates,
+            min_total_synapses: config.min_total_synapses,
+            max_total_synapses: config.max_total_synapses,
+            max_outgoing_per_neuron: config.max_outgoing_per_neuron,
+            max_incoming_per_neuron: config.max_incoming_per_neuron,
+            preserve_demo_path: config.preserve_demo_path,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopologySummary {
+    pub cell_count: usize,
+    pub synapse_count: usize,
+    pub candidate_count: usize,
+    pub at_risk_synapse_count: usize,
+    pub created_this_session: u64,
+    pub pruned_this_session: u64,
+    pub max_synapse_capacity: usize,
+    pub min_synapse_floor: usize,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StructuralHistoryEntry {
+    pub tick: u64,
+    pub kind: String,
+    pub synapse_id: Option<String>,
+    pub candidate_id: Option<String>,
+    pub source_neuron_id: Option<String>,
+    pub target_neuron_id: Option<String>,
+    pub connection_type: Option<SynapseType>,
+    pub weight: Option<f64>,
+    pub reason_codes: Vec<String>,
+    pub synapse_count_before: usize,
+    pub synapse_count_after: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -126,6 +210,8 @@ pub struct StructuralSnapshot {
     pub latest_evaluation_tick: Option<u64>,
     pub candidate_count: usize,
     pub at_risk_synapse_count: usize,
+    pub topology: TopologySummary,
+    pub history: Vec<StructuralHistoryEntry>,
 }
 
 /// Discrete coactivation rule (documented):
@@ -241,7 +327,7 @@ fn readiness_from_evidence(coactivation: f64, compatibility: f64, min_score: f64
     (0.55 + 0.45 * coact_norm * compatibility).clamp(0.0, 1.0)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructuralEvent {
     pub event_type: &'static str,
     pub entity_id: String,
@@ -479,13 +565,36 @@ pub fn evaluate_pruning_risk(
         };
         synapse.inactivity_ticks = inactivity;
 
+        if synapse.structurally_protected {
+            synapse.pruning_status = PruningStatus::Protected;
+            synapse.pruning_risk = 0.0;
+            synapse.pruning_reasons = vec!["structurally_protected"];
+            synapse.at_risk_evals = 0;
+            if previous != PruningStatus::Protected {
+                events.push(StructuralEvent {
+                    event_type: "synapse_pruning_monitored",
+                    entity_id: synapse.id.clone(),
+                    source_neuron_id: Some(synapse.source_neuron_id.clone()),
+                    target_neuron_id: Some(synapse.target_neuron_id.clone()),
+                    previous_status: Some(format!("{:?}", previous).to_ascii_lowercase()),
+                    new_status: Some("protected".into()),
+                    metric: Some(0.0),
+                    reason_codes: vec!["structurally_protected"],
+                    message: format!("{} structurally protected", synapse.id),
+                });
+            }
+            continue;
+        }
+
         if synapse.age < config.pruning_grace_ticks {
-            synapse.protected_until_tick = config.pruning_grace_ticks;
+            synapse.protected_until_tick =
+                tick + config.pruning_grace_ticks.saturating_sub(synapse.age);
             synapse.pruning_status = PruningStatus::Protected;
             synapse.pruning_risk = 0.0;
             synapse.pruning_reasons = vec!["grace_period"];
             synapse.low_weight_ticks = 0;
             synapse.low_health_ticks = 0;
+            synapse.at_risk_evals = 0;
             if previous != PruningStatus::Protected {
                 events.push(StructuralEvent {
                     event_type: "synapse_pruning_monitored",
@@ -546,6 +655,11 @@ pub fn evaluate_pruning_risk(
         } else {
             PruningStatus::Stable
         };
+        if status == PruningStatus::AtRisk {
+            synapse.at_risk_evals = synapse.at_risk_evals.saturating_add(1);
+        } else {
+            synapse.at_risk_evals = 0;
+        }
         synapse.pruning_status = status;
 
         let should_emit = previous != status
@@ -592,6 +706,353 @@ fn risk_increased(previous: PruningStatus, next: PruningStatus) -> bool {
             | (Protected, Monitoring)
             | (Protected, AtRisk)
     )
+}
+
+#[derive(Debug, Clone)]
+pub struct PlannedBirth {
+    pub candidate_id: String,
+    pub synapse: Synapse,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlannedPrune {
+    pub synapse_id: String,
+    pub source_neuron_id: String,
+    pub target_neuron_id: String,
+    pub synapse_type: SynapseType,
+    pub final_weight: f64,
+    pub reason_codes: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PlannedMutations {
+    pub births: Vec<PlannedBirth>,
+    pub prunes: Vec<PlannedPrune>,
+    pub events: Vec<StructuralEvent>,
+    pub next_synapse_number: u64,
+}
+
+pub fn format_synapse_id(number: u64) -> String {
+    format!("SYNAPSE-{number:04}")
+}
+
+fn count_outgoing(synapses: &[Synapse], neuron_id: &str) -> usize {
+    synapses
+        .iter()
+        .filter(|s| s.source_neuron_id == neuron_id)
+        .count()
+}
+
+fn count_incoming(synapses: &[Synapse], neuron_id: &str) -> usize {
+    synapses
+        .iter()
+        .filter(|s| s.target_neuron_id == neuron_id)
+        .count()
+}
+
+/// True if a directed path exists from `start` to `goal` using `synapses`.
+pub fn has_directed_path(synapses: &[Synapse], start: &str, goal: &str) -> bool {
+    if start == goal {
+        return true;
+    }
+    let mut stack = vec![start.to_string()];
+    let mut seen = std::collections::HashSet::new();
+    while let Some(node) = stack.pop() {
+        if !seen.insert(node.clone()) {
+            continue;
+        }
+        for synapse in synapses.iter().filter(|s| s.source_neuron_id == node) {
+            if synapse.target_neuron_id == goal {
+                return true;
+            }
+            stack.push(synapse.target_neuron_id.clone());
+        }
+    }
+    false
+}
+
+fn birth_block_reasons(
+    config: &StructuralPlasticityConfig,
+    neurons: &[Neuron],
+    synapses: &[Synapse],
+    candidate: &GrowthCandidate,
+    pending_births: usize,
+) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if candidate.status != CandidateStatus::Maturing {
+        reasons.push("insufficient_maturation");
+    }
+    if candidate.readiness < config.creation_readiness_threshold {
+        reasons.push("insufficient_readiness");
+    }
+    let required_maturation = config
+        .candidate_maturation_ticks
+        .saturating_add(config.creation_hold_evals);
+    if candidate.maturation_ticks < required_maturation {
+        reasons.push("insufficient_maturation");
+    }
+    if candidate.source_neuron_id == candidate.target_neuron_id {
+        reasons.push("self_connection");
+    }
+    if synapse_exists(
+        synapses,
+        &candidate.source_neuron_id,
+        &candidate.target_neuron_id,
+    ) {
+        reasons.push("duplicate_connection");
+    }
+    let Some(source) = neurons.iter().find(|n| n.id == candidate.source_neuron_id) else {
+        reasons.push("missing_neuron");
+        return reasons;
+    };
+    let Some(target) = neurons.iter().find(|n| n.id == candidate.target_neuron_id) else {
+        reasons.push("missing_neuron");
+        return reasons;
+    };
+    let distance = normalized_distance(source, target);
+    if distance > config.max_candidate_distance
+        || !within_structural_reach(source, target, distance)
+    {
+        reasons.push("outside_structural_reach");
+    }
+    if synapses.len() + pending_births >= config.max_total_synapses {
+        reasons.push("max_total_synapses");
+    }
+    if count_outgoing(synapses, &candidate.source_neuron_id) >= config.max_outgoing_per_neuron {
+        reasons.push("max_outgoing");
+    }
+    if count_incoming(synapses, &candidate.target_neuron_id) >= config.max_incoming_per_neuron {
+        reasons.push("max_incoming");
+    }
+    reasons.sort();
+    reasons.dedup();
+    reasons
+}
+
+fn prune_block_reasons(
+    config: &StructuralPlasticityConfig,
+    synapse: &Synapse,
+    synapses: &[Synapse],
+    pending_prunes: usize,
+) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if synapse.structurally_protected {
+        reasons.push("structurally_protected");
+    }
+    if synapse.age < config.pruning_grace_ticks {
+        reasons.push("grace_period");
+    }
+    if synapse.pruning_status != PruningStatus::AtRisk {
+        reasons.push("not_at_risk");
+    }
+    if synapse.pruning_risk < config.pruning_commit_risk_threshold {
+        reasons.push("insufficient_risk");
+    }
+    if synapse.inactivity_ticks < config.pruning_inactivity_ticks {
+        reasons.push("insufficient_inactivity");
+    }
+    if synapse.low_weight_ticks < config.pruning_low_weight_duration {
+        reasons.push("insufficient_low_weight_duration");
+    }
+    if synapse.low_health_ticks < config.pruning_low_health_duration {
+        reasons.push("insufficient_low_health_duration");
+    }
+    if synapse.at_risk_evals < config.pruning_sustained_at_risk_evals {
+        reasons.push("insufficient_sustained_evidence");
+    }
+    let remaining = synapses.len().saturating_sub(pending_prunes + 1);
+    if remaining < config.min_total_synapses {
+        reasons.push("min_total_synapses");
+    }
+    if config.preserve_demo_path {
+        let projected: Vec<Synapse> = synapses
+            .iter()
+            .filter(|s| s.id != synapse.id)
+            .cloned()
+            .collect();
+        // Also exclude already-planned prunes by id via pending_prunes count alone is insufficient;
+        // caller passes projected synapses when validating sequentially.
+        if !has_directed_path(&projected, DEMO_SOURCE_NEURON, DEMO_TARGET_NEURON) {
+            reasons.push("demo_path_required");
+        }
+    }
+    reasons
+}
+
+/// Plan births then prunes. Does not mutate synapse/candidate vectors.
+/// Births and prunes are sorted by stable IDs before return.
+pub fn plan_structural_mutations(
+    config: &StructuralPlasticityConfig,
+    neurons: &[Neuron],
+    synapses: &[Synapse],
+    candidates: &[GrowthCandidate],
+    tick: u64,
+    next_synapse_number: u64,
+) -> PlannedMutations {
+    let mut planned = PlannedMutations {
+        next_synapse_number,
+        ..PlannedMutations::default()
+    };
+    if !config.enabled {
+        return planned;
+    }
+
+    let mut sorted_candidates = candidates.to_vec();
+    sorted_candidates.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let mut provisional = synapses.to_vec();
+    let mut number = next_synapse_number;
+
+    for candidate in &sorted_candidates {
+        let near_ready = candidate.status == CandidateStatus::Maturing
+            || candidate.readiness >= config.creation_readiness_threshold * 0.85;
+        if !near_ready {
+            continue;
+        }
+        let blocks = birth_block_reasons(config, neurons, &provisional, candidate, 0);
+        if !blocks.is_empty() {
+            if candidate.status == CandidateStatus::Maturing {
+                planned.events.push(StructuralEvent {
+                    event_type: "candidate_creation_blocked",
+                    entity_id: candidate.id.clone(),
+                    source_neuron_id: Some(candidate.source_neuron_id.clone()),
+                    target_neuron_id: Some(candidate.target_neuron_id.clone()),
+                    previous_status: Some(candidate.status_label().to_string()),
+                    new_status: Some("blocked".into()),
+                    metric: Some(candidate.readiness),
+                    reason_codes: blocks,
+                    message: format!(
+                        "Creation blocked for {} → {}",
+                        candidate.source_neuron_id, candidate.target_neuron_id
+                    ),
+                });
+            }
+            continue;
+        }
+
+        let synapse_id = format_synapse_id(number);
+        number = number.saturating_add(1);
+        let synapse = Synapse::new_unchecked_for_birth(
+            synapse_id,
+            &candidate.source_neuron_id,
+            &candidate.target_neuron_id,
+            BIRTH_INITIAL_WEIGHT,
+            candidate.proposed_connection_type,
+            tick,
+            &candidate.id,
+            tick.saturating_add(1),
+        );
+        provisional.push(synapse.clone());
+        planned.births.push(PlannedBirth {
+            candidate_id: candidate.id.clone(),
+            synapse,
+        });
+    }
+
+    planned
+        .births
+        .sort_by(|a, b| a.synapse.id.cmp(&b.synapse.id));
+    planned.next_synapse_number = number;
+
+    let mut sorted_synapses = provisional.clone();
+    sorted_synapses.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut remaining = provisional;
+
+    for synapse in &sorted_synapses {
+        if synapse.structurally_protected || synapse.pruning_status != PruningStatus::AtRisk {
+            continue;
+        }
+        // Validate against remaining after prior planned prunes in this phase.
+        let blocks = {
+            let mut reasons = prune_block_reasons(config, synapse, &remaining, 0);
+            // Re-check demo path on remaining-without-this-synapse
+            if config.preserve_demo_path && !reasons.iter().any(|r| *r == "demo_path_required") {
+                let projected: Vec<Synapse> = remaining
+                    .iter()
+                    .filter(|s| s.id != synapse.id)
+                    .cloned()
+                    .collect();
+                if !has_directed_path(&projected, DEMO_SOURCE_NEURON, DEMO_TARGET_NEURON) {
+                    reasons.push("demo_path_required");
+                }
+            }
+            reasons.sort();
+            reasons.dedup();
+            reasons
+        };
+
+        if !blocks.is_empty() {
+            if synapse.at_risk_evals > 0 {
+                planned.events.push(StructuralEvent {
+                    event_type: "pruning_blocked",
+                    entity_id: synapse.id.clone(),
+                    source_neuron_id: Some(synapse.source_neuron_id.clone()),
+                    target_neuron_id: Some(synapse.target_neuron_id.clone()),
+                    previous_status: Some(
+                        format!("{:?}", synapse.pruning_status).to_ascii_lowercase(),
+                    ),
+                    new_status: Some("at_risk".into()),
+                    metric: Some(synapse.pruning_risk),
+                    reason_codes: blocks,
+                    message: format!("Pruning blocked for {}", synapse.id),
+                });
+            }
+            continue;
+        }
+
+        remaining.retain(|s| s.id != synapse.id);
+        planned.prunes.push(PlannedPrune {
+            synapse_id: synapse.id.clone(),
+            source_neuron_id: synapse.source_neuron_id.clone(),
+            target_neuron_id: synapse.target_neuron_id.clone(),
+            synapse_type: synapse.synapse_type,
+            final_weight: synapse.weight,
+            reason_codes: synapse.pruning_reasons.clone(),
+        });
+    }
+
+    planned
+        .prunes
+        .sort_by(|a, b| a.synapse_id.cmp(&b.synapse_id));
+    planned
+}
+
+impl GrowthCandidate {
+    pub fn status_label(&self) -> &'static str {
+        match self.status {
+            CandidateStatus::Observing => "observing",
+            CandidateStatus::Eligible => "eligible",
+            CandidateStatus::Maturing => "maturing",
+            CandidateStatus::Blocked => "blocked",
+        }
+    }
+}
+
+impl Synapse {
+    /// Internal birth helper used by structural commit (already validated).
+    pub fn new_unchecked_for_birth(
+        id: impl Into<String>,
+        source: &str,
+        target: &str,
+        weight: f64,
+        synapse_type: SynapseType,
+        creation_tick: u64,
+        origin_candidate_id: &str,
+        eligible_from_tick: u64,
+    ) -> Self {
+        let mut synapse = match synapse_type {
+            SynapseType::Excitatory => {
+                Synapse::excitatory(id, source, target, weight, creation_tick).expect("validated")
+            }
+            SynapseType::Inhibitory => {
+                Synapse::inhibitory(id, source, target, weight, creation_tick).expect("validated")
+            }
+        };
+        synapse.origin_candidate_id = Some(origin_candidate_id.to_string());
+        synapse.eligible_from_tick = eligible_from_tick;
+        synapse.protected_until_tick = creation_tick.saturating_add(10);
+        synapse
+    }
 }
 
 #[cfg(test)]

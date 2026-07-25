@@ -3,6 +3,8 @@ import { shortNeuronId } from "../../types/neural";
 
 interface SynapsePanelProps {
   synapse: SynapseSnapshot | null;
+  prunedNotice?: string | null;
+  maturationTicksRequired?: number;
 }
 
 function pct(value: number): string {
@@ -13,12 +15,23 @@ function shortSynapseId(id: string): string {
   return id.replace("SYNAPSE-", "S-").replace("CONNECTION-", "C-");
 }
 
-export function SynapsePanel({ synapse }: SynapsePanelProps) {
+export function SynapsePanel({
+  synapse,
+  prunedNotice = null,
+}: SynapsePanelProps) {
   if (!synapse) {
     return (
-      <p className="hint">
-        Tap a connection (axon) on Network or Tissue View to inspect a living synapse.
-      </p>
+      <div data-testid="synapse-panel-empty">
+        {prunedNotice ? (
+          <p className="hint" data-testid="synapse-pruned-notice" role="status">
+            {prunedNotice}
+          </p>
+        ) : (
+          <p className="hint">
+            Tap a connection (axon) on Network or Tissue View to inspect a living synapse.
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -122,8 +135,29 @@ export function SynapsePanel({ synapse }: SynapsePanelProps) {
         data-testid="synapse-development-section"
       >
         <h3 className="help-heading">Development</h3>
-        <p className="hint">Pruning risk is observed only — synapses are not deleted in 0.6C.</p>
         <dl className="status-list panel-metrics">
+          <div className="status-row">
+            <dt>Created tick</dt>
+            <dd>Tick {synapse.creationTick}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Origin candidate</dt>
+            <dd data-testid="synapse-origin-candidate">
+              {synapse.originCandidateId ?? "Initial tissue"}
+            </dd>
+          </div>
+          <div className="status-row">
+            <dt>Eligible from</dt>
+            <dd>Tick {synapse.eligibleFromTick}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Structural protection</dt>
+            <dd data-testid="synapse-structural-protection">
+              {synapse.structurallyProtected
+                ? synapse.protectionReason?.replaceAll("_", " ") ?? "protected"
+                : "none"}
+            </dd>
+          </div>
           <div className="status-row">
             <dt>Pruning status</dt>
             <dd className="capitalize" data-testid="synapse-pruning-status">
@@ -133,6 +167,10 @@ export function SynapsePanel({ synapse }: SynapsePanelProps) {
           <div className="status-row">
             <dt>Pruning risk</dt>
             <dd data-testid="synapse-pruning-risk">{pct(synapse.pruningRisk)}</dd>
+          </div>
+          <div className="status-row">
+            <dt>At-risk evals</dt>
+            <dd>{synapse.atRiskEvals}</dd>
           </div>
           <div className="status-row">
             <dt>Inactivity</dt>

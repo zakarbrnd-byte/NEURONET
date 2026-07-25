@@ -1,4 +1,4 @@
-//! Living synapse model (Version 0.6B).
+//! Living synapse model (Version 0.6B + structural birth/pruning 0.6D).
 //!
 //! Synapses are first-class biological objects with weight, usage, health,
 //! stability, and age. Plasticity is deterministic — never random.
@@ -67,7 +67,7 @@ pub struct Synapse {
     pub weight_history: Vec<WeightHistoryEntry>,
     /// Signed delta applied on the most recent weight change (0 if none this tick).
     pub last_weight_delta: f64,
-    // --- Structural pruning observation (0.6C; no deletion) ---
+    // --- Structural pruning observation (0.6C) / mutation (0.6D) ---
     pub pruning_risk: f64,
     pub inactivity_ticks: u64,
     pub low_weight_ticks: u64,
@@ -75,6 +75,15 @@ pub struct Synapse {
     pub protected_until_tick: u64,
     pub pruning_status: PruningStatus,
     pub pruning_reasons: Vec<&'static str>,
+    /// Explicit backbone / policy protection (never inferred in the frontend).
+    pub structurally_protected: bool,
+    pub protection_reason: Option<&'static str>,
+    /// Growth-candidate ID that produced this synapse, if any.
+    pub origin_candidate_id: Option<String>,
+    /// Synapse may deliver signals only when network tick ≥ this value.
+    pub eligible_from_tick: u64,
+    /// Consecutive structural evaluations spent in `atRisk` (sustained evidence).
+    pub at_risk_evals: u64,
 }
 
 impl Synapse {
@@ -159,7 +168,35 @@ impl Synapse {
             protected_until_tick: 0,
             pruning_status: PruningStatus::Protected,
             pruning_reasons: vec!["grace_period"],
+            structurally_protected: false,
+            protection_reason: None,
+            origin_candidate_id: None,
+            eligible_from_tick: creation_tick,
+            at_risk_evals: 0,
         })
+    }
+
+    /// Mark an initial backbone synapse as permanently structurally protected.
+    pub fn with_structural_protection(mut self, reason: &'static str) -> Self {
+        self.structurally_protected = true;
+        self.protection_reason = Some(reason);
+        self.pruning_status = PruningStatus::Protected;
+        self.pruning_reasons = vec!["structurally_protected"];
+        self
+    }
+
+    pub fn with_origin_candidate(mut self, candidate_id: impl Into<String>) -> Self {
+        self.origin_candidate_id = Some(candidate_id.into());
+        self
+    }
+
+    pub fn with_eligible_from_tick(mut self, tick: u64) -> Self {
+        self.eligible_from_tick = tick;
+        self
+    }
+
+    pub fn is_propagation_eligible(&self, tick: u64) -> bool {
+        tick >= self.eligible_from_tick
     }
 
     /// Signed millivolts delivered when the source fires (`± weight`).

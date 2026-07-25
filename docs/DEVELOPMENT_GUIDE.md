@@ -124,7 +124,7 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.6C Structural Plasticity Foundations**
+**Shipped runtime:** **0.6D Synapse Birth and Pruning**
 
-0.6C observes growth candidates and pruning risk only.  
-Do not implement synapse create/delete (0.6D+), body, or cognition unless explicitly asked.
+Topology may change only through backend structural commits.  
+Do not implement neuron birth/death, body, or cognition unless explicitly asked.

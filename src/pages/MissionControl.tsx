@@ -52,6 +52,9 @@ export function MissionControl() {
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [tissueDisplayMode, setTissueDisplayMode] =
     useState<TissueDisplayMode>("activity");
+  const [bornSynapseIds, setBornSynapseIds] = useState<string[]>([]);
+  const [pruningSynapseIds, setPruningSynapseIds] = useState<string[]>([]);
+  const [prunedNotice, setPrunedNotice] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<MissionPanel>("network");
   const [mainView, setMainView] = useState<MainView>("network");
   const [pressingNeuronId, setPressingNeuronId] = useState<string | null>(null);
@@ -190,6 +193,35 @@ export function MissionControl() {
     };
     setTimeline((current) => [entry, ...current].slice(0, MAX_TIMELINE));
   }
+
+  useEffect(() => {
+    if (!network) return;
+    const created = events
+      .filter((event) => event.type === "synapse_created" && event.synapseId)
+      .map((event) => event.synapseId!)
+      .filter((id) => network.synapses.some((synapse) => synapse.id === id));
+    if (created.length > 0) {
+      setBornSynapseIds((current) => Array.from(new Set([...created, ...current])).slice(0, 8));
+    }
+
+    if (
+      selectedSynapseId &&
+      !network.synapses.some((synapse) => synapse.id === selectedSynapseId)
+    ) {
+      const pruneEvent = events.find(
+        (event) => event.type === "synapse_pruned" && event.synapseId === selectedSynapseId,
+      );
+      setPrunedNotice(
+        pruneEvent
+          ? `This synapse was pruned at Tick ${pruneEvent.networkTick}`
+          : "This synapse is no longer present in the tissue.",
+      );
+      setPruningSynapseIds((current) =>
+        Array.from(new Set([selectedSynapseId, ...current])).slice(0, 8),
+      );
+      setSelectedSynapseId(null);
+    }
+  }, [network, events, selectedSynapseId]);
 
   // Keep selected structural entities valid after reset/snapshot refresh.
   useEffect(() => {
@@ -397,6 +429,7 @@ export function MissionControl() {
   function handleSelectSynapse(synapseId: string) {
     setSelectedSynapseId(synapseId);
     setSelectedCandidateId(null);
+    setPrunedNotice(null);
     setActivePanel("synapse");
   }
 
@@ -481,7 +514,7 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.6C"
+          version="0.6D"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
@@ -490,7 +523,7 @@ export function MissionControl() {
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Structural Plasticity Foundations · Version 0.6C
+          Synapse Birth and Pruning · Version 0.6D
         </p>
       </header>
 
@@ -520,6 +553,9 @@ export function MissionControl() {
                 interactionDisabled={status !== "connected" || busy || running}
                 pressingNeuronId={pressingNeuronId}
                 flashedNeuronId={flashedNeuronId}
+                bornSynapseIds={bornSynapseIds}
+                pruningSynapseIds={pruningSynapseIds}
+                topology={network.structural.topology}
                 onSelectNeuron={handleSelectNeuron}
                 onSelectSynapse={handleSelectSynapse}
                 onSelectCandidate={handleSelectCandidate}
@@ -601,7 +637,15 @@ export function MissionControl() {
               events={events}
             />
           ) : null}
-          {activePanel === "synapse" ? <SynapsePanel synapse={selectedSynapse} /> : null}
+          {activePanel === "synapse" ? (
+            <SynapsePanel
+              synapse={selectedSynapse}
+              prunedNotice={prunedNotice}
+              maturationTicksRequired={
+                network?.structural.config.candidateMaturationTicks ?? 3
+              }
+            />
+          ) : null}
           {activePanel === "candidate" ? (
             <GrowthCandidatePanel
               candidate={selectedCandidate}

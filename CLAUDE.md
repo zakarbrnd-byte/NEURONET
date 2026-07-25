@@ -30,12 +30,12 @@ We are cultivating the conditions from which intelligence may emerge.
 
 ## Current milestone
 
-**Shipped:** 0.6C Structural Plasticity Foundations  
+**Shipped:** 0.6D Synapse Birth and Pruning  
 
-**Next development target: 0.6D Structural Growth**
+**Next development target: 0.7 richer developmental campaigns**
 
-0.6C observes candidates and pruning risk only — it does not create or delete synapses.  
-Do not implement synapse create/delete, body, memory, or cognition unless that milestone is explicitly requested.
+0.6D allows deterministic topology change under backend rules.  
+Do not implement neuron birth/death, body, memory, or cognition unless that milestone is explicitly requested.
 
 ## Canonical docs
 
