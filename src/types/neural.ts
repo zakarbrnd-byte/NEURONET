@@ -8,6 +8,36 @@ export interface NeuronPosition {
 export type CellType = "excitatory" | "inhibitory";
 export type SynapseType = "excitatory" | "inhibitory";
 
+/** Simplified developmental lifecycle (Version 0.7) — backend-owned. */
+export type LifecycleState =
+  | "quiescent"
+  | "maturing"
+  | "differentiating"
+  | "migrating"
+  | "settling"
+  | "settled";
+
+export interface MigrationPath {
+  waypoints: NeuronPosition[];
+  currentSegment: number;
+}
+
+export interface MorphologyProfile {
+  somaRadius: number;
+  dendriteRadius: number;
+  axonReach: number;
+}
+
+export interface TissueRegion {
+  id: string;
+  name: string;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+  description: string;
+}
+
 export interface NeuronSnapshot {
   id: string;
   restingPotentialMv: number;
@@ -26,6 +56,24 @@ export interface NeuronSnapshot {
   somaRadius: number;
   dendriteRadius: number;
   axonLength: number;
+  /** Developmental fields (0.7). */
+  lifecycle: LifecycleState;
+  developmentalAge: number;
+  phaseAge: number;
+  birthTick: number;
+  settledTick: number | null;
+  targetPosition: NeuronPosition | null;
+  originalTargetPosition: NeuronPosition | null;
+  migrationPath: MigrationPath | null;
+  migrationProgress: number;
+  migrationDistance: number;
+  morphologyProgress: number;
+  cellTypeAssigned: CellType | null;
+  electricallyEligibleFromTick: number | null;
+  structurallyEligibleFromTick: number | null;
+  developmentalOrigin: string;
+  matureMorphology: MorphologyProfile;
+  blockingConditions: string[];
 }
 
 export interface WeightHistoryEntry {
@@ -141,6 +189,34 @@ export interface StructuralSnapshot {
   history: StructuralHistoryEntry[];
 }
 
+export interface DevelopmentConfigSummary {
+  maximumTotalNeurons: number;
+  maximumConcurrentDevelopingCells: number;
+  firstBirthTick: number;
+  minimumBirthIntervalTicks: number;
+  maturationDurationTicks: number;
+  differentiationDurationTicks: number;
+  migrationDurationTicks: number;
+  settlingDurationTicks: number;
+  targetExcitatoryRatio: number;
+}
+
+/** Compact development summary from backend NetworkSnapshot (0.7). */
+export interface DevelopmentSummary {
+  enabled: boolean;
+  totalCellCount: number;
+  settledNeuronCount: number;
+  developingCellCount: number;
+  populationCapacity: number;
+  latestBirthTick: number | null;
+  latestDevelopmentEvaluationTick: number | null;
+  nextBirthEligibilityTick: number | null;
+  currentLifecycleActivity: string;
+  progenitorZone: TissueRegion;
+  settlementZones: TissueRegion[];
+  config: DevelopmentConfigSummary;
+}
+
 export interface TissueInfo {
   label: string;
   region: string;
@@ -156,6 +232,8 @@ export interface NetworkSnapshot {
   synapses: SynapseSnapshot[];
   tissue: TissueInfo;
   structural: StructuralSnapshot;
+  /** Present from Version 0.7; omit/null → no developmental visualization. */
+  development?: DevelopmentSummary | null;
 }
 
 export interface PropagationTrace {
@@ -242,9 +320,46 @@ export function isStructuralEventType(type: string): boolean {
   );
 }
 
+export function isDevelopmentalEventType(type: string): boolean {
+  return (
+    type === "progenitor_born" ||
+    type === "maturation_started" ||
+    type === "differentiation_started" ||
+    type === "cell_type_assigned" ||
+    type.startsWith("migration_") ||
+    type === "settling_started" ||
+    type === "neuron_settled" ||
+    type === "development_blocked" ||
+    type === "population_capacity_reached"
+  );
+}
+
+export function isObservatoryEventType(type: string): boolean {
+  return isStructuralEventType(type) || isDevelopmentalEventType(type);
+}
+
+export function neuronIsDeveloping(neuron: NeuronSnapshot): boolean {
+  return neuron.lifecycle !== "settled" && neuron.lifecycle !== "quiescent";
+}
+
+/** Settled + electricallyEligibleFromTick reached — otherwise no stimulation. */
+export function neuronIsElectricallyEligible(
+  neuron: NeuronSnapshot,
+  networkTick: number,
+): boolean {
+  if (neuron.lifecycle !== "settled") return false;
+  if (neuron.electricallyEligibleFromTick == null) return false;
+  return networkTick >= neuron.electricallyEligibleFromTick;
+}
+
 export function structuralEventPlainSummary(event: NetworkEvent): string {
   const source = event.sourceNeuronId ? shortNeuronId(event.sourceNeuronId) : "?";
   const target = event.targetNeuronId ? shortNeuronId(event.targetNeuronId) : "?";
+  const cell = event.neuronId
+    ? shortNeuronId(event.neuronId)
+    : event.entityId
+      ? shortNeuronId(event.entityId)
+      : "?";
   switch (event.type) {
     case "growth_candidate_observed":
       return `A possible ${source} → ${target} synapse is being observed.`;
@@ -268,6 +383,30 @@ export function structuralEventPlainSummary(event: NetworkEvent): string {
       return `Synapse creation blocked for ${source} → ${target}.`;
     case "pruning_blocked":
       return `Pruning blocked for synapse ${source} → ${target}.`;
+    case "progenitor_born":
+      return `Progenitor ${cell} born in Simplified Progenitor Zone.`;
+    case "maturation_started":
+      return `${cell} began maturation.`;
+    case "differentiation_started":
+      return `${cell} began differentiation.`;
+    case "cell_type_assigned":
+      return `${cell} was assigned a cell type.`;
+    case "migration_started":
+      return `${cell} began migration.`;
+    case "migration_progressed":
+      return `${cell} migration progressed${
+        event.readinessOrRisk != null ? ` (${Math.round(event.readinessOrRisk * 100)}%)` : ""
+      }.`;
+    case "migration_completed":
+      return `${cell} completed migration.`;
+    case "settling_started":
+      return `${cell} entered settling.`;
+    case "neuron_settled":
+      return `${cell} settled.`;
+    case "development_blocked":
+      return `Development blocked for ${cell}.`;
+    case "population_capacity_reached":
+      return event.message || "Population capacity reached.";
     default:
       return event.message;
   }

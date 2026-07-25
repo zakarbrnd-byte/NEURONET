@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { StructuralSnapshot } from "../../types/neural";
+import type { DevelopmentSummary, StructuralSnapshot } from "../../types/neural";
 import { shortNeuronId } from "../../types/neural";
 import type { ControlsCategory } from "../../types/ui";
 
@@ -11,6 +11,8 @@ interface ControlsPanelProps {
   autoStep: number;
   maxAutoSteps: number;
   structural: StructuralSnapshot | null;
+  development?: DevelopmentSummary | null;
+  stimulateDisabled?: boolean;
   onStimulateWeak: () => void;
   onStimulateStrong: () => void;
   onStep: () => void;
@@ -34,6 +36,8 @@ export function ControlsPanel({
   autoStep,
   maxAutoSteps,
   structural,
+  development = null,
+  stimulateDisabled = false,
   onStimulateWeak,
   onStimulateStrong,
   onStep,
@@ -43,7 +47,7 @@ export function ControlsPanel({
 }: ControlsPanelProps) {
   const [category, setCategory] = useState<ControlsCategory>("stimulus");
   const noNeuron = !selectedNeuronId;
-  const stimLocked = disabled || busy || running || noNeuron;
+  const stimLocked = disabled || busy || running || noNeuron || stimulateDisabled;
   const stepLocked = disabled || busy || running;
   const runLocked = disabled || busy || running;
   const pauseLocked = disabled || !running;
@@ -60,6 +64,9 @@ export function ControlsPanel({
       <p className="hint">
         Long-press a neuron on the graph for quick +5 mV. Sequence:{" "}
         {running ? "running" : "paused"} · {autoStep}/{maxAutoSteps}
+        {stimulateDisabled
+          ? " · Developing cells are not electrically eligible for stimulation."
+          : ""}
       </p>
 
       <div className="segmented" role="tablist" aria-label="Control categories">
@@ -129,65 +136,123 @@ export function ControlsPanel({
         ) : null}
 
         {category === "structure" ? (
-          <section
-            className="structural-controls"
-            aria-label="Structural plasticity"
-            data-testid="structural-plasticity-controls"
-          >
-            <h3 className="help-heading">Structural Plasticity</h3>
-            <p className="hint">
-              Read-only summary. Birth and pruning are backend-owned in Version 0.6D.
-            </p>
-            <dl className="status-list panel-metrics">
-              <div className="status-row">
-                <dt>Enabled</dt>
-                <dd>{structural?.config.enabled ? "Yes" : "No"}</dd>
-              </div>
-              <div className="status-row">
-                <dt>Evaluation interval</dt>
-                <dd>{structural?.config.evaluationIntervalTicks ?? "—"} ticks</dd>
-              </div>
-              <div className="status-row">
-                <dt>Latest evaluation</dt>
-                <dd>
-                  {structural?.latestEvaluationTick != null
-                    ? `Tick ${structural.latestEvaluationTick}`
-                    : "None yet"}
-                </dd>
-              </div>
-              <div className="status-row">
-                <dt>Candidates</dt>
-                <dd data-testid="structural-candidate-count">
-                  {structural?.candidateCount ?? 0}
-                </dd>
-              </div>
-              <div className="status-row">
-                <dt>At-risk synapses</dt>
-                <dd data-testid="structural-at-risk-count">
-                  {structural?.atRiskSynapseCount ?? 0}
-                </dd>
-              </div>
-              <div className="status-row">
-                <dt>Created this session</dt>
-                <dd data-testid="structural-created-count">
-                  {structural?.topology.createdThisSession ?? 0}
-                </dd>
-              </div>
-              <div className="status-row">
-                <dt>Pruned this session</dt>
-                <dd data-testid="structural-pruned-count">
-                  {structural?.topology.prunedThisSession ?? 0}
-                </dd>
-              </div>
-              <div className="status-row">
-                <dt>Synapse capacity</dt>
-                <dd>
-                  {structural?.topology.synapseCount ?? 0}/
-                  {structural?.topology.maxSynapseCapacity ?? "—"}
-                </dd>
-              </div>
-            </dl>
-          </section>
+          <>
+            <section
+              className="development-controls"
+              aria-label="Development summary"
+              data-testid="development-summary-controls"
+            >
+              <h3 className="help-heading">Development</h3>
+              <p className="hint">
+                Read-only summary. Progenitor birth and settlement are backend-owned in Version
+                0.7.
+              </p>
+              <dl className="status-list panel-metrics">
+                <div className="status-row">
+                  <dt>Population</dt>
+                  <dd data-testid="development-population">
+                    {development
+                      ? `${development.totalCellCount}/${development.populationCapacity}`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Developing</dt>
+                  <dd data-testid="development-developing-count">
+                    {development?.developingCellCount ?? "—"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Settled</dt>
+                  <dd data-testid="development-settled-count">
+                    {development?.settledNeuronCount ?? "—"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Next birth tick</dt>
+                  <dd data-testid="development-next-birth">
+                    {development?.nextBirthEligibilityTick != null
+                      ? `Tick ${development.nextBirthEligibilityTick}`
+                      : "None"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Latest evaluation</dt>
+                  <dd data-testid="development-latest-eval">
+                    {development?.latestDevelopmentEvaluationTick != null
+                      ? `Tick ${development.latestDevelopmentEvaluationTick}`
+                      : "None yet"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Lifecycle activity</dt>
+                  <dd data-testid="development-lifecycle-activity">
+                    {development?.currentLifecycleActivity ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              className="structural-controls"
+              aria-label="Structural plasticity"
+              data-testid="structural-plasticity-controls"
+            >
+              <h3 className="help-heading">Structural Plasticity</h3>
+              <p className="hint">
+                Read-only summary. Birth and pruning are backend-owned.
+              </p>
+              <dl className="status-list panel-metrics">
+                <div className="status-row">
+                  <dt>Enabled</dt>
+                  <dd>{structural?.config.enabled ? "Yes" : "No"}</dd>
+                </div>
+                <div className="status-row">
+                  <dt>Evaluation interval</dt>
+                  <dd>{structural?.config.evaluationIntervalTicks ?? "—"} ticks</dd>
+                </div>
+                <div className="status-row">
+                  <dt>Latest evaluation</dt>
+                  <dd>
+                    {structural?.latestEvaluationTick != null
+                      ? `Tick ${structural.latestEvaluationTick}`
+                      : "None yet"}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Candidates</dt>
+                  <dd data-testid="structural-candidate-count">
+                    {structural?.candidateCount ?? 0}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>At-risk synapses</dt>
+                  <dd data-testid="structural-at-risk-count">
+                    {structural?.atRiskSynapseCount ?? 0}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Created this session</dt>
+                  <dd data-testid="structural-created-count">
+                    {structural?.topology.createdThisSession ?? 0}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Pruned this session</dt>
+                  <dd data-testid="structural-pruned-count">
+                    {structural?.topology.prunedThisSession ?? 0}
+                  </dd>
+                </div>
+                <div className="status-row">
+                  <dt>Synapse capacity</dt>
+                  <dd>
+                    {structural?.topology.synapseCount ?? 0}/
+                    {structural?.topology.maxSynapseCapacity ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </>
         ) : null}
 
         {category === "reset" ? (
@@ -209,8 +274,9 @@ export function ControlsPanel({
                   <dt>What is Tissue View?</dt>
                   <dd>
                     This view shows the physical organization of the artificial nervous system.
-                    Neuron positions are fixed. Signals travel along axons. Development mode shows
-                    growth candidates and pruning risk without changing structure.
+                    Neuron positions come from the backend. Signals travel along axons. Development
+                    mode shows the Simplified Progenitor Zone, developing cells, growth candidates,
+                    and pruning risk without inventing biology.
                   </dd>
                 </div>
                 <div>
@@ -251,8 +317,8 @@ export function ControlsPanel({
                 </div>
               </dl>
               <p className="hint">
-                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Synapse Birth and
-                Pruning · Version 0.6D
+                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV (settled cells only).
+                Developmental Neural Tissue · Version 0.7
               </p>
             </section>
           </>

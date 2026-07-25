@@ -382,6 +382,10 @@ pub fn evaluate_growth_candidates(
 
             let source = neurons.iter().find(|n| n.id == source_id).unwrap();
             let target = neurons.iter().find(|n| n.id == target_id).unwrap();
+            // Version 0.7: developing / not-yet-eligible cells cannot form candidates.
+            if !source.is_structurally_eligible(tick) || !target.is_structurally_eligible(tick) {
+                continue;
+            }
             let distance = normalized_distance(source, target);
             let pair = pairs
                 .iter()

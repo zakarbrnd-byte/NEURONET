@@ -8,6 +8,8 @@ import type {
 import {
   distanceToThresholdMv,
   electricalState,
+  neuronIsDeveloping,
+  neuronIsElectricallyEligible,
   shortNeuronId,
 } from "../../types/neural";
 import type { NodeCategory } from "../../types/ui";
@@ -31,11 +33,105 @@ function formatMv(value: number): string {
   return `${value.toFixed(1)} mV`;
 }
 
+function formatPos(pos: { x: number; y: number } | null | undefined): string {
+  if (!pos) return "—";
+  return `x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}`;
+}
+
 export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelProps) {
   const [category, setCategory] = useState<NodeCategory>("electrical");
 
   if (!neuron) {
     return <p className="hint">Select a neuron on the network graph to inspect it.</p>;
+  }
+
+  const developing = neuronIsDeveloping(neuron);
+  const eligible = neuronIsElectricallyEligible(neuron, networkTick);
+  const showLifecycleInspector = developing || !eligible;
+
+  if (showLifecycleInspector) {
+    return (
+      <div className="node-panel" data-testid="lifecycle-inspector">
+        <div className="panel-lede">
+          <strong>{shortNeuronId(neuron.id)}</strong>
+          <span className={`state-badge state-lifecycle-${neuron.lifecycle}`}>
+            {neuron.lifecycle}
+          </span>
+        </div>
+        <p className="hint" data-testid="lifecycle-no-stim-note">
+          Developing / electrically ineligible cells have no stimulation controls. Values are from
+          the backend snapshot only.
+        </p>
+        <dl className="status-list panel-metrics">
+          <div className="status-row">
+            <dt>Lifecycle</dt>
+            <dd data-testid="lifecycle-state">{neuron.lifecycle}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Developmental age</dt>
+            <dd>{neuron.developmentalAge}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Phase age</dt>
+            <dd>{neuron.phaseAge}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Birth tick</dt>
+            <dd>{neuron.birthTick}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Origin</dt>
+            <dd>{neuron.developmentalOrigin}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Cell type assigned</dt>
+            <dd className="capitalize">{neuron.cellTypeAssigned ?? "pending"}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Position</dt>
+            <dd data-testid="lifecycle-position">{formatPos(neuron.position)}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Target position</dt>
+            <dd>{formatPos(neuron.targetPosition)}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Migration progress</dt>
+            <dd data-testid="lifecycle-migration-progress">
+              {(neuron.migrationProgress * 100).toFixed(0)}%
+            </dd>
+          </div>
+          <div className="status-row">
+            <dt>Migration distance</dt>
+            <dd>{neuron.migrationDistance.toFixed(3)}</dd>
+          </div>
+          <div className="status-row">
+            <dt>Morphology progress</dt>
+            <dd>{(neuron.morphologyProgress * 100).toFixed(0)}%</dd>
+          </div>
+          <div className="status-row">
+            <dt>Electrically eligible from</dt>
+            <dd>
+              {neuron.electricallyEligibleFromTick != null
+                ? `Tick ${neuron.electricallyEligibleFromTick}`
+                : "Not yet"}
+            </dd>
+          </div>
+          {neuron.blockingConditions.length > 0 ? (
+            <div className="status-block">
+              <dt style={{ color: "var(--text-muted)", marginBottom: 6 }}>Blocking conditions</dt>
+              <dd style={{ textAlign: "left", fontWeight: 400 }}>
+                <ul className="reason-code-list">
+                  {neuron.blockingConditions.map((code) => (
+                    <li key={code}>{code}</li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+    );
   }
 
   const state = electricalState(neuron);
@@ -51,7 +147,7 @@ export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelPr
   );
 
   return (
-    <div className="node-panel">
+    <div className="node-panel" data-testid="neuron-inspector-panel">
       <div className="panel-lede">
         <strong>{shortNeuronId(neuron.id)}</strong>
         <span className={`state-badge state-${state.toLowerCase()}`}>{state}</span>
@@ -194,9 +290,7 @@ export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelPr
               <dt>
                 <MetricHint metric="position" label="Position" />
               </dt>
-              <dd>
-                x={neuron.position.x.toFixed(2)}, y={neuron.position.y.toFixed(2)}
-              </dd>
+              <dd>{formatPos(neuron.position)}</dd>
             </div>
             <div className="status-row">
               <dt>
@@ -216,6 +310,36 @@ export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelPr
               </dt>
               <dd>{neuron.axonLength.toFixed(3)}</dd>
             </div>
+            <div className="status-row">
+              <dt>Birth tick</dt>
+              <dd data-testid="settled-birth-tick">{neuron.birthTick}</dd>
+            </div>
+            {neuron.settledTick != null ? (
+              <div className="status-row">
+                <dt>Settled tick</dt>
+                <dd data-testid="settled-settled-tick">{neuron.settledTick}</dd>
+              </div>
+            ) : null}
+            <div className="status-row">
+              <dt>Developmental origin</dt>
+              <dd data-testid="settled-developmental-origin">{neuron.developmentalOrigin}</dd>
+            </div>
+            {neuron.migrationDistance > 0 ? (
+              <div className="status-row">
+                <dt>Migration distance</dt>
+                <dd data-testid="settled-migration-distance">
+                  {neuron.migrationDistance.toFixed(3)}
+                </dd>
+              </div>
+            ) : null}
+            {neuron.originalTargetPosition ? (
+              <div className="status-row">
+                <dt>Original target</dt>
+                <dd data-testid="settled-original-target">
+                  {formatPos(neuron.originalTargetPosition)}
+                </dd>
+              </div>
+            ) : null}
           </>
         ) : null}
 

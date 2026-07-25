@@ -4,6 +4,9 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::development::{
+    build_summary, evaluate_development, DevelopmentConfig, DevelopmentSummary,
+};
 use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
 use crate::structural::{
     evaluate_growth_candidates, evaluate_pruning_risk, plan_structural_mutations,
@@ -74,6 +77,7 @@ pub struct NetworkSnapshot {
     pub synapses: Vec<Synapse>,
     pub tissue: TissueInfo,
     pub structural: StructuralSnapshot,
+    pub development: DevelopmentSummary,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -115,10 +119,15 @@ pub struct NeuralNetwork {
     structural_history: Vec<StructuralHistoryEntry>,
     created_this_session: u64,
     pruned_this_session: u64,
+    development_config: DevelopmentConfig,
+    next_neuron_number: u32,
+    latest_birth_tick: Option<u64>,
+    latest_development_evaluation_tick: Option<u64>,
+    birth_count: u32,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron tissue with living synapses + structural mutations (0.6D).
+    /// Deterministic five-neuron tissue with living synapses + development (0.7).
     pub fn initial() -> Self {
         Self::initial_with_age(0)
     }
@@ -140,6 +149,11 @@ impl NeuralNetwork {
             structural_history: Vec::new(),
             created_this_session: 0,
             pruned_this_session: 0,
+            development_config: DevelopmentConfig::default(),
+            next_neuron_number: 6,
+            latest_birth_tick: None,
+            latest_development_evaluation_tick: None,
+            birth_count: 0,
         };
 
         let seeds = [
@@ -260,7 +274,7 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Deterministic artificial neural tissue with structural birth/pruning ready",
+            "Deterministic artificial neural tissue with developmental lifecycle ready",
         );
 
         network
@@ -337,6 +351,12 @@ impl NeuralNetwork {
                 },
                 history: self.structural_history.clone(),
             },
+            development: build_summary(
+                &self.development_config,
+                &neurons,
+                self.latest_birth_tick,
+                self.latest_development_evaluation_tick,
+            ),
             neurons,
             synapses,
         }
@@ -353,11 +373,19 @@ impl NeuralNetwork {
             return Err("amountMv must be greater than zero".to_string());
         }
 
+        let tick = self.tick;
         let neuron = self
             .neurons
             .iter_mut()
             .find(|n| n.id == neuron_id)
             .ok_or_else(|| format!("unknown neuron id: {neuron_id}"))?;
+
+        if !neuron.is_electrically_eligible(tick) {
+            return Err(format!(
+                "{neuron_id} is not electrically eligible (lifecycle={:?})",
+                neuron.lifecycle
+            ));
+        }
 
         neuron.receive_signal(amount_mv);
 
@@ -389,7 +417,13 @@ impl NeuralNetwork {
 
         for index in ordered_indexes {
             let neuron_id = self.neurons[index].id.clone();
+            let electrically_active = self.neurons[index].is_electrically_eligible(self.tick);
             let result = self.neurons[index].step();
+
+            // Developing / not-yet-eligible cells do not emit electrical timeline noise.
+            if !electrically_active {
+                continue;
+            }
 
             match result {
                 NeuronStepResult::Fired => {
@@ -594,6 +628,10 @@ impl NeuralNetwork {
             event_ids.extend(self.commit_structural_mutations(planned));
         }
 
+        // Developmental lifecycle (0.7): evaluate → migrate → settle → emit.
+        // A cell that settles on Tick X is electrically/structurally eligible from X+1.
+        event_ids.extend(self.run_development_phase());
+
         NetworkStepTrace {
             tick: self.tick,
             fired_neuron_ids: fired_ids,
@@ -601,6 +639,104 @@ impl NeuralNetwork {
             event_ids,
             network: self.snapshot(),
         }
+    }
+
+    fn run_development_phase(&mut self) -> Vec<String> {
+        let mut event_ids = Vec::new();
+        let config = self.development_config.clone();
+        let interval = config.evaluation_interval_ticks.max(1);
+        if !config.enabled || self.tick % interval != 0 {
+            return event_ids;
+        }
+
+        let result = evaluate_development(
+            &config,
+            &mut self.neurons,
+            self.tick,
+            self.next_neuron_number,
+            self.latest_birth_tick,
+            self.birth_count,
+        );
+        self.latest_development_evaluation_tick = Some(self.tick);
+
+        if let Some(birth) = result.birth {
+            let cell =
+                Neuron::progenitor_birth(birth.neuron_number, birth.birth_tick, birth.position);
+            self.neurons.push(cell);
+            self.next_neuron_number = self.next_neuron_number.saturating_add(1);
+            self.latest_birth_tick = Some(birth.birth_tick);
+            self.birth_count = self.birth_count.saturating_add(1);
+        }
+
+        for event in result.events {
+            event_ids.push(self.push_development_event(event));
+        }
+
+        event_ids
+    }
+
+    fn push_development_event(&mut self, event: serde_json::Value) -> String {
+        let event_type = event
+            .get("eventType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("development_event");
+        let neuron_id = event
+            .get("neuronId")
+            .or_else(|| event.get("cellId"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let message = event
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Developmental update")
+            .to_string();
+        let reason_codes = event.get("reasonCodes").and_then(|v| {
+            v.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|x| {
+                        if let Some(s) = x.as_str() {
+                            Some(s.to_string())
+                        } else {
+                            // Enum variants serialize as strings; accept as-is via to_string fallback.
+                            Some(x.to_string().trim_matches('"').to_string())
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+        });
+        let previous_status = event
+            .get("previousState")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let new_status = event
+            .get("newState")
+            .or_else(|| event.get("lifecycleState"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let readiness = event.get("progress").and_then(|v| v.as_f64());
+        let entity_id = event
+            .get("cellId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        self.push_event_full(
+            event_type,
+            neuron_id,
+            None,
+            None,
+            None,
+            entity_id,
+            previous_status,
+            new_status,
+            readiness,
+            reason_codes,
+            message,
+        )
+    }
+
+    #[cfg(test)]
+    pub fn set_development_config_for_test(&mut self, config: DevelopmentConfig) {
+        self.development_config = config;
     }
 
     fn commit_structural_mutations(
@@ -1715,6 +1851,271 @@ mod tests {
             }
         }
         assert!(saw_structural);
+    }
+
+    fn step_n(network: &mut NeuralNetwork, n: u64) {
+        for _ in 0..n {
+            network.step();
+        }
+    }
+
+    #[test]
+    fn development_initial_reset_has_five_settled_neurons() {
+        let network = NeuralNetwork::initial();
+        let snap = network.snapshot();
+        assert_eq!(snap.neurons.len(), 5);
+        assert_eq!(snap.development.settled_neuron_count, 5);
+        assert_eq!(snap.development.developing_cell_count, 0);
+        assert_eq!(snap.development.population_capacity, 8);
+        assert!(snap
+            .neurons
+            .iter()
+            .all(|n| n.lifecycle == crate::neuron::LifecycleState::Settled));
+    }
+
+    #[test]
+    fn development_population_never_exceeds_maximum() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 400);
+        let snap = network.snapshot();
+        assert!(snap.neurons.len() <= 8);
+        assert!(snap.development.total_cell_count <= 8);
+    }
+
+    #[test]
+    fn development_concurrent_and_birth_interval_enforced() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 30);
+        let snap = network.snapshot();
+        assert_eq!(snap.neurons.len(), 6);
+        assert_eq!(snap.development.developing_cell_count, 1);
+        // Next birth blocked while one is developing and until interval.
+        step_n(&mut network, 10);
+        assert!(network.snapshot().neurons.len() <= 6);
+    }
+
+    #[test]
+    fn development_birth_and_ids_are_deterministic() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        step_n(&mut a, 30);
+        step_n(&mut b, 30);
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        assert_eq!(na.position, nb.position);
+        assert_eq!(na.lifecycle, nb.lifecycle);
+        assert_eq!(na.birth_tick, 30);
+    }
+
+    #[test]
+    fn developing_cells_cannot_fire_or_be_stimulated() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 30);
+        let err = network.inject_signal("NEURON-006", 20.0).unwrap_err();
+        assert!(err.contains("not electrically eligible"));
+        let before = network
+            .snapshot()
+            .neurons
+            .iter()
+            .find(|n| n.id == "NEURON-006")
+            .unwrap()
+            .membrane_potential_mv;
+        network.step();
+        let after = network
+            .snapshot()
+            .neurons
+            .iter()
+            .find(|n| n.id == "NEURON-006")
+            .unwrap()
+            .clone();
+        assert!(!after.fired);
+        assert_eq!(after.membrane_potential_mv, before);
+    }
+
+    #[test]
+    fn developing_cells_excluded_from_synapses_and_candidates() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 35);
+        let snap = network.snapshot();
+        assert!(snap
+            .synapses
+            .iter()
+            .all(|s| { s.source_neuron_id != "NEURON-006" && s.target_neuron_id != "NEURON-006" }));
+        assert!(snap
+            .structural
+            .growth_candidates
+            .iter()
+            .all(|c| { c.source_neuron_id != "NEURON-006" && c.target_neuron_id != "NEURON-006" }));
+    }
+
+    #[test]
+    fn differentiation_and_target_are_deterministic() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        // Mature + differentiate
+        step_n(&mut a, 42);
+        step_n(&mut b, 42);
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        assert_eq!(na.cell_type_assigned, nb.cell_type_assigned);
+        assert_eq!(na.target_position, nb.target_position);
+        if let Some(t) = &na.target_position {
+            assert!((0.0..=1.0).contains(&t.x));
+            assert!((0.0..=1.0).contains(&t.y));
+            for settled in sa.neurons.iter().filter(|n| {
+                n.lifecycle == crate::neuron::LifecycleState::Settled && n.id != "NEURON-006"
+            }) {
+                let dx = t.x - settled.position.x;
+                let dy = t.y - settled.position.y;
+                assert!((dx * dx + dy * dy).sqrt() >= crate::development::MIN_SOMA_SPACING - 1e-9);
+            }
+        }
+        // Initial tissue: 4 excitatory / 5 → ratio 0.8 > 0.75 → inhibitory
+        assert_eq!(na.cell_type_assigned, Some(CellType::Inhibitory));
+    }
+
+    #[test]
+    fn migration_progresses_on_ticks_without_overshoot_and_settled_stay_fixed() {
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, 42);
+        let mut last_prog = -1.0;
+        let initial_settled: Vec<_> = network
+            .snapshot()
+            .neurons
+            .iter()
+            .filter(|n| n.id != "NEURON-006")
+            .map(|n| (n.id.clone(), n.position))
+            .collect();
+        for _ in 0..20 {
+            network.step();
+            let cell = network
+                .snapshot()
+                .neurons
+                .iter()
+                .find(|n| n.id == "NEURON-006")
+                .unwrap()
+                .clone();
+            assert!(cell.migration_progress >= last_prog - 1e-9);
+            last_prog = cell.migration_progress;
+            if let Some(t) = &cell.target_position {
+                let dx = cell.position.x - t.x;
+                let dy = cell.position.y - t.y;
+                // Never past target along path end — progress capped at 1.
+                assert!(cell.migration_progress <= 1.0 + 1e-9);
+                if cell.migration_progress >= 1.0 - 1e-9 {
+                    assert!((dx * dx + dy * dy).sqrt() < 1e-6);
+                }
+            }
+        }
+        let after = network.snapshot();
+        for (id, pos) in initial_settled {
+            let n = after.neurons.iter().find(|n| n.id == id).unwrap();
+            assert_eq!(n.position, pos);
+        }
+    }
+
+    #[test]
+    fn settled_eligibility_starts_next_tick() {
+        let mut network = NeuralNetwork::initial();
+        // Drive until settled.
+        let mut settled_tick = None;
+        for _ in 0..120 {
+            network.step();
+            let snap = network.snapshot();
+            if let Some(c) = snap.neurons.iter().find(|n| n.id == "NEURON-006") {
+                if c.lifecycle == crate::neuron::LifecycleState::Settled {
+                    settled_tick = c.settled_tick;
+                    break;
+                }
+            }
+        }
+        let settled_tick = settled_tick.expect("cell should settle");
+        // Reconstruct: after settlement tick, inject should fail until next tick.
+        let mut network = NeuralNetwork::initial();
+        step_n(&mut network, settled_tick);
+        let cell = network
+            .snapshot()
+            .neurons
+            .iter()
+            .find(|n| n.id == "NEURON-006")
+            .unwrap()
+            .clone();
+        assert_eq!(cell.lifecycle, crate::neuron::LifecycleState::Settled);
+        assert_eq!(cell.electrically_eligible_from_tick, Some(settled_tick + 1));
+        assert!(network.inject_signal("NEURON-006", 5.0).is_err());
+        network.step();
+        assert!(network.inject_signal("NEURON-006", 5.0).is_ok());
+    }
+
+    #[test]
+    fn morphology_progress_deterministic_and_reset_clears_born_cells() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        step_n(&mut a, 45);
+        step_n(&mut b, 45);
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        let na = sa.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        let nb = sb.neurons.iter().find(|n| n.id == "NEURON-006").unwrap();
+        assert_eq!(na.morphology_progress, nb.morphology_progress);
+        assert_eq!(na.soma_radius, nb.soma_radius);
+
+        a.reset();
+        let snap = a.snapshot();
+        assert_eq!(snap.neurons.len(), 5);
+        assert!(snap.neurons.iter().all(|n| n.id != "NEURON-006"));
+        assert_eq!(snap.development.latest_birth_tick, None);
+        assert!(snap.development.population_capacity >= 5);
+        step_n(&mut a, 30);
+        assert!(a.snapshot().neurons.iter().any(|n| n.id == "NEURON-006"));
+    }
+
+    #[test]
+    fn identical_sequences_reproduce_developmental_history() {
+        let mut a = NeuralNetwork::initial();
+        let mut b = NeuralNetwork::initial();
+        for _ in 0..80 {
+            a.inject_signal("NEURON-001", 20.0).unwrap();
+            b.inject_signal("NEURON-001", 20.0).unwrap();
+            a.step();
+            b.step();
+        }
+        let sa = a.snapshot();
+        let sb = b.snapshot();
+        assert_eq!(sa.neurons, sb.neurons);
+        assert_eq!(sa.development, sb.development);
+        let dev_a: Vec<_> = a
+            .events_newest_first()
+            .into_iter()
+            .filter(|e| {
+                e.event_type.contains("progenitor")
+                    || e.event_type.contains("migration")
+                    || e.event_type.contains("settled")
+                    || e.event_type.contains("differentiation")
+                    || e.event_type.contains("maturation")
+                    || e.event_type.contains("cell_type")
+            })
+            .map(|e| (e.network_tick, e.event_type, e.neuron_id, e.message))
+            .collect();
+        let dev_b: Vec<_> = b
+            .events_newest_first()
+            .into_iter()
+            .filter(|e| {
+                e.event_type.contains("progenitor")
+                    || e.event_type.contains("migration")
+                    || e.event_type.contains("settled")
+                    || e.event_type.contains("differentiation")
+                    || e.event_type.contains("maturation")
+                    || e.event_type.contains("cell_type")
+            })
+            .map(|e| (e.network_tick, e.event_type, e.neuron_id, e.message))
+            .collect();
+        assert_eq!(dev_a, dev_b);
+        assert!(a.events_newest_first().len() <= 200);
     }
 }
 

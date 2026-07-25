@@ -5,33 +5,38 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.6D — Synapse Birth and Pruning** |
+| **Current version** | **0.7 — Developmental Neural Tissue** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.6D Synapse Birth and Pruning
+## Current Version — 0.7 Developmental Neural Tissue
 
-**Version 0.6D allows deterministic topology change.**
+**Version 0.7 makes artificial tissue visibly develop over simulation time.**
 
-It still does not implement autonomous intelligence, body, memory, or realistic neurodevelopment.
+Deterministic lifecycle:
 
-The backend may:
+neural progenitor → maturation → differentiation → migration → settlement →
+eligibility for electrical and structural behavior
 
-- create a synapse from a fully matured growth candidate
-- prune an unprotected synapse after sustained pruning eligibility
+Defaults grow conservatively from **5 settled neurons** to a maximum of **8**.
+Only developing cells migrate; settled somas stay fixed. The frontend never
+creates cells, chooses destinations, or invents migration.
 
-All structural changes are backend-owned, slow, evidence-based, observable, and restored by reset. The frontend never forces create/delete.
+This is a simplified developmental model — not embryology or stem-cell biology.
 
-See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
+See [`docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md`](docs/experiments/0.7_DEVELOPMENTAL_NEURAL_TISSUE.md).
 
 ---
 
-## Prior: 0.6C Structural Plasticity Foundations
+## Prior: 0.6D Synapse Birth and Pruning
 
-0.6C introduced growth candidates and pruning-risk observation. 0.6D commits those observations into topology mutations under explicit limits.
+0.6D commits structural observations into topology mutations under explicit
+limits. 0.7 preserves that system and adds cell-level development.
+
+See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md).
 
 ---
 
@@ -40,16 +45,16 @@ See [`docs/experiments/0.6D_SYNAPSE_BIRTH_AND_PRUNING.md`](docs/experiments/0.6D
 | View | Role |
 | --- | --- |
 | **Network View** | Schematic graph. Tap neuron or synapse. |
-| **Tissue View** | Positions, morphology, Development candidates, birth/prune transitions. |
+| **Tissue View** | Positions, morphology, Development mode (progenitor zone, migration paths, candidates). |
 
-Tissue Development mode shows topology counters from the backend snapshot.
+Tissue Development mode shows backend progenitor zone, developing cells, and settlement targets.
 
 ---
 
 ## Architecture
 
-- The **Rust backend** owns neurons, living synapses, plasticity, structural evaluation, and mutation commits.
-- **Mission Control** observes snapshots/events and never invents topology.
+- The **Rust backend** owns neurons, living synapses, plasticity, structural mutations, and developmental lifecycle.
+- **Mission Control** observes snapshots/events and never invents biology.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -57,11 +62,11 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Observatory tissue
 
-Five initial synapses `SYNAPSE-001`…`SYNAPSE-005`.  
+Five initial settled neurons `NEURON-001`…`NEURON-005` and synapses `SYNAPSE-001`…`SYNAPSE-005`.  
 `SYNAPSE-001` and `SYNAPSE-002` are structurally protected backbone pathways.  
-Dynamic IDs continue from `SYNAPSE-0006`.
+Dynamically born cells continue from `NEURON-006`. Dynamic synapses from `SYNAPSE-0006`.
 
-Reset restores the original five-synapse tissue and ID counter.
+Reset restores the original five-neuron tissue and all ID / developmental counters.
 
 ## Run locally
 
@@ -93,5 +98,5 @@ npm test
 | Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
 | Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-Verification marker: **Synapse Birth and Pruning · Version 0.6D**  
-Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.6D
+Verification marker: **Developmental Neural Tissue · Version 0.7**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.7

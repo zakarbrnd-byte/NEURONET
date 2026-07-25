@@ -78,7 +78,8 @@ Backend owns:
 - propagation
 - tissue structure
 - synaptic plasticity state
-- structural development state (candidates, pruning risk)
+- structural development state (candidates, pruning risk, birth/prune)
+- developmental lifecycle (birth, migration, settlement)
 - learning/plasticity state (when those milestones exist)
 - simulation ticks and events
 
@@ -102,6 +103,7 @@ Frontend must never invent:
 - signals
 - propagation
 - membrane potentials
+- developmental lifecycle or migration
 - learning
 - simulation state
 
@@ -124,7 +126,8 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.6D Synapse Birth and Pruning**
+**Shipped runtime:** **0.7 Developmental Neural Tissue**
 
-Topology may change only through backend structural commits.  
-Do not implement neuron birth/death, body, or cognition unless explicitly asked.
+Cell development and topology change are backend-owned.  
+Do not implement body sensors, cognition, or large-scale tissue unless explicitly asked.
+Next recommended milestone: **0.8 Embodied Sensory Surface** (not started).

@@ -11,8 +11,8 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
 | [`SCIENTIFIC_MODEL.md`](SCIENTIFIC_MODEL.md) | Model assumptions |
 | [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) | Contributor rules |
 
-**Shipped runtime target:** Version **0.6D Synapse Birth and Pruning**  
-(Deterministic topology mutations via structural-commit phase.)
+**Shipped runtime target:** Version **0.7 Developmental Neural Tissue**  
+(Deterministic cell development + preserved structural birth/pruning.)
 
 ---
 
@@ -29,7 +29,7 @@ Ownership and deployment boundaries for the Artificial Nervous System observator
 ┌───────────────────────────▼─────────────────────────────┐
 │  Neural Core (Rust / Axum)                              │
 │  neurons · living synapses · membrane · tissue ·        │
-│  synaptic + structural plasticity observation · ticks     │
+│  synaptic + structural plasticity · development · ticks │
 │  SIMULATION OWNERSHIP — SOURCE OF TRUTH                 │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -51,12 +51,15 @@ The Rust backend owns:
 | Tissue | Deterministic positions, region/layer/cell type |
 | Synaptic plasticity | Deterministic Hebbian / idle decay (0.6B) |
 | Structural plasticity | Candidates, pruning risk, birth/prune commits (0.6D) |
+| Development | Progenitor birth, lifecycle, migration, settlement (0.7) |
 | Simulation | Discrete ticks, propagation, event logs, step traces |
 | Authority | All neural state mutations |
 
-Location: `backend/` (`neuron`, `synapse`, `structural`, `network`, `api`).
+Location: `backend/` (`neuron`, `synapse`, `structural`, `development`, `network`, `api`).
 
-Frontend must never invent neurons, synapses, growth/pruning decisions, signals, propagation, membrane potentials, learning, or simulation state.
+Frontend must never invent neurons, synapses, growth/pruning decisions, developmental
+lifecycle, migration, signals, propagation, membrane potentials, learning, or
+simulation state.
 
 ---
 
@@ -68,7 +71,7 @@ The React frontend owns:
 | --- | --- |
 | Visualization | Network + Tissue SVG; pulses from backend propagation traces only |
 | Interaction | Tap inspect, long-press stimulate command, Step / Run / Pause / Reset |
-| Inspection | Node / Synapse / Growth Candidate / Timeline / Controls sheets |
+| Inspection | Node / Synapse / Growth Candidate / Developmental Cell / Timeline / Controls sheets |
 | UI state | Selection, open panel, Tissue display mode, auto-step scheduling, gesture feedback |
 
 Frontend local state must not include a parallel neural reality.
@@ -99,18 +102,19 @@ Stimuli are commands. The backend decides tissue response.
 
 ## API
 
-Current REST surface (0.5):
+Current REST surface (0.7):
 
 | Method | Path | Role |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness; reports version `0.5` |
-| `GET` | `/api/network` | Full network snapshot |
+| `GET` | `/api/health` | Liveness; reports version `0.7` |
+| `GET` | `/api/network` | Full network snapshot (includes `development`) |
 | `GET` | `/api/events` | Recent structured events |
-| `POST` | `/api/neurons/:id/signals` | Inject stimulus (mV) |
+| `POST` | `/api/neurons/:id/signals` | Inject stimulus (mV); rejects ineligible cells |
 | `POST` | `/api/network/step` | Advance one tick; return step trace |
 | `POST` | `/api/network/reset` | Reset tissue to initial observatory state |
 
 Step traces include `tick`, `firedNeuronIds`, `propagations`, `eventIds`, and `network`.
+Network snapshots include developmental summary, lifecycle fields, and migration paths.
 
 Visual connection pulses must map to structured `propagations`, not client-side guesses.
 
