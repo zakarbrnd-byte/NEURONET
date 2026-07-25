@@ -9,15 +9,18 @@ import { TissueView } from "../features/network/TissueView";
 import { NodePanel } from "../features/mission/NodePanel";
 import { SynapsePanel } from "../features/mission/SynapsePanel";
 import { GrowthCandidatePanel } from "../features/mission/GrowthCandidatePanel";
+import { ReceptorPanel } from "../features/mission/ReceptorPanel";
 import { TimelinePanel } from "../features/mission/TimelinePanel";
 import { ControlsPanel } from "../features/mission/ControlsPanel";
 import { ApiError, neuralApi } from "../services/neuralApi";
 import type {
   ConnectionStatus,
+  EnvironmentControlsRequest,
   NetworkEvent,
   NetworkSnapshot,
   NetworkStepTrace,
   PropagationTrace,
+  SensoryDeliveryTrace,
   TimelineEntry,
 } from "../types/neural";
 import {
@@ -51,6 +54,7 @@ export function MissionControl() {
   const [selectedNeuronId, setSelectedNeuronId] = useState<string | null>(null);
   const [selectedSynapseId, setSelectedSynapseId] = useState<string | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [selectedReceptorId, setSelectedReceptorId] = useState<string | null>(null);
   const [tissueDisplayMode, setTissueDisplayMode] =
     useState<TissueDisplayMode>("activity");
   const [bornSynapseIds, setBornSynapseIds] = useState<string[]>([]);
@@ -67,6 +71,9 @@ export function MissionControl() {
   const [lastTrace, setLastTrace] = useState<NetworkStepTrace | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [activePropagations, setActivePropagations] = useState<PropagationTrace[]>([]);
+  const [activeSensoryDeliveries, setActiveSensoryDeliveries] = useState<
+    SensoryDeliveryTrace[]
+  >([]);
   const [seenEventIds, setSeenEventIds] = useState<Set<string>>(new Set());
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -119,7 +126,9 @@ export function MissionControl() {
       window.clearTimeout(stimFeedbackTimerRef.current);
     }
     setFlashedNeuronId(neuronId);
-    setStimToast(`${shortNeuronId(neuronId)} stimulated +${amountMv} mV`);
+    setStimToast(
+      `Laboratory Electrode → ${shortNeuronId(neuronId)} +${amountMv} mV`,
+    );
     stimFeedbackTimerRef.current = window.setTimeout(() => {
       setFlashedNeuronId(null);
       setStimToast(null);
@@ -174,10 +183,20 @@ export function MissionControl() {
       (propagation) => !seenEventIds.has(propagation.eventId),
     );
     setActivePropagations(freshPropagations);
+
+    const sensoryDeliveries = trace.environmentTrace?.sensoryDeliveries ?? [];
+    const freshSensory = sensoryDeliveries.filter(
+      (delivery) => !seenEventIds.has(delivery.eventId),
+    );
+    setActiveSensoryDeliveries(freshSensory);
+
     setSeenEventIds((current) => {
       const next = new Set(current);
       for (const propagation of freshPropagations) {
         next.add(propagation.eventId);
+      }
+      for (const delivery of freshSensory) {
+        next.add(delivery.eventId);
       }
       for (const eventId of trace.eventIds) {
         next.add(eventId);
@@ -238,7 +257,17 @@ export function MissionControl() {
         setActivePanel(mainView);
       }
     }
-  }, [network, selectedCandidateId, activePanel, mainView]);
+    if (
+      selectedReceptorId &&
+      !(network.environment?.receptors.some((receptor) => receptor.id === selectedReceptorId) ??
+        false)
+    ) {
+      setSelectedReceptorId(null);
+      if (activePanel === "receptor") {
+        setActivePanel(mainView);
+      }
+    }
+  }, [network, selectedCandidateId, selectedReceptorId, activePanel, mainView]);
 
   async function refreshEvents() {
     const backendEvents = await neuralApi.getEvents();
@@ -317,6 +346,7 @@ export function MissionControl() {
       const snapshot = await neuralApi.injectSignal(neuronId, amountMv);
       setNetwork(snapshot);
       setActivePropagations([]);
+      setActiveSensoryDeliveries([]);
       await refreshEvents();
       if (showStimFeedback) {
         showStimulationFeedback(neuronId, amountMv);
@@ -368,9 +398,11 @@ export function MissionControl() {
       setLastTrace(null);
       setTimeline([]);
       setActivePropagations([]);
+      setActiveSensoryDeliveries([]);
       setSeenEventIds(new Set());
       setAutoStep(0);
       autoStepRef.current = 0;
+      setSelectedReceptorId(null);
       await refreshEvents();
     } catch (err) {
       const message =
@@ -439,12 +471,14 @@ export function MissionControl() {
     setSelectedNeuronId(neuronId);
     setSelectedSynapseId(null);
     setSelectedCandidateId(null);
+    setSelectedReceptorId(null);
     setActivePanel("node");
   }
 
   function handleSelectSynapse(synapseId: string) {
     setSelectedSynapseId(synapseId);
     setSelectedCandidateId(null);
+    setSelectedReceptorId(null);
     setPrunedNotice(null);
     setActivePanel("synapse");
   }
@@ -452,7 +486,40 @@ export function MissionControl() {
   function handleSelectCandidate(candidateId: string) {
     setSelectedCandidateId(candidateId);
     setSelectedSynapseId(null);
+    setSelectedReceptorId(null);
     setActivePanel("candidate");
+  }
+
+  function handleSelectReceptor(receptorId: string) {
+    setSelectedReceptorId(receptorId);
+    setSelectedNeuronId(null);
+    setSelectedSynapseId(null);
+    setSelectedCandidateId(null);
+    setActivePanel("receptor");
+  }
+
+  async function handleEnvironmentControls(controls: EnvironmentControlsRequest) {
+    if (busyRef.current || status !== "connected") {
+      return;
+    }
+    setBusy(true);
+    busyRef.current = true;
+    setError(null);
+    try {
+      const snapshot = await neuralApi.updateEnvironmentControls(controls);
+      setNetwork(snapshot);
+      await refreshEvents();
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Request failed";
+      setError(message);
+      if (err instanceof ApiError && err.status === 0) {
+        setStatus("unavailable");
+      }
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
+    }
   }
 
   function handleTissueDisplayModeChange(mode: TissueDisplayMode) {
@@ -482,6 +549,7 @@ export function MissionControl() {
     activePanel === "node" ||
     activePanel === "synapse" ||
     activePanel === "candidate" ||
+    activePanel === "receptor" ||
     activePanel === "timeline" ||
     activePanel === "controls";
   const panelTitle =
@@ -491,13 +559,15 @@ export function MissionControl() {
         ? "Synapse"
         : activePanel === "candidate"
           ? "Growth Candidate"
-          : activePanel === "timeline"
-            ? "Timeline"
-            : activePanel === "controls"
-              ? "Controls"
-              : mainView === "tissue"
-                ? "Tissue"
-                : "Network";
+          : activePanel === "receptor"
+            ? "Receptor"
+            : activePanel === "timeline"
+              ? "Timeline"
+              : activePanel === "controls"
+                ? "Controls"
+                : mainView === "tissue"
+                  ? "Tissue"
+                  : "Network";
   const navActive =
     activePanel === "timeline" || activePanel === "controls" ? activePanel : mainView;
 
@@ -511,6 +581,11 @@ export function MissionControl() {
       ? network?.structural.growthCandidates.find(
           (candidate) => candidate.id === selectedCandidateId,
         )
+      : null) ?? null;
+
+  const selectedReceptor =
+    (selectedReceptorId
+      ? network?.environment?.receptors.find((receptor) => receptor.id === selectedReceptorId)
       : null) ?? null;
 
   const uiRevision =
@@ -530,7 +605,7 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.7"
+          version="0.8"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
@@ -539,7 +614,7 @@ export function MissionControl() {
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Developmental Neural Tissue · Version 0.7
+          Autonomous Sensory Environment · Version 0.8
         </p>
       </header>
 
@@ -551,7 +626,9 @@ export function MissionControl() {
           aria-label={mainView === "tissue" ? "Tissue view" : "Network graph"}
         >
           {mainView === "network" ? (
-            <p className="network-gesture-hint">Tap: Inspect · Hold: Stimulate +5 mV</p>
+            <p className="network-gesture-hint">
+              Tap: Inspect · Hold: Laboratory Electrode +5 mV
+            </p>
           ) : null}
           {network ? (
             mainView === "tissue" ? (
@@ -562,9 +639,11 @@ export function MissionControl() {
                 selectedNeuronId={selectedNeuronId}
                 selectedSynapseId={selectedSynapseId}
                 selectedCandidateId={selectedCandidateId}
+                selectedReceptorId={selectedReceptorId}
                 displayMode={tissueDisplayMode}
                 onDisplayModeChange={handleTissueDisplayModeChange}
                 activePropagations={activePropagations}
+                activeSensoryDeliveries={activeSensoryDeliveries}
                 reducedMotion={reducedMotion}
                 interactionDisabled={status !== "connected" || busy || running}
                 pressingNeuronId={pressingNeuronId}
@@ -573,9 +652,11 @@ export function MissionControl() {
                 pruningSynapseIds={pruningSynapseIds}
                 topology={network.structural.topology}
                 development={network.development ?? null}
+                environment={network.environment ?? null}
                 onSelectNeuron={handleSelectNeuron}
                 onSelectSynapse={handleSelectSynapse}
                 onSelectCandidate={handleSelectCandidate}
+                onSelectReceptor={handleSelectReceptor}
                 onLongPressStimulate={handleLongPressStimulate}
                 onPressVisualChange={setPressingNeuronId}
               />
@@ -671,6 +752,12 @@ export function MissionControl() {
               }
             />
           ) : null}
+          {activePanel === "receptor" ? (
+            <ReceptorPanel
+              receptor={selectedReceptor}
+              connections={network?.environment?.sensoryConnections ?? []}
+            />
+          ) : null}
           {activePanel === "timeline" ? (
             <TimelinePanel
               entries={timeline}
@@ -687,6 +774,7 @@ export function MissionControl() {
               maxAutoSteps={MAX_AUTO_STEPS}
               structural={network?.structural ?? null}
               development={network?.development ?? null}
+              environment={network?.environment ?? null}
               stimulateDisabled={
                 selectedNeuron
                   ? !neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
@@ -720,6 +808,7 @@ export function MissionControl() {
               onRun={handleRunSequence}
               onPause={handlePauseSequence}
               onReset={() => void handleReset()}
+              onEnvironmentControls={(controls) => void handleEnvironmentControls(controls)}
             />
           ) : null}
         </ContextPanel>

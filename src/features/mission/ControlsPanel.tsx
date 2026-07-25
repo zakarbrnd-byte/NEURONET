@@ -1,5 +1,11 @@
 import { useState } from "react";
-import type { DevelopmentSummary, StructuralSnapshot } from "../../types/neural";
+import type {
+  DevelopmentSummary,
+  EnvironmentControlsRequest,
+  EnvironmentPreset,
+  EnvironmentSnapshot,
+  StructuralSnapshot,
+} from "../../types/neural";
 import { shortNeuronId } from "../../types/neural";
 import type { ControlsCategory } from "../../types/ui";
 
@@ -12,6 +18,7 @@ interface ControlsPanelProps {
   maxAutoSteps: number;
   structural: StructuralSnapshot | null;
   development?: DevelopmentSummary | null;
+  environment?: EnvironmentSnapshot | null;
   stimulateDisabled?: boolean;
   onStimulateWeak: () => void;
   onStimulateStrong: () => void;
@@ -19,13 +26,21 @@ interface ControlsPanelProps {
   onRun: () => void;
   onPause: () => void;
   onReset: () => void;
+  onEnvironmentControls: (controls: EnvironmentControlsRequest) => void;
 }
 
 const CATEGORIES: Array<{ id: ControlsCategory; label: string }> = [
   { id: "stimulus", label: "Stimulus" },
   { id: "time", label: "Time" },
   { id: "structure", label: "Structure" },
+  { id: "environment", label: "Environment" },
   { id: "reset", label: "Reset" },
+];
+
+const PRESETS: Array<{ id: EnvironmentPreset; label: string }> = [
+  { id: "quiet", label: "Quiet" },
+  { id: "balanced", label: "Balanced" },
+  { id: "active", label: "Active" },
 ];
 
 export function ControlsPanel({
@@ -37,6 +52,7 @@ export function ControlsPanel({
   maxAutoSteps,
   structural,
   development = null,
+  environment = null,
   stimulateDisabled = false,
   onStimulateWeak,
   onStimulateStrong,
@@ -44,6 +60,7 @@ export function ControlsPanel({
   onRun,
   onPause,
   onReset,
+  onEnvironmentControls,
 }: ControlsPanelProps) {
   const [category, setCategory] = useState<ControlsCategory>("stimulus");
   const noNeuron = !selectedNeuronId;
@@ -52,6 +69,8 @@ export function ControlsPanel({
   const runLocked = disabled || busy || running;
   const pauseLocked = disabled || !running;
   const resetLocked = disabled || busy;
+  const envLocked = disabled || busy;
+  const cfg = environment?.config;
 
   return (
     <div className="controls-panel">
@@ -62,7 +81,7 @@ export function ControlsPanel({
         </strong>
       </p>
       <p className="hint">
-        Long-press a neuron on the graph for quick +5 mV. Sequence:{" "}
+        Long-press a neuron on the graph for Laboratory Electrode +5 mV. Sequence:{" "}
         {running ? "running" : "paused"} · {autoStep}/{maxAutoSteps}
         {stimulateDisabled
           ? " · Developing cells are not electrically eligible for stimulation."
@@ -87,6 +106,10 @@ export function ControlsPanel({
       <div className="controls-actions">
         {category === "stimulus" ? (
           <>
+            <p className="hint" data-testid="laboratory-electrode-label">
+              Laboratory Electrode — direct current injection into a selected neuron. Distinct from
+              sensory receptor input.
+            </p>
             <button
               type="button"
               className="btn btn-primary"
@@ -145,7 +168,7 @@ export function ControlsPanel({
               <h3 className="help-heading">Development</h3>
               <p className="hint">
                 Read-only summary. Progenitor birth and settlement are backend-owned in Version
-                0.7.
+                0.7+.
               </p>
               <dl className="status-list panel-metrics">
                 <div className="status-row">
@@ -255,6 +278,143 @@ export function ControlsPanel({
           </>
         ) : null}
 
+        {category === "environment" ? (
+          <section
+            className="environment-controls"
+            aria-label="Autonomous Sensory Environment"
+            data-testid="environment-controls"
+          >
+            <h3 className="help-heading">Autonomous Sensory Environment</h3>
+            <p className="hint" data-testid="environment-limitations-note">
+              Scientific limitation: this is a deterministic virtual sensory schedule, not
+              perception, embodiment, or cognition. Events come only from the backend.
+            </p>
+
+            <div className="env-toggle-row">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={envLocked}
+                data-testid="env-toggle-enabled"
+                onClick={() => onEnvironmentControls({ enabled: !(cfg?.enabled ?? true) })}
+              >
+                Environment: {cfg?.enabled ? "On" : "Off"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={envLocked || !(cfg?.enabled ?? false)}
+                data-testid="env-toggle-background"
+                onClick={() =>
+                  onEnvironmentControls({
+                    backgroundEnabled: !(cfg?.backgroundEnabled ?? true),
+                  })
+                }
+              >
+                Background: {cfg?.backgroundEnabled ? "On" : "Off"}
+              </button>
+            </div>
+            <div className="env-toggle-row">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={envLocked || !(cfg?.enabled ?? false)}
+                data-testid="env-toggle-pattern-a"
+                onClick={() =>
+                  onEnvironmentControls({
+                    patternAEnabled: !(cfg?.patternAEnabled ?? true),
+                  })
+                }
+              >
+                Pattern A: {cfg?.patternAEnabled ? "On" : "Off"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={envLocked || !(cfg?.enabled ?? false)}
+                data-testid="env-toggle-pattern-b"
+                onClick={() =>
+                  onEnvironmentControls({
+                    patternBEnabled: !(cfg?.patternBEnabled ?? true),
+                  })
+                }
+              >
+                Pattern B: {cfg?.patternBEnabled ? "On" : "Off"}
+              </button>
+            </div>
+
+            <p className="hint">Preset</p>
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Environment preset"
+              data-testid="environment-preset-group"
+            >
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={`segmented-item ${
+                    environment?.preset === preset.id ? "is-active" : ""
+                  }`}
+                  disabled={envLocked}
+                  data-testid={`env-preset-${preset.id}`}
+                  onClick={() => onEnvironmentControls({ preset: preset.id })}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            <dl className="status-list panel-metrics" data-testid="environment-status-summary">
+              <div className="status-row">
+                <dt>Mode</dt>
+                <dd data-testid="env-mode">{environment?.mode ?? "—"}</dd>
+              </div>
+              <div className="status-row">
+                <dt>Preset</dt>
+                <dd data-testid="env-preset">{environment?.preset ?? "—"}</dd>
+              </div>
+              <div className="status-row">
+                <dt>Age (ticks)</dt>
+                <dd data-testid="env-age">{environment?.ageTicks ?? "—"}</dd>
+              </div>
+              <div className="status-row">
+                <dt>Event count</dt>
+                <dd data-testid="env-event-count">{environment?.eventCount ?? "—"}</dd>
+              </div>
+              <div className="status-row">
+                <dt>Active patterns</dt>
+                <dd data-testid="env-active-patterns">
+                  {environment?.activePatterns.length
+                    ? environment.activePatterns.join(", ")
+                    : "None"}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Next scheduled</dt>
+                <dd data-testid="env-next-scheduled">
+                  {environment?.nextScheduledEventTick != null
+                    ? `Tick ${environment.nextScheduledEventTick}`
+                    : "None"}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Neural synapses</dt>
+                <dd data-testid="env-neural-synapse-count">
+                  {environment?.neuralSynapseCount ?? "—"}
+                </dd>
+              </div>
+              <div className="status-row">
+                <dt>Sensory inputs</dt>
+                <dd data-testid="env-sensory-input-count">
+                  {environment?.sensoryInputCount ?? "—"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
         {category === "reset" ? (
           <>
             <button
@@ -274,17 +434,15 @@ export function ControlsPanel({
                   <dt>What is Tissue View?</dt>
                   <dd>
                     This view shows the physical organization of the artificial nervous system.
-                    Neuron positions come from the backend. Signals travel along axons. Development
-                    mode shows the Simplified Progenitor Zone, developing cells, growth candidates,
-                    and pruning risk without inventing biology.
+                    Neuron positions come from the backend. Sensory mode shows receptors and
+                    sensory input paths distinct from neural synapses.
                   </dd>
                 </div>
                 <div>
-                  <dt>Network View vs Tissue View</dt>
+                  <dt>Laboratory Electrode</dt>
                   <dd>
-                    Network View is a schematic graph for dynamics. Tissue View uses backend cell
-                    positions, soma/dendrite morphology, and excitatory (arrow) vs inhibitory (bar)
-                    synapses.
+                    Manual stimulation injects current directly into a neuron. It is not a sensory
+                    receptor event.
                   </dd>
                 </div>
                 <div>
@@ -299,26 +457,10 @@ export function ControlsPanel({
                   <dt>Threshold</dt>
                   <dd>The level required for the neuron to fire.</dd>
                 </div>
-                <div>
-                  <dt>Distance to Threshold</dt>
-                  <dd>How much more depolarization is needed before firing.</dd>
-                </div>
-                <div>
-                  <dt>Refractory</dt>
-                  <dd>How many simulation steps remain before the neuron can fire again.</dd>
-                </div>
-                <div>
-                  <dt>Fatigue</dt>
-                  <dd>A simplified temporary exhaustion value.</dd>
-                </div>
-                <div>
-                  <dt>Energy</dt>
-                  <dd>A simplified simulation cost indicator.</dd>
-                </div>
               </dl>
               <p className="hint">
-                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV (settled cells only).
-                Developmental Neural Tissue · Version 0.7
+                Tap a neuron to inspect. Hold ~0.5s for Laboratory Electrode +5 mV (settled cells
+                only). Autonomous Sensory Environment · Version 0.8
               </p>
             </section>
           </>

@@ -104,6 +104,162 @@ const defaultDevelopment = {
   },
 };
 
+const defaultEnvironment = {
+  environmentId: "ENV-001",
+  name: "Virtual Sensory Environment",
+  enabled: true,
+  mode: "active",
+  preset: "balanced" as const,
+  seed: 20260801,
+  ageTicks: 6,
+  eventCount: 0,
+  latestEventTick: null as number | null,
+  nextScheduledEventTick: 8 as number | null,
+  nextBackgroundTick: 8 as number | null,
+  nextPatternATick: 16 as number | null,
+  nextPatternBTick: 28 as number | null,
+  activePatterns: [] as string[],
+  statistics: {
+    totalEvents: 0,
+    backgroundEvents: 0,
+    patternAStarts: 0,
+    patternBStarts: 0,
+    receptorActivations: 0,
+    sensoryDeliveries: 0,
+  },
+  config: {
+    enabled: true,
+    deterministicSeed: 20260801,
+    preset: "balanced" as const,
+    backgroundEnabled: true,
+    backgroundIntervalTicks: 8,
+    backgroundStrengthMv: 2.0,
+    patternAEnabled: true,
+    patternBEnabled: true,
+    patternAIntervalTicks: 24,
+    patternBIntervalTicks: 36,
+    patternAFirstTick: 16,
+    patternBFirstTick: 28,
+    maximumEventsPerTick: 6,
+  },
+  receptors: [
+    {
+      id: "RECEPTOR-BG",
+      receptorType: "background" as const,
+      position: { x: 0.06, y: 0.5 },
+      region: "Sensory Margin",
+      sensitivity: 1,
+      activationThreshold: 0.5,
+      currentActivation: 0,
+      lastActivatedTick: null as number | null,
+      activationCount: 0,
+      active: false,
+    },
+    {
+      id: "RECEPTOR-A",
+      receptorType: "touch_a" as const,
+      position: { x: 0.08, y: 0.32 },
+      region: "Sensory Margin",
+      sensitivity: 1,
+      activationThreshold: 0.5,
+      currentActivation: 0,
+      lastActivatedTick: null as number | null,
+      activationCount: 0,
+      active: false,
+    },
+    {
+      id: "RECEPTOR-B",
+      receptorType: "touch_b" as const,
+      position: { x: 0.08, y: 0.68 },
+      region: "Sensory Margin",
+      sensitivity: 1,
+      activationThreshold: 0.5,
+      currentActivation: 0,
+      lastActivatedTick: null as number | null,
+      activationCount: 0,
+      active: false,
+    },
+  ],
+  sensoryConnections: [
+    {
+      id: "SENSORY-001",
+      receptorId: "RECEPTOR-BG",
+      targetNeuronId: "NEURON-001",
+      weightMv: 2,
+      enabled: true,
+    },
+    {
+      id: "SENSORY-002",
+      receptorId: "RECEPTOR-A",
+      targetNeuronId: "NEURON-001",
+      weightMv: 12,
+      enabled: true,
+    },
+    {
+      id: "SENSORY-003",
+      receptorId: "RECEPTOR-A",
+      targetNeuronId: "NEURON-002",
+      weightMv: 6,
+      enabled: true,
+    },
+    {
+      id: "SENSORY-004",
+      receptorId: "RECEPTOR-B",
+      targetNeuronId: "NEURON-002",
+      weightMv: 12,
+      enabled: true,
+    },
+    {
+      id: "SENSORY-005",
+      receptorId: "RECEPTOR-B",
+      targetNeuronId: "NEURON-003",
+      weightMv: 4,
+      enabled: true,
+    },
+  ],
+  patterns: [
+    {
+      id: "PATTERN-A",
+      name: "Touch Pattern A",
+      steps: [
+        { offsetTicks: 0, receptorId: "RECEPTOR-A", magnitudeMv: 12 },
+        { offsetTicks: 1, receptorId: "RECEPTOR-B", magnitudeMv: 6 },
+      ],
+      repetitionIntervalTicks: 24,
+      firstTick: 16,
+      enabled: true,
+      activationCount: 0,
+      lastStartedTick: null as number | null,
+      active: false,
+      activeStartedTick: null as number | null,
+    },
+    {
+      id: "PATTERN-B",
+      name: "Touch Pattern B",
+      steps: [
+        { offsetTicks: 0, receptorId: "RECEPTOR-B", magnitudeMv: 12 },
+        { offsetTicks: 2, receptorId: "RECEPTOR-A", magnitudeMv: 4 },
+      ],
+      repetitionIntervalTicks: 36,
+      firstTick: 28,
+      enabled: true,
+      activationCount: 0,
+      lastStartedTick: null as number | null,
+      active: false,
+      activeStartedTick: null as number | null,
+    },
+  ],
+  recentEvents: [] as Array<{
+    eventId: string;
+    tick: number;
+    kind: string;
+    reasonCodes: string[];
+    message: string;
+  }>,
+  sensoryInputCount: 5,
+  neuralSynapseCount: 5,
+};
+
 function makeSynapse(
   id: string,
   sourceNeuronId: string,
@@ -249,6 +405,7 @@ const snapshot = {
     history: [],
   },
   development: defaultDevelopment,
+  environment: defaultEnvironment,
 };
 
 const stepTrace = {
@@ -264,6 +421,18 @@ const stepTrace = {
     },
   ],
   eventIds: ["evt-fire-1", "evt-prop-1"],
+  environmentTrace: {
+    eventsGenerated: [] as string[],
+    receptorsActivated: [] as string[],
+    sensoryDeliveries: [] as Array<{
+      receptorId: string;
+      targetNeuronId: string;
+      magnitudeMv: number;
+      connectionId: string;
+      eventId: string;
+    }>,
+    activePatterns: [] as string[],
+  },
   network: {
     ...snapshot,
     tick: 7,
@@ -298,7 +467,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.7", ageSeconds: 12 })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.8", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -309,6 +478,7 @@ vi.mock("./services/neuralApi", () => {
       })),
       stepNetwork: vi.fn(async () => stepTrace),
       resetNetwork: vi.fn(async () => snapshot),
+      updateEnvironmentControls: vi.fn(async () => snapshot),
     },
   };
 });
@@ -329,7 +499,7 @@ describe("Mission Control page", () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
     vi.mocked(neuralApi.getHealth).mockResolvedValue({
       status: "ok",
-      version: "0.7",
+      version: "0.8",
       ageSeconds: 12,
     });
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
@@ -342,6 +512,7 @@ describe("Mission Control page", () => {
     }));
     vi.mocked(neuralApi.stepNetwork).mockResolvedValue(stepTrace);
     vi.mocked(neuralApi.resetNetwork).mockResolvedValue(snapshot);
+    vi.mocked(neuralApi.updateEnvironmentControls).mockResolvedValue(snapshot);
   });
 
   afterEach(() => {
@@ -352,7 +523,7 @@ describe("Mission Control page", () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Developmental Neural Tissue · Version 0.7",
+      "Autonomous Sensory Environment · Version 0.8",
     );
   });
 
@@ -423,7 +594,7 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.7")).toBeInTheDocument();
+    expect(within(header).getByText("0.8")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
   });
@@ -532,10 +703,12 @@ describe("Mission Control page", () => {
     };
     await user.click(screen.getByTestId("tissue-mode-structure"));
     await user.click(screen.getByTestId("tissue-mode-development"));
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
     await user.click(screen.getByTestId("tissue-mode-activity"));
     expect(vi.mocked(neuralApi.stepNetwork).mock.calls.length).toBe(callsBefore.step);
     expect(vi.mocked(neuralApi.resetNetwork).mock.calls.length).toBe(callsBefore.reset);
     expect(vi.mocked(neuralApi.injectSignal).mock.calls.length).toBe(callsBefore.inject);
+    expect(vi.mocked(neuralApi.updateEnvironmentControls).mock.calls.length).toBe(0);
   });
 
   it("renders no candidate paths when backend sends none", async () => {
@@ -557,11 +730,11 @@ describe("Mission Control page", () => {
   });
 
 
-  it("shows Version 0.7 developmental marker and topology counters from backend", async () => {
+  it("shows Version 0.8 sensory marker and topology counters from backend", async () => {
     const user = userEvent.setup();
     await renderConnectedApp();
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Developmental Neural Tissue · Version 0.7",
+      "Autonomous Sensory Environment · Version 0.8",
     );
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
@@ -926,5 +1099,242 @@ describe("Mission Control page", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     expect(vi.mocked(neuralApi.stepNetwork).mock.calls.length).toBe(stepsWhileRunning);
+  });
+
+  it("exposes Sensory display mode with backend receptors and distinct sensory paths", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
+    expect(screen.getByTestId("tissue-view")).toHaveAttribute("data-display-mode", "sensory");
+    expect(screen.getByTestId("tissue-view")).toHaveAttribute("data-has-environment", "true");
+    expect(screen.getByTestId("tissue-receptor-RECEPTOR-A")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-receptor-RECEPTOR-B")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-receptor-RECEPTOR-BG")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-sensory-SENSORY-002")).toHaveAttribute(
+      "data-sensory-connection",
+      "true",
+    );
+    expect(
+      screen.getByTestId("tissue-sensory-SENSORY-002").querySelector(".tissue-sensory-path-inner"),
+    ).toHaveAttribute("stroke-dasharray");
+    expect(screen.getByTestId("tissue-sensory-legend")).toHaveTextContent(
+      "Double / dotted: sensory input path",
+    );
+    expect(screen.getByTestId("sensory-receptor-count")).toHaveTextContent("3");
+    expect(screen.getByTestId("sensory-input-count")).toHaveTextContent("5");
+    expect(screen.getByTestId("sensory-neural-synapse-count")).toHaveTextContent("5");
+  });
+
+  it("does not invent receptors or sensory paths when environment is absent", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue({
+      ...snapshot,
+      environment: null,
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
+    expect(screen.getByTestId("tissue-view")).toHaveAttribute("data-has-environment", "false");
+    expect(screen.queryByTestId("tissue-receptor-RECEPTOR-A")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tissue-sensory-SENSORY-001")).not.toBeInTheDocument();
+  });
+
+  it("opens Receptor inspector without neuron firing controls", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
+    await user.click(screen.getByLabelText("Inspect receptor RECEPTOR-A"));
+    expect(await screen.findByRole("dialog", { name: "Receptor" })).toBeVisible();
+    expect(screen.getByTestId("receptor-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("receptor-id")).toHaveTextContent("RECEPTOR-A");
+    expect(screen.getByTestId("receptor-type")).toHaveTextContent("Touch A");
+    expect(screen.getByTestId("receptor-region")).toHaveTextContent("Sensory Margin");
+    expect(screen.getByTestId("receptor-no-stim-note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Weak Signal/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("receptor-connection-SENSORY-002")).toHaveTextContent("N-001");
+  });
+
+  it("shows Environment controls panel and forwards toggles to the API", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.updateEnvironmentControls).mockImplementation(async (controls) => ({
+      ...snapshot,
+      environment: {
+        ...defaultEnvironment,
+        enabled: controls.enabled ?? defaultEnvironment.enabled,
+        mode: (controls.enabled ?? defaultEnvironment.enabled) ? "active" : "paused",
+        preset: controls.preset ?? defaultEnvironment.preset,
+        config: {
+          ...defaultEnvironment.config,
+          enabled: controls.enabled ?? defaultEnvironment.config.enabled,
+          backgroundEnabled:
+            controls.backgroundEnabled ?? defaultEnvironment.config.backgroundEnabled,
+          patternAEnabled:
+            controls.patternAEnabled ?? defaultEnvironment.config.patternAEnabled,
+          patternBEnabled:
+            controls.patternBEnabled ?? defaultEnvironment.config.patternBEnabled,
+          preset: controls.preset ?? defaultEnvironment.config.preset,
+        },
+      },
+    }));
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    await user.click(screen.getByRole("tab", { name: "Environment" }));
+    expect(screen.getByTestId("environment-controls")).toBeInTheDocument();
+    expect(screen.getByTestId("environment-limitations-note")).toHaveTextContent(
+      "deterministic virtual sensory schedule",
+    );
+    expect(screen.getByTestId("env-neural-synapse-count")).toHaveTextContent("5");
+    expect(screen.getByTestId("env-sensory-input-count")).toHaveTextContent("5");
+    await user.click(screen.getByTestId("env-toggle-pattern-a"));
+    await waitFor(() =>
+      expect(neuralApi.updateEnvironmentControls).toHaveBeenCalledWith({
+        patternAEnabled: false,
+      }),
+    );
+    await user.click(screen.getByTestId("env-preset-quiet"));
+    await waitFor(() =>
+      expect(neuralApi.updateEnvironmentControls).toHaveBeenCalledWith({ preset: "quiet" }),
+    );
+    await user.click(screen.getByTestId("env-toggle-enabled"));
+    await waitFor(() =>
+      expect(neuralApi.updateEnvironmentControls).toHaveBeenCalledWith({ enabled: false }),
+    );
+  });
+
+  it("labels manual stimulation as Laboratory Electrode", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    expect(screen.getByTestId("laboratory-electrode-label")).toHaveTextContent(
+      "Laboratory Electrode",
+    );
+    expect(screen.getByText(/Hold: Laboratory Electrode/i)).toBeInTheDocument();
+  });
+
+  it("uses structured environment and receptor timeline filters without inventing events", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([
+      {
+        id: "evt-env-1",
+        timestamp: "2026-01-01T00:00:00Z",
+        networkTick: 8,
+        type: "environment_event_started",
+        sourceNeuronId: "RECEPTOR-BG",
+        targetNeuronId: "NEURON-001",
+        amountMv: 2,
+        reasonCodes: ["background_pulse"],
+        message: "Background pulse +2.0 mV via RECEPTOR-BG.",
+      },
+      {
+        id: "evt-rec-1",
+        timestamp: "2026-01-01T00:00:01Z",
+        networkTick: 8,
+        type: "receptor_activated",
+        sourceNeuronId: "RECEPTOR-BG",
+        entityId: "RECEPTOR-BG",
+        amountMv: 2,
+        reasonCodes: ["receptor_channel"],
+        message: "RECEPTOR-BG activated (2.0 mV).",
+      },
+      {
+        id: "evt-pat-1",
+        timestamp: "2026-01-01T00:00:02Z",
+        networkTick: 16,
+        type: "sensory_pattern_started",
+        entityId: "PATTERN-A",
+        reasonCodes: ["pattern_schedule"],
+        message: "PATTERN-A started.",
+      },
+      {
+        id: "evt-lab-1",
+        timestamp: "2026-01-01T00:00:03Z",
+        networkTick: 17,
+        type: "laboratory_stimulus",
+        neuronId: "NEURON-001",
+        targetNeuronId: "NEURON-001",
+        amountMv: 5,
+        reasonCodes: [],
+        message: "Laboratory electrode +5 mV to NEURON-001.",
+      },
+    ]);
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    await user.click(screen.getByTestId("timeline-filter-environment"));
+    expect(await screen.findByTestId("timeline-environment-item")).toHaveTextContent(
+      "Background pulse +2.0 mV via RECEPTOR-BG.",
+    );
+    await user.click(screen.getByTestId("timeline-filter-receptors"));
+    expect(await screen.findByTestId("timeline-environment-item")).toHaveTextContent(
+      "RECEPTOR-BG activated",
+    );
+    await user.click(screen.getByTestId("timeline-filter-patterns"));
+    expect(await screen.findByTestId("timeline-environment-item")).toHaveTextContent(
+      "PATTERN-A started.",
+    );
+    await user.click(screen.getByTestId("timeline-filter-laboratory"));
+    expect(await screen.findByTestId("timeline-environment-item")).toHaveTextContent(
+      "Laboratory electrode",
+    );
+  });
+
+  it("animates sensory deliveries from step environmentTrace only", async () => {
+    const user = userEvent.setup();
+    vi.mocked(neuralApi.stepNetwork).mockResolvedValue({
+      ...stepTrace,
+      environmentTrace: {
+        eventsGenerated: ["env-del-1"],
+        receptorsActivated: ["RECEPTOR-A"],
+        sensoryDeliveries: [
+          {
+            receptorId: "RECEPTOR-A",
+            targetNeuronId: "NEURON-001",
+            magnitudeMv: 12,
+            connectionId: "SENSORY-002",
+            eventId: "env-del-1",
+          },
+        ],
+        activePatterns: ["PATTERN-A"],
+      },
+      network: {
+        ...snapshot,
+        tick: 16,
+        environment: {
+          ...defaultEnvironment,
+          ageTicks: 16,
+          activePatterns: ["PATTERN-A"],
+          receptors: defaultEnvironment.receptors.map((r) =>
+            r.id === "RECEPTOR-A"
+              ? { ...r, active: true, currentActivation: 12, activationCount: 1 }
+              : r,
+          ),
+        },
+      },
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
+    await user.click(screen.getByRole("button", { name: "Step one tick" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tissue-sensory-SENSORY-002")).toHaveClass("is-pulse"),
+    );
+    expect(screen.getByTestId("tissue-receptor-RECEPTOR-A")).toHaveAttribute(
+      "data-receptor-active",
+      "true",
+    );
+    expect(screen.getByTestId("sensory-active-patterns")).toHaveTextContent("PATTERN-A");
+  });
+
+  it("keeps development mode working alongside sensory mode", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("tissue-candidate-CANDIDATE-NEURON-002-NEURON-001")).toBeInTheDocument();
+    await user.click(screen.getByTestId("tissue-mode-sensory"));
+    expect(screen.getByTestId("tissue-receptor-RECEPTOR-A")).toBeInTheDocument();
+    await user.click(screen.getByTestId("tissue-mode-development"));
+    expect(screen.getByTestId("tissue-progenitor-zone")).toBeInTheDocument();
   });
 });

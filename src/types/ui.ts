@@ -6,13 +6,14 @@ export type MissionPanel =
   | "node"
   | "synapse"
   | "candidate"
+  | "receptor"
   | "timeline"
   | "controls";
 
 export type MainView = "network" | "tissue";
 
 /** Frontend-only Tissue canvas emphasis (does not mutate backend). */
-export type TissueDisplayMode = "activity" | "structure" | "development";
+export type TissueDisplayMode = "activity" | "structure" | "development" | "sensory";
 
 export type NodeCategory = "electrical" | "recovery" | "connections" | "history" | "biology";
 
@@ -31,6 +32,10 @@ export type TimelineFilter =
   | "differentiation"
   | "migration"
   | "settlement"
-  | "capacity";
+  | "capacity"
+  | "environment"
+  | "receptors"
+  | "patterns"
+  | "laboratory";
 
-export type ControlsCategory = "stimulus" | "time" | "structure" | "reset";
+export type ControlsCategory = "stimulus" | "time" | "structure" | "environment" | "reset";

@@ -1,4 +1,5 @@
 import type {
+  EnvironmentControlsRequest,
   HealthResponse,
   NetworkEvent,
   NetworkSnapshot,
@@ -79,5 +80,14 @@ export const neuralApi = {
 
   resetNetwork(): Promise<NetworkSnapshot> {
     return request<NetworkSnapshot>("/api/network/reset", { method: "POST" });
+  },
+
+  updateEnvironmentControls(
+    controls: EnvironmentControlsRequest,
+  ): Promise<NetworkSnapshot> {
+    return request<NetworkSnapshot>("/api/environment/controls", {
+      method: "POST",
+      body: JSON.stringify(controls),
+    });
   },
 };
