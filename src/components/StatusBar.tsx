@@ -24,7 +24,7 @@ export function StatusBar({
   onRetry,
 }: StatusBarProps) {
   return (
-    <header className="status-bar" aria-label="Mission status">
+    <div className="status-bar" aria-label="Mission status">
       <div className="status-bar-brand">
         <span className="status-bar-title">NEURONET</span>
         <span className="status-bar-version">{version}</span>
@@ -56,6 +56,6 @@ export function StatusBar({
           {error}
         </p>
       ) : null}
-    </header>
+    </div>
   );
 }

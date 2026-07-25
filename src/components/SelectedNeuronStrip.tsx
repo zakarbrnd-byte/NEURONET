@@ -33,25 +33,25 @@ export function SelectedNeuronStrip({ neuron, onOpenNode }: SelectedNeuronStripP
     >
       <span className="neuron-strip-id">{shortNeuronId(neuron.id)}</span>
       <span className="neuron-strip-sep" aria-hidden="true">
-        |
+        ·
       </span>
       <span className={`neuron-strip-state state-text-${state.toLowerCase()}`}>{state}</span>
       <span className="neuron-strip-sep" aria-hidden="true">
-        |
+        ·
       </span>
       <span>{neuron.membranePotentialMv.toFixed(0)} mV</span>
       <span className="neuron-strip-sep" aria-hidden="true">
-        |
+        ·
       </span>
       <span>{distanceText}</span>
       <span className="neuron-strip-sep" aria-hidden="true">
-        |
+        ·
       </span>
-      <span>R:{neuron.refractoryTicks}</span>
+      <span>R{neuron.refractoryTicks}</span>
       {neuron.fired ? (
         <>
           <span className="neuron-strip-sep" aria-hidden="true">
-            |
+            ·
           </span>
           <span className="neuron-strip-fired">Fired</span>
         </>

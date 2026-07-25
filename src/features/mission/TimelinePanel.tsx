@@ -9,8 +9,8 @@ interface TimelinePanelProps {
 
 const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: "all", label: "All" },
-  { id: "fired", label: "Fired" },
-  { id: "signals", label: "Signals" },
+  { id: "fired", label: "Firing" },
+  { id: "signals", label: "Propagation" },
   { id: "recovery", label: "Recovery" },
 ];
 

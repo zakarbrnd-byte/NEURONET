@@ -5,6 +5,7 @@ interface QuickActionsProps {
   onStep: () => void;
   onRun: () => void;
   onPause: () => void;
+  onReset: () => void;
 }
 
 export function QuickActions({
@@ -14,6 +15,7 @@ export function QuickActions({
   onStep,
   onRun,
   onPause,
+  onReset,
 }: QuickActionsProps) {
   return (
     <div className="quick-actions" aria-label="Quick simulation actions">
@@ -24,6 +26,9 @@ export function QuickActions({
         onClick={onStep}
         aria-label="Step one tick"
       >
+        <span className="quick-action-icon" aria-hidden="true">
+          ▸|
+        </span>
         Step
       </button>
       {running ? (
@@ -34,6 +39,9 @@ export function QuickActions({
           onClick={onPause}
           aria-label="Pause sequence"
         >
+          <span className="quick-action-icon" aria-hidden="true">
+            ❚❚
+          </span>
           Pause
         </button>
       ) : (
@@ -44,9 +52,24 @@ export function QuickActions({
           onClick={onRun}
           aria-label="Run sequence"
         >
+          <span className="quick-action-icon" aria-hidden="true">
+            ▶
+          </span>
           Run
         </button>
       )}
+      <button
+        type="button"
+        className="quick-action-btn"
+        disabled={disabled || busy}
+        onClick={onReset}
+        aria-label="Reset network"
+      >
+        <span className="quick-action-icon" aria-hidden="true">
+          ↺
+        </span>
+        Reset
+      </button>
     </div>
   );
 }

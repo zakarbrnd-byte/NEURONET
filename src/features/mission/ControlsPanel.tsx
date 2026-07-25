@@ -134,10 +134,45 @@ export function ControlsPanel({
             >
               Reset Network
             </button>
-            <p className="hint">
-              Help: Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. A tick is one backend
-              simulation step, not a real-world second.
-            </p>
+            <section className="help-section" aria-labelledby="help-heading">
+              <h3 id="help-heading" className="help-heading">
+                Help
+              </h3>
+              <dl className="help-list">
+                <div>
+                  <dt>Tick</dt>
+                  <dd>One complete backend simulation step. It is not one real-world second.</dd>
+                </div>
+                <div>
+                  <dt>Membrane Potential</dt>
+                  <dd>The neuron&apos;s current electrical state.</dd>
+                </div>
+                <div>
+                  <dt>Threshold</dt>
+                  <dd>The level required for the neuron to fire.</dd>
+                </div>
+                <div>
+                  <dt>Distance to Threshold</dt>
+                  <dd>How much more depolarization is needed before firing.</dd>
+                </div>
+                <div>
+                  <dt>Refractory</dt>
+                  <dd>How many simulation steps remain before the neuron can fire again.</dd>
+                </div>
+                <div>
+                  <dt>Fatigue</dt>
+                  <dd>A simplified temporary exhaustion value.</dd>
+                </div>
+                <div>
+                  <dt>Energy</dt>
+                  <dd>A simplified simulation cost indicator.</dd>
+                </div>
+              </dl>
+              <p className="hint">
+                Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Mission Control UI · Layout
+                Revision 1
+              </p>
+            </section>
           </>
         ) : null}
       </div>

@@ -76,15 +76,15 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
           <>
             <div className="status-row">
               <dt>
-                <MetricHint metric="restingPotential" label="Resting Potential" />
-              </dt>
-              <dd>{formatMv(neuron.restingPotentialMv)}</dd>
-            </div>
-            <div className="status-row">
-              <dt>
                 <MetricHint metric="membranePotential" label="Membrane Potential" />
               </dt>
               <dd>{formatMv(neuron.membranePotentialMv)}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="restingPotential" label="Resting Potential" />
+              </dt>
+              <dd>{formatMv(neuron.restingPotentialMv)}</dd>
             </div>
             <div className="status-row">
               <dt>
@@ -98,6 +98,18 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
               </dt>
               <dd>{formatMv(distance)}</dd>
             </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="firedLastTick" label="Fired Status" />
+              </dt>
+              <dd>{neuron.fired ? "Fired" : "Not fired"}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="neuronTick" label="Neuron Tick" />
+              </dt>
+              <dd>{neuron.tick}</dd>
+            </div>
           </>
         ) : null}
 
@@ -105,9 +117,9 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
           <>
             <div className="status-row">
               <dt>
-                <MetricHint metric="energy" label="Energy" />
+                <MetricHint metric="refractoryTicks" label="Refractory Ticks" />
               </dt>
-              <dd>{neuron.energy}%</dd>
+              <dd>{neuron.refractoryTicks}</dd>
             </div>
             <div className="status-row">
               <dt>
@@ -117,15 +129,9 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
             </div>
             <div className="status-row">
               <dt>
-                <MetricHint metric="refractoryTicks" label="Refractory Ticks" />
+                <MetricHint metric="energy" label="Energy" />
               </dt>
-              <dd>{neuron.refractoryTicks}</dd>
-            </div>
-            <div className="status-row">
-              <dt>
-                <MetricHint metric="firedLastTick" label="Fired Last Tick" />
-              </dt>
-              <dd>{neuron.fired ? "true" : "false"}</dd>
+              <dd>{neuron.energy}%</dd>
             </div>
           </>
         ) : null}
@@ -144,11 +150,6 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
               </dt>
               <dd>{outgoing}</dd>
             </div>
-          </>
-        ) : null}
-
-        {category === "history" ? (
-          <>
             <div className="status-row">
               <dt>
                 <MetricHint metric="latestSignal" label="Latest Received Signal" />
@@ -159,6 +160,11 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
                   : "None"}
               </dd>
             </div>
+          </>
+        ) : null}
+
+        {category === "history" ? (
+          <>
             <div className="status-row">
               <dt>
                 <MetricHint metric="latestFiringTick" label="Latest Firing Tick" />
@@ -167,15 +173,41 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
             </div>
             <div className="status-row">
               <dt>
-                <MetricHint metric="neuronTick" label="Neuron Tick" />
-              </dt>
-              <dd>{neuron.tick}</dd>
-            </div>
-            <div className="status-row">
-              <dt>
                 <MetricHint metric="networkTick" label="Network Tick" />
               </dt>
               <dd>{networkTick}</dd>
+            </div>
+            <div className="status-block">
+              <dt style={{ color: "var(--text-muted)", marginBottom: 6 }}>Recent events</dt>
+              <dd style={{ textAlign: "left", fontWeight: 400 }}>
+                {events.filter(
+                  (event) =>
+                    event.neuronId === neuron.id ||
+                    event.sourceNeuronId === neuron.id ||
+                    event.targetNeuronId === neuron.id,
+                ).length === 0 ? (
+                  <span className="hint">No recent events for this neuron.</span>
+                ) : (
+                  <ul className="timeline-list">
+                    {events
+                      .filter(
+                        (event) =>
+                          event.neuronId === neuron.id ||
+                          event.sourceNeuronId === neuron.id ||
+                          event.targetNeuronId === neuron.id,
+                      )
+                      .slice(0, 8)
+                      .map((event) => (
+                        <li key={event.id} className="timeline-item">
+                          <div className="timeline-title">
+                            Tick {event.networkTick} · {event.type}
+                          </div>
+                          <div className="timeline-detail">{event.message}</div>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </dd>
             </div>
           </>
         ) : null}
