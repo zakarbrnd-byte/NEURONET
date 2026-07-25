@@ -1,4 +1,4 @@
-# NEURONET Backend (0.4)
+# NEURONET Backend (0.5)
 
 Rust neural core. Source of truth for neurons, connections, stepping, and events.
 
@@ -17,12 +17,21 @@ Port resolution:
 2. `NEURONET_PORT` (optional local override)
 3. default `3000`
 
+## Observatory network
+
+Five deterministic neurons with branching and convergence.
+
+`POST /api/network/step` returns a structured step trace:
+
+- `tick`
+- `firedNeuronIds`
+- `propagations` (`eventId`, `sourceNeuronId`, `targetNeuronId`, `amountMv`)
+- `eventIds`
+- `network`
+
 ## Public host
 
-Configured for **Render** via:
-
-- `../render.yaml`
-- `Dockerfile`
+Render Blueprint: `../render.yaml` + `Dockerfile`
 
 CORS allow-list should include:
 
