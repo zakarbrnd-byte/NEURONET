@@ -30,11 +30,11 @@ We are cultivating the conditions from which intelligence may emerge.
 
 ## Current milestone
 
-**Shipped:** 0.6A Artificial Neural Tissue  
+**Shipped:** 0.6B Synaptic Plasticity  
 
-**Next development target: 0.6B Synaptic Plasticity**
+**Next development target: 0.6C Structural Plasticity**
 
-Do not implement learning, memory, growth, body, or cognition unless that milestone is explicitly requested.
+Do not implement growth, pruning, body, memory, or cognition unless that milestone is explicitly requested.
 
 ## Canonical docs
 

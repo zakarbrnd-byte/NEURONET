@@ -84,7 +84,7 @@ async fn refresh_age(state: &AppState) {
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.6A",
+        version: "0.6B",
         age_seconds: state.started_at.elapsed().as_secs(),
     })
 }
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint_reports_version_0_6a() {
+    async fn health_endpoint_reports_version_0_6b() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -166,12 +166,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.6A");
+        assert_eq!(json["version"], "0.6B");
         assert!(json["ageSeconds"].as_u64().is_some());
     }
 
     #[tokio::test]
-    async fn network_endpoint_returns_tissue_fields() {
+    async fn network_endpoint_returns_tissue_and_synapse_fields() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
+        assert_eq!(json["synapses"].as_array().unwrap().len(), 5);
         assert_eq!(json["tissue"]["label"], "Artificial Neural Tissue");
         assert_eq!(json["tissue"]["region"], "Observatory Cortex");
         assert_eq!(json["tissue"]["cellCount"], 5);
@@ -200,13 +200,16 @@ mod tests {
         assert_eq!(n4["cellType"], "inhibitory");
         assert_eq!(n4["position"]["x"], 0.60);
         assert_eq!(n4["position"]["y"], 0.72);
-        let c5 = json["connections"]
+        let s5 = json["synapses"]
             .as_array()
             .unwrap()
             .iter()
-            .find(|c| c["id"] == "CONNECTION-005")
+            .find(|c| c["id"] == "SYNAPSE-005")
             .unwrap();
-        assert_eq!(c5["connectionType"], "inhibitory");
+        assert_eq!(s5["type"], "inhibitory");
+        assert_eq!(s5["usageCount"], 0);
+        assert_eq!(s5["stability"], 0.5);
+        assert_eq!(s5["health"], 0.9);
     }
 
     #[tokio::test]
@@ -364,7 +367,7 @@ mod tests {
         let json = body_json(reset).await;
         assert_eq!(json["tick"], 0);
         assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
+        assert_eq!(json["synapses"].as_array().unwrap().len(), 5);
         let n1 = json["neurons"]
             .as_array()
             .unwrap()
@@ -374,5 +377,13 @@ mod tests {
         assert_eq!(n1["position"]["x"], 0.12);
         assert_eq!(n1["position"]["y"], 0.50);
         assert_eq!(n1["membranePotentialMv"], -70.0);
+        let s1 = json["synapses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == "SYNAPSE-001")
+            .unwrap();
+        assert_eq!(s1["weight"], 16.0);
+        assert_eq!(s1["usageCount"], 0);
     }
 }

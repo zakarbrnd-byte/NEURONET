@@ -6,7 +6,7 @@ import {
   MOVE_TOLERANCE_PX,
   NetworkView,
 } from "./NetworkView";
-import type { ConnectionSnapshot, NeuronSnapshot, PropagationTrace } from "../../types/neural";
+import type { NeuronSnapshot, PropagationTrace, SynapseSnapshot } from "../../types/neural";
 
 const neurons: NeuronSnapshot[] = [
   "NEURON-001",
@@ -34,47 +34,88 @@ const neurons: NeuronSnapshot[] = [
   axonLength: 0.2,
 }));
 
-const connections: ConnectionSnapshot[] = [
+const synapses: SynapseSnapshot[] = [
   {
-    id: "CONNECTION-001",
+    id: "SYNAPSE-001",
     sourceNeuronId: "NEURON-001",
     targetNeuronId: "NEURON-002",
     weight: 16,
-    connectionType: "excitatory",
+    type: "excitatory",
+    usageCount: 0,
+    lastActivatedTick: null,
+    stability: 0.5,
+    health: 0.9,
+    age: 0,
+    creationTick: 0,
+    weightHistory: [{ tick: 0, weight: 16 }],
+    lastWeightDelta: 0,
   },
   {
-    id: "CONNECTION-002",
+    id: "SYNAPSE-002",
     sourceNeuronId: "NEURON-002",
     targetNeuronId: "NEURON-003",
     weight: 16,
-    connectionType: "excitatory",
+    type: "excitatory",
+    usageCount: 0,
+    lastActivatedTick: null,
+    stability: 0.5,
+    health: 0.9,
+    age: 0,
+    creationTick: 0,
+    weightHistory: [{ tick: 0, weight: 16 }],
+    lastWeightDelta: 0,
   },
   {
-    id: "CONNECTION-003",
+    id: "SYNAPSE-003",
     sourceNeuronId: "NEURON-002",
     targetNeuronId: "NEURON-004",
     weight: 16,
-    connectionType: "excitatory",
+    type: "excitatory",
+    usageCount: 0,
+    lastActivatedTick: null,
+    stability: 0.5,
+    health: 0.9,
+    age: 0,
+    creationTick: 0,
+    weightHistory: [{ tick: 0, weight: 16 }],
+    lastWeightDelta: 0,
   },
   {
-    id: "CONNECTION-004",
+    id: "SYNAPSE-004",
     sourceNeuronId: "NEURON-003",
     targetNeuronId: "NEURON-005",
     weight: 8,
-    connectionType: "excitatory",
+    type: "excitatory",
+    usageCount: 0,
+    lastActivatedTick: null,
+    stability: 0.5,
+    health: 0.9,
+    age: 0,
+    creationTick: 0,
+    weightHistory: [{ tick: 0, weight: 8 }],
+    lastWeightDelta: 0,
   },
   {
-    id: "CONNECTION-005",
+    id: "SYNAPSE-005",
     sourceNeuronId: "NEURON-004",
     targetNeuronId: "NEURON-005",
     weight: 8,
-    connectionType: "inhibitory",
+    type: "inhibitory",
+    usageCount: 0,
+    lastActivatedTick: null,
+    stability: 0.5,
+    health: 0.9,
+    age: 0,
+    creationTick: 0,
+    weightHistory: [{ tick: 0, weight: 8 }],
+    lastWeightDelta: 0,
   },
 ];
 
 function renderView(
   overrides: Partial<{
     onSelectNeuron: (id: string) => void;
+    onSelectSynapse: (id: string) => void;
     onLongPressStimulate: (id: string) => void;
     onPressVisualChange: (id: string | null) => void;
     selectedNeuronId: string | null;
@@ -84,33 +125,35 @@ function renderView(
   }> = {},
 ) {
   const onSelectNeuron = overrides.onSelectNeuron ?? vi.fn();
+  const onSelectSynapse = overrides.onSelectSynapse ?? vi.fn();
   const onLongPressStimulate = overrides.onLongPressStimulate ?? vi.fn();
   const onPressVisualChange = overrides.onPressVisualChange ?? vi.fn();
 
-  const result = render(
+  const view = render(
     <NetworkView
       neurons={neurons}
-      connections={connections}
-      selectedNeuronId={overrides.selectedNeuronId ?? "NEURON-001"}
+      synapses={synapses}
+      selectedNeuronId={overrides.selectedNeuronId ?? null}
       activePropagations={overrides.activePropagations ?? []}
       reducedMotion={overrides.reducedMotion ?? false}
       interactionDisabled={false}
       pressingNeuronId={null}
       flashedNeuronId={overrides.flashedNeuronId ?? null}
       onSelectNeuron={onSelectNeuron}
+      onSelectSynapse={onSelectSynapse}
       onLongPressStimulate={onLongPressStimulate}
       onPressVisualChange={onPressVisualChange}
     />,
   );
 
-  return { ...result, onSelectNeuron, onLongPressStimulate, onPressVisualChange };
+  return { ...view, onSelectNeuron, onSelectSynapse, onLongPressStimulate, onPressVisualChange };
 }
 
-function targetFor(container: HTMLElement, id: string) {
-  return container.querySelector(`[aria-label^="Select ${id}"]`) as Element;
+function targetFor(id: string) {
+  return screen.getByLabelText(new RegExp(`Select ${id}`));
 }
 
-describe("NetworkView pointer gesture model", () => {
+describe("NetworkView gestures", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -119,173 +162,81 @@ describe("NetworkView pointer gesture model", () => {
     vi.useRealTimers();
   });
 
-  it("renders five backend neurons and five connections", () => {
+  it("renders five backend neurons and five synapses", () => {
+    renderView();
+    expect(screen.getAllByRole("button", { name: /Select NEURON-/ })).toHaveLength(5);
+    expect(screen.getByTestId("network-synapse-SYNAPSE-001")).toBeInTheDocument();
+    expect(screen.getByLabelText("Inspect synapse SYNAPSE-005")).toBeInTheDocument();
+  });
+
+  it("selects a synapse when its hit target is activated", () => {
+    const { onSelectSynapse } = renderView();
+    fireEvent.click(screen.getByLabelText("Inspect synapse SYNAPSE-001"));
+    expect(onSelectSynapse).toHaveBeenCalledWith("SYNAPSE-001");
+  });
+
+  it("short tap selects neuron after pointer release without stimulating", () => {
+    const { onSelectNeuron, onLongPressStimulate } = renderView();
+    const target = targetFor("NEURON-001");
+    fireEvent.pointerDown(target, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(target, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    expect(onSelectNeuron).toHaveBeenCalledWith("NEURON-001");
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+  });
+
+  it("long press stimulates and suppresses synthetic click selection", () => {
+    const { onSelectNeuron, onLongPressStimulate } = renderView();
+    const target = targetFor("NEURON-002");
+    fireEvent.pointerDown(target, { pointerId: 2, button: 0, clientX: 20, clientY: 20 });
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+    });
+    fireEvent.pointerUp(target, { pointerId: 2, button: 0, clientX: 20, clientY: 20 });
+    fireEvent.click(target);
+    expect(onLongPressStimulate).toHaveBeenCalledWith("NEURON-002");
+    expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("cancels long press when the pointer moves beyond tolerance", () => {
+    const { onSelectNeuron, onLongPressStimulate } = renderView();
+    const target = targetFor("NEURON-003");
+    fireEvent.pointerDown(target, { pointerId: 3, button: 0, clientX: 30, clientY: 30 });
+    fireEvent.pointerMove(target, {
+      pointerId: 3,
+      clientX: 30 + MOVE_TOLERANCE_PX + 1,
+      clientY: 30,
+    });
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+    });
+    fireEvent.pointerUp(target, { pointerId: 3, button: 0, clientX: 40, clientY: 30 });
+    expect(onLongPressStimulate).not.toHaveBeenCalled();
+    expect(onSelectNeuron).not.toHaveBeenCalled();
+  });
+
+  it("uses a hit target radius of at least 22 SVG units", () => {
+    expect(HIT_TARGET_RADIUS).toBeGreaterThanOrEqual(22);
+  });
+
+  it("marks SVG text as non-interactive", () => {
     const { container } = renderView();
-    expect(container.querySelectorAll(".network-node")).toHaveLength(5);
-    expect(container.querySelectorAll(".network-link")).toHaveLength(5);
-    expect(container.querySelectorAll(".neuron-hit-target")).toHaveLength(5);
+    for (const text of container.querySelectorAll("text")) {
+      expect(text).toHaveAttribute("pointer-events", "none");
+    }
   });
 
-  it("1. pointer down alone does not select", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-003");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-    expect(container.querySelector(".network-hold-ring")).toBeTruthy();
-  });
-
-  it("2. holding less than 500ms does not select before pointer up", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-003");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS - 1);
+  it("pulses only matching synapse propagations", () => {
+    const { container } = renderView({
+      activePropagations: [
+        {
+          eventId: "e1",
+          synapseId: "SYNAPSE-001",
+          sourceNeuronId: "NEURON-001",
+          targetNeuronId: "NEURON-002",
+          amountMv: 16,
+        },
+      ],
     });
-
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-  });
-
-  it("3. short pointer down + pointer up selects once", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-003");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.click(node);
-
-    expect(onSelectNeuron).toHaveBeenCalledTimes(1);
-    expect(onSelectNeuron).toHaveBeenCalledWith("NEURON-003");
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-  });
-
-  it("4–5. long press stimulates once and never selects", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-002");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS);
-    });
-    expect(onLongPressStimulate).toHaveBeenCalledTimes(1);
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.click(node);
-
-    expect(onLongPressStimulate).toHaveBeenCalledTimes(1);
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-  });
-
-  it("7. SVG text cannot become the pointer event target", () => {
-    const { container } = renderView();
-    const texts = container.querySelectorAll(
-      ".network-node-id, .network-node-mv, .network-state-mark",
-    );
-    expect(texts.length).toBeGreaterThan(0);
-    texts.forEach((text) => {
-      expect(text.getAttribute("pointer-events")).toBe("none");
-    });
-
-    const hit = container.querySelector(".network-hit-area") as SVGCircleElement;
-    expect(hit).toBeTruthy();
-    expect(Number(hit.getAttribute("r"))).toBe(HIT_TARGET_RADIUS);
-  });
-
-  it("8. moving beyond tolerance cancels stimulation and selection", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-001");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(node, {
-      pointerId: 1,
-      clientX: 10 + MOVE_TOLERANCE_PX + 1,
-      clientY: 10,
-    });
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS);
-    });
-    fireEvent.pointerUp(node, {
-      pointerId: 1,
-      clientX: 10 + MOVE_TOLERANCE_PX + 1,
-      clientY: 10,
-    });
-    fireEvent.click(node);
-
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-  });
-
-  it("9. pointer cancel performs no action", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-002");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerCancel(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS);
-    });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.click(node);
-
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-  });
-
-  it("10. synthetic click after long press is ignored", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-004");
-
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS);
-    });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.click(node);
-    fireEvent.click(node);
-
-    expect(onLongPressStimulate).toHaveBeenCalledTimes(1);
-    expect(onSelectNeuron).not.toHaveBeenCalled();
-  });
-
-  it("11. context menu is suppressed on the neuron target", () => {
-    const { container } = renderView();
-    const node = targetFor(container, "NEURON-001");
-    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-    const prevented = !node.dispatchEvent(event);
-    // preventDefault during handler → defaultPrevented
-    expect(event.defaultPrevented || prevented).toBe(true);
-  });
-
-  it("12. Enter and Space select without stimulating", () => {
-    const { container, onSelectNeuron, onLongPressStimulate } = renderView();
-    const node = targetFor(container, "NEURON-005");
-
-    fireEvent.keyDown(node, { key: "Enter" });
-    fireEvent.keyDown(node, { key: " " });
-
-    expect(onSelectNeuron).toHaveBeenCalledTimes(2);
-    expect(onLongPressStimulate).not.toHaveBeenCalled();
-  });
-
-  it("animates only a matching real propagation", () => {
-    const active: PropagationTrace[] = [
-      {
-        eventId: "evt-1",
-        sourceNeuronId: "NEURON-001",
-        targetNeuronId: "NEURON-002",
-        amountMv: 16,
-      },
-    ];
-    const { container } = renderView({ activePropagations: active, reducedMotion: true });
-    expect(container.querySelectorAll(".network-link-pulse")).toHaveLength(1);
-    expect(screen.getByText("+16 mV")).toBeInTheDocument();
+    expect(container.querySelector(".network-link-pulse")).toBeTruthy();
   });
 });

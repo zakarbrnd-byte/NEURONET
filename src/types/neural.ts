@@ -6,7 +6,7 @@ export interface NeuronPosition {
 }
 
 export type CellType = "excitatory" | "inhibitory";
-export type ConnectionKind = "excitatory" | "inhibitory";
+export type SynapseType = "excitatory" | "inhibitory";
 
 export interface NeuronSnapshot {
   id: string;
@@ -28,12 +28,26 @@ export interface NeuronSnapshot {
   axonLength: number;
 }
 
-export interface ConnectionSnapshot {
+export interface WeightHistoryEntry {
+  tick: number;
+  weight: number;
+}
+
+/** Living synapse — first-class biological object (0.6B). */
+export interface SynapseSnapshot {
   id: string;
   sourceNeuronId: string;
   targetNeuronId: string;
   weight: number;
-  connectionType: ConnectionKind;
+  type: SynapseType;
+  usageCount: number;
+  lastActivatedTick: number | null;
+  stability: number;
+  health: number;
+  age: number;
+  creationTick: number;
+  weightHistory: WeightHistoryEntry[];
+  lastWeightDelta: number;
 }
 
 export interface TissueInfo {
@@ -48,12 +62,13 @@ export interface TissueInfo {
 export interface NetworkSnapshot {
   tick: number;
   neurons: NeuronSnapshot[];
-  connections: ConnectionSnapshot[];
+  synapses: SynapseSnapshot[];
   tissue: TissueInfo;
 }
 
 export interface PropagationTrace {
   eventId: string;
+  synapseId?: string;
   sourceNeuronId: string;
   targetNeuronId: string;
   amountMv: number;

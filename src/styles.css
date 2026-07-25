@@ -1213,3 +1213,81 @@ body {
 .capitalize {
   text-transform: capitalize;
 }
+
+/* ========== Synapse inspector & strength cues (0.6B) ========== */
+
+.network-link-hit,
+.tissue-axon-hit {
+  stroke: transparent;
+  fill: none;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.network-link.is-inhibitory {
+  stroke: #c27b7b;
+}
+
+.network-synapse.is-selected .network-link,
+.tissue-axon-group.is-selected .tissue-axon {
+  stroke: var(--accent);
+}
+
+.synapse-strengthening .network-link,
+.synapse-strengthening .tissue-axon {
+  filter: brightness(1.35);
+  animation: synapse-pulse-up 0.7s ease-out 1;
+}
+
+.synapse-weakening .network-link,
+.synapse-weakening .tissue-axon {
+  opacity: 0.55;
+  animation: synapse-fade-down 0.7s ease-out 1;
+}
+
+@keyframes synapse-pulse-up {
+  0% { stroke-width: inherit; filter: brightness(1); }
+  40% { filter: brightness(1.6); }
+  100% { filter: brightness(1.2); }
+}
+
+@keyframes synapse-fade-down {
+  0% { opacity: 1; }
+  40% { opacity: 0.35; }
+  100% { opacity: 0.55; }
+}
+
+.synapse-delta-up {
+  color: var(--ok);
+}
+
+.synapse-delta-down {
+  color: var(--danger);
+}
+
+.state-badge.state-excitatory {
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+  color: var(--ok);
+}
+
+.state-badge.state-inhibitory {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+
+.weight-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weight-history-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}

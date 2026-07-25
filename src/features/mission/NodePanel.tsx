@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { MetricHint } from "../../components/MetricHint";
 import type {
-  ConnectionSnapshot,
   NetworkEvent,
   NeuronSnapshot,
+  SynapseSnapshot,
 } from "../../types/neural";
 import {
   distanceToThresholdMv,
@@ -15,7 +15,7 @@ import type { NodeCategory } from "../../types/ui";
 interface NodePanelProps {
   neuron: NeuronSnapshot | null;
   networkTick: number;
-  connections: ConnectionSnapshot[];
+  synapses: SynapseSnapshot[];
   events: NetworkEvent[];
 }
 
@@ -31,7 +31,7 @@ function formatMv(value: number): string {
   return `${value.toFixed(1)} mV`;
 }
 
-export function NodePanel({ neuron, networkTick, connections, events }: NodePanelProps) {
+export function NodePanel({ neuron, networkTick, synapses, events }: NodePanelProps) {
   const [category, setCategory] = useState<NodeCategory>("electrical");
 
   if (!neuron) {
@@ -40,8 +40,8 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
 
   const state = electricalState(neuron);
   const distance = distanceToThresholdMv(neuron);
-  const incoming = connections.filter((c) => c.targetNeuronId === neuron.id).length;
-  const outgoing = connections.filter((c) => c.sourceNeuronId === neuron.id).length;
+  const incoming = synapses.filter((c) => c.targetNeuronId === neuron.id).length;
+  const outgoing = synapses.filter((c) => c.sourceNeuronId === neuron.id).length;
   const latestReceived = events.find(
     (event) =>
       event.type === "signal_propagated" && event.targetNeuronId === neuron.id,

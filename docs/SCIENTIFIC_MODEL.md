@@ -33,7 +33,8 @@ Always distinguish:
 | Excitatory + inhibitory cell types | Implemented (0.6A) |
 | Inhibitory synapses (signed mV) | Implemented (0.6A) |
 | Fatigue / energy fields | Implemented (coarse educational indicators) |
-| Synaptic plasticity | Future work (0.6B) |
+| Living synapses (usage, health, stability, age) | Implemented (0.6B) |
+| Deterministic Hebbian weight change | Implemented (0.6B, approximation) |
 | Structural plasticity / growth | Future work (0.6C) |
 | Body / sensors | Future work (0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |

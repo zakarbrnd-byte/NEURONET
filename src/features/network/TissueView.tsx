@@ -5,9 +5,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
-  ConnectionSnapshot,
   NeuronSnapshot,
   PropagationTrace,
+  SynapseSnapshot,
 } from "../../types/neural";
 import { electricalState, shortNeuronId } from "../../types/neural";
 import {
@@ -18,14 +18,16 @@ import {
 
 interface TissueViewProps {
   neurons: NeuronSnapshot[];
-  connections: ConnectionSnapshot[];
+  synapses: SynapseSnapshot[];
   selectedNeuronId: string | null;
+  selectedSynapseId?: string | null;
   activePropagations: PropagationTrace[];
   reducedMotion: boolean;
   interactionDisabled: boolean;
   pressingNeuronId: string | null;
   flashedNeuronId: string | null;
   onSelectNeuron: (neuronId: string) => void;
+  onSelectSynapse?: (synapseId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
 }
@@ -82,14 +84,16 @@ function axonPath(from: Point, to: Point, fromRadius: number, toRadius: number):
 
 export function TissueView({
   neurons,
-  connections,
+  synapses,
   selectedNeuronId,
+  selectedSynapseId = null,
   activePropagations,
   reducedMotion,
   interactionDisabled,
   pressingNeuronId,
   flashedNeuronId,
   onSelectNeuron,
+  onSelectSynapse,
   onLongPressStimulate,
   onPressVisualChange,
 }: TissueViewProps) {
@@ -251,15 +255,15 @@ export function TissueView({
           </marker>
         </defs>
 
-        {connections.map((connection) => {
-          const source = byId.get(connection.sourceNeuronId);
-          const target = byId.get(connection.targetNeuronId);
-          const from = positions.get(connection.sourceNeuronId);
-          const to = positions.get(connection.targetNeuronId);
+        {synapses.map((synapse) => {
+          const source = byId.get(synapse.sourceNeuronId);
+          const target = byId.get(synapse.targetNeuronId);
+          const from = positions.get(synapse.sourceNeuronId);
+          const to = positions.get(synapse.targetNeuronId);
           if (!source || !target || !from || !to) return null;
 
-          const inhibitory = connection.connectionType === "inhibitory";
-          const edgeKey = `${connection.sourceNeuronId}->${connection.targetNeuronId}`;
+          const inhibitory = synapse.type === "inhibitory";
+          const edgeKey = `${synapse.sourceNeuronId}->${synapse.targetNeuronId}`;
           const pulse = pulseByEdge.get(edgeKey);
           const d = axonPath(
             from,
@@ -267,16 +271,49 @@ export function TissueView({
             source.somaRadius * WIDTH,
             target.somaRadius * WIDTH,
           );
+          const selected = selectedSynapseId === synapse.id;
+          const strengthClass =
+            synapse.lastWeightDelta > 0
+              ? "synapse-strengthening"
+              : synapse.lastWeightDelta < 0
+                ? "synapse-weakening"
+                : "";
+          const strokeWidth = Math.max(0.45, Math.min(1.8, synapse.weight / 14));
 
           return (
-            <g key={connection.id} className="tissue-axon-group">
+            <g
+              key={synapse.id}
+              className={`tissue-axon-group ${selected ? "is-selected" : ""} ${strengthClass}`}
+              data-testid={`tissue-synapse-${synapse.id}`}
+            >
+              <path
+                d={d}
+                className="tissue-axon-hit"
+                strokeWidth={Math.max(3.5, strokeWidth + 2.5)}
+                fill="none"
+                role="button"
+                tabIndex={0}
+                aria-label={`Inspect synapse ${synapse.id}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectSynapse?.(synapse.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectSynapse?.(synapse.id);
+                  }
+                }}
+              />
               <path
                 d={d}
                 className={`tissue-axon ${inhibitory ? "is-inhibitory" : "is-excitatory"} ${
                   pulse ? "is-pulse" : ""
                 }`}
+                strokeWidth={strokeWidth}
                 markerEnd={inhibitory ? "url(#tissue-barhead)" : "url(#tissue-arrowhead)"}
                 fill="none"
+                pointerEvents="none"
               />
               {pulse && !reducedMotion ? (
                 <circle r="1.2" className="tissue-pulse-dot">

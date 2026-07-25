@@ -5,36 +5,33 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.6A — Artificial Neural Tissue** |
+| **Current version** | **0.6B — Synaptic Plasticity** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
-It is not a chatbot. It is not an LLM. It is not a text prediction product.
-
 ---
 
-## Project Philosophy
+## Current Version — 0.6B Synaptic Plasticity
 
-The goal is not to directly program intelligence.
+**Synapses are now first-class biological objects.**  
+Connections are living structures — not passive lines.
 
-The goal is to build tissue, embodiment, interaction, memory, structural adaptation, and learning as biological conditions — then observe what, if anything, emerges.
+Every synapse owns:
 
-Read [`NEURONET.md`](NEURONET.md) and [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md).
+- weight (signal strength in mV)
+- type (excitatory / inhibitory)
+- usage count
+- last activated tick
+- stability (0–1)
+- health (0–1)
+- age (ticks)
+- creation tick
+- short weight history
 
----
+Deterministic Hebbian adaptation strengthens a synapse when its source delivers and its target fires on the next tick. Unused synapses slowly weaken. No randomness.
 
-## Current Version — 0.6A Artificial Neural Tissue
-
-Physical organization of a deterministic observatory tissue:
-
-- fixed neuron positions (backend-owned)
-- region / layer / cell type / DNA id
-- soma, dendrite field, axon length
-- excitatory and inhibitory cells and synapses
-- Mission Control **Network** and **Tissue** views
-
-**Not included in 0.6A:** learning, memory, growth, pruning, moving neurons, body, prediction, cognition.
+**Not included:** new neurons, pruning, growth, DNA mutation, memory, body, cognition.
 
 ---
 
@@ -42,81 +39,29 @@ Physical organization of a deterministic observatory tissue:
 
 | View | Role |
 | --- | --- |
-| **Network View** | Schematic graph for dynamics. Educational layout. Arrow links. |
-| **Tissue View** | Physical organization. Backend positions never move. Solid soma + transparent dendrite field. Smooth axons. Excitatory **arrow** `────►` vs inhibitory **bar** `────⊣`. |
+| **Network View** | Schematic graph. Tap a neuron or a synapse. Stroke thickness follows weight. |
+| **Tissue View** | Fixed backend positions, soma/dendrite morphology, curved axons, E/I endings. |
 
----
-
-## Current Scientific Stage
-
-**Implemented**
-
-- neurons, membrane potentials, firing, propagation, refractory recovery
-- deterministic tissue with fixed positions
-- one inhibitory cell (NEURON-004) and one inhibitory synapse (004 → 005)
-
-**Not yet**
-
-- memory, learning, structural plasticity / growth, embodiment, cognition
+Tap a connection/axon → **Synapse Inspector** (Weight, Usage, Health, Age, Stability, Type, Last Used, history).
 
 ---
 
 ## Architecture
 
-- The **Rust backend** owns neurons, connections, membrane potentials, tissue geometry, firing, propagation, ticks, and events.
-- The **React Mission Control** observes snapshots and step traces.
-- The frontend never invents neural state, signal paths, or firings.
+- The **Rust backend** owns neurons, **living synapses**, membrane potentials, tissue geometry, plasticity, ticks, and events.
+- **Mission Control** observes snapshots and step traces only.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
-## Observatory tissue (0.6A)
+## Observatory tissue
 
-```text
-                  NEURON-003 (E)
-                ↗            ↘ +8
-NEURON-001 → NEURON-002       NEURON-005
-                ↘            ↗ −8
-                  NEURON-004 (I)
-```
+Five neurons with living synapses `SYNAPSE-001`…`SYNAPSE-005`.  
+NEURON-004 / SYNAPSE-005 are inhibitory.
 
-Fixed positions (normalized):
-
-| Neuron | x | y | Type |
-| --- | --- | --- | --- |
-| N-001 | 0.12 | 0.50 | Excitatory |
-| N-002 | 0.32 | 0.50 | Excitatory |
-| N-003 | 0.60 | 0.28 | Excitatory |
-| N-004 | 0.60 | 0.72 | Inhibitory |
-| N-005 | 0.88 | 0.50 | Excitatory |
-
-Reset recreates the identical tissue. Age counts seconds since the backend process started.
-
-## Mission Control
-
-One-screen observatory:
-
-- tissue status header (Alive · Cells · Synapses · Region · Age)
-- Network or Tissue viewport
-- selected-neuron strip → Node sheet (includes **Biology**)
-- quick Step / Run·Pause / Reset
-- bottom nav: Network · Tissue · Timeline · Controls
-
-Direct node interaction (both views):
-
-- **Tap** — inspect (no signal)
-- **Long-press** (~500 ms) — inject **+5 mV** via backend
-
-## Reproduce dynamics
-
-1. Reset Network
-2. Strong Stimulus +20 mV on NEURON-001
-3. Step One Tick repeatedly
-
-N-001 → N-002 → {N-003, N-004}. On the convergent tick, N-003 delivers **+8 mV** while inhibitory N-004 delivers **−8 mV**, so net drive on N-005 cancels in this tissue.
-
-Or use **Run Sequence** (800 ms between backend steps, max 12).
+Reset restores identical tissue and baseline synapse state.  
+Age of the tissue process continues across reset.
 
 ## Run locally
 
@@ -150,15 +95,11 @@ cd backend && cargo test && cargo build --release
 - Frontend (GitHub Pages): https://zakarbrnd-byte.github.io/NEURONET/
 - Backend (Render): https://neuronet-backend-qphx.onrender.com
 
-GitHub Actions builds with repository variable `VITE_API_BASE_URL`.
-
-Render free services may cold-start; backend memory resets on restart.
-
 ## API
 
-- `GET /api/health` → version `0.6A`, `ageSeconds`
-- `GET /api/network` → snapshot including `tissue` + neuron biology fields
+- `GET /api/health` → version `0.6B`, `ageSeconds`
+- `GET /api/network` → `neurons`, **`synapses`**, `tissue`
 - `GET /api/events`
 - `POST /api/neurons/:id/signals`
-- `POST /api/network/step` → structured step trace (signed `amountMv`)
+- `POST /api/network/step` → step trace with `synapseId` on propagations
 - `POST /api/network/reset`

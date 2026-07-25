@@ -5,16 +5,17 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
-  ConnectionSnapshot,
   NeuronSnapshot,
   PropagationTrace,
+  SynapseSnapshot,
 } from "../../types/neural";
 import { electricalState, shortNeuronId } from "../../types/neural";
 
 interface NetworkViewProps {
   neurons: NeuronSnapshot[];
-  connections: ConnectionSnapshot[];
+  synapses: SynapseSnapshot[];
   selectedNeuronId: string | null;
+  selectedSynapseId?: string | null;
   activePropagations: PropagationTrace[];
   reducedMotion: boolean;
   interactionDisabled: boolean;
@@ -23,6 +24,7 @@ interface NetworkViewProps {
   /** Compact canvas mode for Mission Control (no card chrome). */
   compact?: boolean;
   onSelectNeuron: (neuronId: string) => void;
+  onSelectSynapse?: (synapseId: string) => void;
   onLongPressStimulate: (neuronId: string) => void;
   onPressVisualChange: (neuronId: string | null) => void;
 }
@@ -89,8 +91,9 @@ interface GestureState {
 
 export function NetworkView({
   neurons,
-  connections,
+  synapses,
   selectedNeuronId,
+  selectedSynapseId = null,
   activePropagations,
   reducedMotion,
   interactionDisabled,
@@ -98,6 +101,7 @@ export function NetworkView({
   flashedNeuronId,
   compact = false,
   onSelectNeuron,
+  onSelectSynapse,
   onLongPressStimulate,
   onPressVisualChange,
 }: NetworkViewProps) {
@@ -328,9 +332,9 @@ export function NetworkView({
             </marker>
           </defs>
 
-          {connections.map((connection) => {
-            const source = positions.get(connection.sourceNeuronId);
-            const target = positions.get(connection.targetNeuronId);
+          {synapses.map((synapse) => {
+            const source = positions.get(synapse.sourceNeuronId);
+            const target = positions.get(synapse.targetNeuronId);
             if (!source || !target) {
               return null;
             }
@@ -345,20 +349,57 @@ export function NetworkView({
             const y2 = target.y - (dy / length) * inset;
             const midX = (x1 + x2) / 2;
             const midY = (y1 + y2) / 2;
-            const key = `${connection.sourceNeuronId}->${connection.targetNeuronId}`;
+            const key = `${synapse.sourceNeuronId}->${synapse.targetNeuronId}`;
             const pulse = pulseByEdge.get(key);
+            const selected = selectedSynapseId === synapse.id;
+            const strengthClass =
+              synapse.lastWeightDelta > 0
+                ? "synapse-strengthening"
+                : synapse.lastWeightDelta < 0
+                  ? "synapse-weakening"
+                  : "";
+            const strokeWidth = Math.max(1.5, Math.min(6, synapse.weight / 4));
+            const inhibitory = synapse.type === "inhibitory";
 
             return (
-              <g key={connection.id}>
+              <g
+                key={synapse.id}
+                className={`network-synapse ${selected ? "is-selected" : ""} ${strengthClass}`}
+                data-testid={`network-synapse-${synapse.id}`}
+              >
                 <line
                   x1={x1}
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  className={`network-link ${pulse ? "network-link-pulse" : ""}`}
-                  strokeWidth={Math.max(2, Math.min(5, connection.weight / 4))}
+                  className="network-link-hit"
+                  strokeWidth={Math.max(14, strokeWidth + 10)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Inspect synapse ${synapse.id}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectSynapse?.(synapse.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSynapse?.(synapse.id);
+                    }
+                  }}
+                />
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  className={`network-link ${inhibitory ? "is-inhibitory" : ""} ${
+                    pulse ? "network-link-pulse" : ""
+                  }`}
+                  strokeWidth={strokeWidth}
                   markerEnd="url(#arrowhead)"
                   strokeDasharray={pulse && reducedMotion ? "4 3" : undefined}
+                  pointerEvents="none"
                 />
                 {pulse ? (
                   <>
@@ -372,7 +413,8 @@ export function NetworkView({
                       </circle>
                     ) : null}
                     <text x={midX} y={midY - 8} className="network-pulse-label" pointerEvents="none">
-                      +{pulse.amountMv} mV
+                      {pulse.amountMv >= 0 ? "+" : ""}
+                      {pulse.amountMv} mV
                     </text>
                   </>
                 ) : null}

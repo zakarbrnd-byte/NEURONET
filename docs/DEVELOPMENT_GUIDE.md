@@ -122,6 +122,6 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Shipped runtime:** **0.6A Artificial Neural Tissue**
+**Shipped runtime:** **0.6B Synaptic Plasticity**
 
-Do not implement 0.6B+ plasticity, body, or cognition unless explicitly asked.
+Do not implement 0.6C growth/pruning, body, or cognition unless explicitly asked.

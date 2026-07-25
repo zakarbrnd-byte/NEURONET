@@ -1,14 +1,14 @@
 import type {
-  ConnectionSnapshot,
   NetworkEvent,
   NeuronSnapshot,
+  SynapseSnapshot,
 } from "../../types/neural";
 import { distanceToThresholdMv, electricalState } from "../../types/neural";
 
 interface NeuronStatusProps {
   neuron: NeuronSnapshot | null;
   networkTick: number;
-  connections: ConnectionSnapshot[];
+  connections: SynapseSnapshot[];
   events: NetworkEvent[];
   embedded?: boolean;
 }
