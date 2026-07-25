@@ -1,4 +1,4 @@
-/** Version 0.8.1 — explicit run modes and pause reasons (no activity-based auto-pause). */
+/** Version 0.8.1/0.8.2 — run modes, pause reasons, adjustable pacing (no activity auto-pause). */
 
 export type RunMode = "continuous" | "observation";
 
@@ -10,6 +10,7 @@ export type PauseReason =
   | "Reset";
 
 export const DEFAULT_OBSERVATION_LIMIT = 100;
+/** Historical 1× Normal pacing (0.8.1 default). */
 export const DEFAULT_STEP_DELAY_MS = 800;
 
 export type RunStopDecision =
@@ -50,15 +51,20 @@ export function decideRunContinuation(input: {
   return { stop: false };
 }
 
+/**
+ * Async delay that always yields to the browser event loop.
+ * Max mode (0 ms) still uses setTimeout(0) so Pause/Reset remain responsive.
+ */
 export async function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     return;
   }
+  const wait = Math.max(0, ms);
   await new Promise<void>((resolve) => {
     const timer = window.setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
       resolve();
-    }, ms);
+    }, wait);
     const onAbort = () => {
       window.clearTimeout(timer);
       resolve();
@@ -68,26 +74,31 @@ export async function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export type StepResult<T> =
-  | { ok: true; trace: T }
+  | { ok: true; trace: T; latencyMs: number }
   | { ok: false; backendFailed: boolean };
 
 export interface RunLoopHooks<T> {
   mode: RunMode;
   observationLimit: number;
-  stepDelayMs: number;
+  /**
+   * Read the intentional inter-request delay for the next pacing wait.
+   * Called after each confirmed step so speed can change while running.
+   */
+  getStepDelayMs: () => number;
   signal: AbortSignal;
   isUserPaused: () => boolean;
   isResetRequested: () => boolean;
   isUnmounted: () => boolean;
   /** Must await the backend and never overlap callers externally. */
   stepOnce: () => Promise<StepResult<T>>;
-  onStepComplete?: (trace: T, stepsCompleted: number) => void;
+  onStepComplete?: (trace: T, stepsCompleted: number, latencyMs: number) => void;
   onStop: (reason: Exclude<PauseReason, "None">) => void;
 }
 
 /**
  * Sequential run loop: one awaited backend step at a time.
  * Empty / quiet StepTrace results do not pause.
+ * Max mode yields via delay(0) between requests — never a tight sync loop.
  */
 export async function runAutonomousLoop<T>(hooks: RunLoopHooks<T>): Promise<void> {
   let stepsCompleted = 0;
@@ -115,7 +126,7 @@ export async function runAutonomousLoop<T>(hooks: RunLoopHooks<T>): Promise<void
     }
 
     stepsCompleted += 1;
-    hooks.onStepComplete?.(result.trace, stepsCompleted);
+    hooks.onStepComplete?.(result.trace, stepsCompleted, result.latencyMs);
 
     const post = decideRunContinuation({
       mode: hooks.mode,
@@ -131,7 +142,9 @@ export async function runAutonomousLoop<T>(hooks: RunLoopHooks<T>): Promise<void
       return;
     }
 
-    await delay(hooks.stepDelayMs, hooks.signal);
+    // Live speed: read delay after the step so a mid-run change applies next wait.
+    const pacingMs = hooks.getStepDelayMs();
+    await delay(pacingMs, hooks.signal);
   }
 
   if (hooks.isResetRequested()) {

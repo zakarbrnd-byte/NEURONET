@@ -9,6 +9,13 @@ import type {
 import { shortNeuronId } from "../../types/neural";
 import type { ControlsCategory } from "../../types/ui";
 import type { PauseReason, RunMode } from "./runLoop";
+import { SpeedControl } from "./SpeedControl";
+import {
+  presetForSpeed,
+  renderModeLabel,
+  shortSpeedLabel,
+  type SimulationSpeedId,
+} from "./simulationSpeed";
 
 interface ControlsPanelProps {
   selectedNeuronId: string | null;
@@ -20,6 +27,8 @@ interface ControlsPanelProps {
   pauseReason: PauseReason;
   observationLimit: number;
   onObservationLimitChange: (limit: number) => void;
+  simulationSpeed: SimulationSpeedId;
+  onSimulationSpeedChange: (speed: SimulationSpeedId) => void;
   structural: StructuralSnapshot | null;
   development?: DevelopmentSummary | null;
   environment?: EnvironmentSnapshot | null;
@@ -58,6 +67,8 @@ export function ControlsPanel({
   pauseReason,
   observationLimit,
   onObservationLimitChange,
+  simulationSpeed,
+  onSimulationSpeedChange,
   structural,
   development = null,
   environment = null,
@@ -80,6 +91,7 @@ export function ControlsPanel({
   const resetLocked = disabled || busy;
   const envLocked = disabled || busy;
   const cfg = environment?.config;
+  const speedPreset = presetForSpeed(simulationSpeed);
 
   return (
     <div className="controls-panel">
@@ -94,7 +106,8 @@ export function ControlsPanel({
         {running ? "running" : "paused"} · mode {runMode}
         {runMode === "observation" ? ` · ${autoStep}/${observationLimit}` : ` · ${autoStep} steps`}
         {" · "}
-        pause reason: {pauseReason}
+        speed {shortSpeedLabel(simulationSpeed)} · render{" "}
+        {renderModeLabel(speedPreset.renderMode)} · pause reason: {pauseReason}
         {stimulateDisabled
           ? " · Developing cells are not electrically eligible for stimulation."
           : ""}
@@ -145,8 +158,14 @@ export function ControlsPanel({
           <>
             <p className="hint">
               Quiet ticks are valid simulation time. Run never stops because the network is
-              inactive.
+              inactive. Speed changes apply after the current in-flight step.
             </p>
+            <SpeedControl
+              speed={simulationSpeed}
+              onSpeedChange={onSimulationSpeedChange}
+              disabled={disabled}
+              compact={false}
+            />
             <button
               type="button"
               className="btn btn-secondary"
@@ -200,6 +219,39 @@ export function ControlsPanel({
             >
               Pause
             </button>
+            <section aria-label="Simulation speed help" data-testid="simulation-speed-help">
+              <h3 className="help-heading">Simulation Speed</h3>
+              <dl className="help-list">
+                <div>
+                  <dt>Simulation Speed</dt>
+                  <dd>
+                    Controls how quickly backend simulation steps are processed. It does not
+                    change the rules inside each tick.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Tick</dt>
+                  <dd>
+                    One complete logical simulation step. A tick is not assigned to a specific
+                    amount of biological or real-world time.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Actual Ticks per Second</dt>
+                  <dd>
+                    The measured number of confirmed backend steps completed each real-world
+                    second.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Max</dt>
+                  <dd>
+                    Processes steps as quickly as the backend and device allow while reducing
+                    nonessential animation.
+                  </dd>
+                </div>
+              </dl>
+            </section>
           </>
         ) : null}
 
@@ -505,7 +557,7 @@ export function ControlsPanel({
               </dl>
               <p className="hint">
                 Tap a neuron to inspect. Hold ~0.5s for Laboratory Electrode +5 mV (settled cells
-                only). Autonomous Observation Stabilization · Version 0.8.1
+                only). Adjustable Simulation Speed · Version 0.8.2
               </p>
             </section>
           </>

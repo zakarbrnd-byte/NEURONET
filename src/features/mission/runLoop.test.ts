@@ -170,7 +170,7 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "continuous",
         observationLimit: 100,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => steps >= 5,
         isResetRequested: () => false,
@@ -182,11 +182,10 @@ describe("runAutonomousLoop", () => {
           inFlight.value -= 1;
           steps += 1;
           const trace = emptyTrace(steps);
-          // Explicit quiet empty StepTrace
           expect(trace.firedNeuronIds).toHaveLength(0);
           expect(trace.propagations).toHaveLength(0);
           expect(trace.environmentTrace?.eventsGenerated ?? []).toHaveLength(0);
-          return { ok: true, trace } satisfies StepResult<NetworkStepTrace>;
+          return { ok: true, trace, latencyMs: 1 } satisfies StepResult<NetworkStepTrace>;
         },
         onStop: (reason) => resolve(reason),
       });
@@ -204,14 +203,14 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "observation",
         observationLimit: 7,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => false,
         isUnmounted: () => false,
         stepOnce: async () => {
           steps += 1;
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 2 };
         },
         onStop: (r) => resolve(r),
       });
@@ -226,7 +225,7 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "continuous",
         observationLimit: 100,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => false,
@@ -246,7 +245,7 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "continuous",
         observationLimit: 100,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => reset,
@@ -257,7 +256,7 @@ describe("runAutonomousLoop", () => {
             reset = true;
             controller.abort();
           }
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
         },
         onStop: (r) => resolve(r),
       });
@@ -274,7 +273,7 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "continuous",
         observationLimit: 100,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => false,
@@ -285,7 +284,7 @@ describe("runAutonomousLoop", () => {
             unmounted = true;
             controller.abort();
           }
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
         },
         onStop: (r) => resolve(r),
       });
@@ -302,7 +301,7 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "observation",
         observationLimit: 4,
-        stepDelayMs: 1,
+        getStepDelayMs: () => 1,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => false,
@@ -313,7 +312,7 @@ describe("runAutonomousLoop", () => {
           await delay(5);
           concurrent -= 1;
           steps += 1;
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 5 };
         },
         onStop: () => resolve(),
       });
@@ -329,14 +328,14 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "observation",
         observationLimit: 3,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => false,
         isResetRequested: () => false,
         isUnmounted: () => false,
         stepOnce: async () => {
           steps += 1;
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
         },
         onStop: () => resolve(),
       });
@@ -351,19 +350,108 @@ describe("runAutonomousLoop", () => {
       void runAutonomousLoop({
         mode: "continuous",
         observationLimit: 100,
-        stepDelayMs: 0,
+        getStepDelayMs: () => 0,
         signal: controller.signal,
         isUserPaused: () => steps >= 15,
         isResetRequested: () => false,
         isUnmounted: () => false,
         stepOnce: async () => {
           steps += 1;
-          return { ok: true, trace: emptyTrace(steps) };
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
         },
         onStop: (r) => resolve(r),
       });
     });
     expect(steps).toBe(15);
     expect(reason).toBe("User paused");
+  });
+
+  it("applies a new delay after the in-flight step when speed changes mid-run", async () => {
+    const controller = new AbortController();
+    let steps = 0;
+    let delayMs = 40;
+    const delayReads: number[] = [];
+    await new Promise<void>((resolve) => {
+      void runAutonomousLoop({
+        mode: "observation",
+        observationLimit: 3,
+        getStepDelayMs: () => {
+          const current = delayMs;
+          delayReads.push(current);
+          // Simulate a mid-run speed change after the first pacing decision.
+          delayMs = 0;
+          return current;
+        },
+        signal: controller.signal,
+        isUserPaused: () => false,
+        isResetRequested: () => false,
+        isUnmounted: () => false,
+        stepOnce: async () => {
+          steps += 1;
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 3 };
+        },
+        onStop: () => resolve(),
+      });
+    });
+    expect(steps).toBe(3);
+    // First pacing wait uses the pre-change delay; subsequent waits see 0.
+    expect(delayReads[0]).toBe(40);
+    expect(delayReads.slice(1).every((v) => v === 0)).toBe(true);
+  });
+
+  it("Max mode yields to the event loop between steps", async () => {
+    const controller = new AbortController();
+    let steps = 0;
+    let yielded = false;
+    await new Promise<void>((resolve) => {
+      void runAutonomousLoop({
+        mode: "observation",
+        observationLimit: 3,
+        getStepDelayMs: () => 0,
+        signal: controller.signal,
+        isUserPaused: () => false,
+        isResetRequested: () => false,
+        isUnmounted: () => false,
+        stepOnce: async () => {
+          steps += 1;
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
+        },
+        onStop: () => resolve(),
+      });
+      // Schedule a macrotask; Max uses setTimeout(0) so this can interleave.
+      window.setTimeout(() => {
+        yielded = true;
+      }, 0);
+    });
+    expect(steps).toBe(3);
+    expect(yielded).toBe(true);
+  });
+
+  it("Max mode remains pausable", async () => {
+    const controller = new AbortController();
+    let steps = 0;
+    let pause = false;
+    const reason = await new Promise<string>((resolve) => {
+      void runAutonomousLoop({
+        mode: "continuous",
+        observationLimit: 100,
+        getStepDelayMs: () => 0,
+        signal: controller.signal,
+        isUserPaused: () => pause,
+        isResetRequested: () => false,
+        isUnmounted: () => false,
+        stepOnce: async () => {
+          steps += 1;
+          if (steps === 4) {
+            pause = true;
+            controller.abort();
+          }
+          return { ok: true, trace: emptyTrace(steps), latencyMs: 1 };
+        },
+        onStop: (r) => resolve(r),
+      });
+    });
+    expect(reason).toBe("User paused");
+    expect(steps).toBeGreaterThanOrEqual(4);
   });
 });

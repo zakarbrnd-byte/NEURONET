@@ -1,7 +1,12 @@
+import { SpeedControl } from "../features/mission/SpeedControl";
+import type { SimulationSpeedId } from "../features/mission/simulationSpeed";
+
 interface QuickActionsProps {
   disabled: boolean;
   busy: boolean;
   running: boolean;
+  simulationSpeed: SimulationSpeedId;
+  onSimulationSpeedChange: (speed: SimulationSpeedId) => void;
   onStep: () => void;
   onRun: () => void;
   onPause: () => void;
@@ -12,6 +17,8 @@ export function QuickActions({
   disabled,
   busy,
   running,
+  simulationSpeed,
+  onSimulationSpeedChange,
   onStep,
   onRun,
   onPause,
@@ -58,6 +65,12 @@ export function QuickActions({
           Run
         </button>
       )}
+      <SpeedControl
+        speed={simulationSpeed}
+        onSpeedChange={onSimulationSpeedChange}
+        disabled={disabled}
+        compact
+      />
       <button
         type="button"
         className="quick-action-btn"

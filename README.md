@@ -5,23 +5,28 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Current version** | **0.8.1 — Autonomous Observation Stabilization** |
+| **Current version** | **0.8.2 — Adjustable Simulation Speed** (frontend) |
+| **Backend** | **0.8.1** (unchanged) |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
 
 ---
 
-## Current Version — 0.8.1 Autonomous Observation Stabilization
+## Current Version — 0.8.2 Adjustable Simulation Speed
 
-**Stabilization patch on 0.8.** Continuous Run no longer pauses on quiet ticks.
-Balanced sensory patterns can produce evidence-based synapse birth within a
-documented 300-tick calibration window without early pruning collapse.
+**Frontend observation/control patch.** Mission Control can pace backend step
+requests from 0.5× through Max without changing tick biology or determinism.
 
-Verification marker: **Autonomous Observation Stabilization · Version 0.8.1**  
-Health: **0.8.1**
+Verification marker: **Adjustable Simulation Speed · Version 0.8.2**  
+Backend health remains: **0.8.1**
 
-See [`docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md`](docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md).
+See [`docs/experiments/0.8.2_ADJUSTABLE_SIMULATION_SPEED.md`](docs/experiments/0.8.2_ADJUSTABLE_SIMULATION_SPEED.md).
+
+### Prior: 0.8.1 Autonomous Observation Stabilization
+
+Continuous Run survives quiet ticks; Balanced calibration births synapses within
+300 ticks. See [`docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md`](docs/experiments/0.8.1_AUTONOMOUS_RUN_AND_STRUCTURAL_BALANCE.md).
 
 ### Prior: 0.8 Autonomous Sensory Environment
 
@@ -103,5 +108,5 @@ npm test
 | Frontend (GitHub Pages) | https://zakarbrnd-byte.github.io/NEURONET/ |
 | Backend (Render) | https://neuronet-backend-qphx.onrender.com |
 
-Verification marker: **Autonomous Observation Stabilization · Version 0.8.1**  
-Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.8.1
+Verification marker: **Adjustable Simulation Speed · Version 0.8.2**  
+Example: https://zakarbrnd-byte.github.io/NEURONET/?version=0.8.2

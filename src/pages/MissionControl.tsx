@@ -15,11 +15,20 @@ import { ControlsPanel } from "../features/mission/ControlsPanel";
 import { ObserverStatusPanel } from "../features/mission/ObserverStatusPanel";
 import {
   DEFAULT_OBSERVATION_LIMIT,
-  DEFAULT_STEP_DELAY_MS,
   runAutonomousLoop,
   type PauseReason,
   type RunMode,
 } from "../features/mission/runLoop";
+import {
+  DEFAULT_SIMULATION_SPEED,
+  ThroughputMeter,
+  loadStoredSimulationSpeed,
+  persistSimulationSpeed,
+  presetForSpeed,
+  shouldShowTravelAnimations,
+  visualRefreshIntervalMs,
+  type SimulationSpeedId,
+} from "../features/mission/simulationSpeed";
 import { ApiError, neuralApi } from "../services/neuralApi";
 import type {
   ConnectionStatus,
@@ -76,6 +85,12 @@ export function MissionControl() {
   const [runMode, setRunMode] = useState<RunMode>("continuous");
   const [pauseReason, setPauseReason] = useState<PauseReason>("None");
   const [observationLimit, setObservationLimit] = useState(DEFAULT_OBSERVATION_LIMIT);
+  const [simulationSpeed, setSimulationSpeed] = useState<SimulationSpeedId>(
+    DEFAULT_SIMULATION_SPEED,
+  );
+  const [actualTicksPerSecond, setActualTicksPerSecond] = useState(0);
+  const [backendLatencyMs, setBackendLatencyMs] = useState<number | null>(null);
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
   const [lastTrace, setLastTrace] = useState<NetworkStepTrace | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [activePropagations, setActivePropagations] = useState<PropagationTrace[]>([]);
@@ -96,6 +111,10 @@ export function MissionControl() {
   const stimInFlightRef = useRef(false);
   const stimFeedbackTimerRef = useRef<number | null>(null);
   const runAbortRef = useRef<AbortController | null>(null);
+  const runGenerationRef = useRef(0);
+  const simulationSpeedRef = useRef<SimulationSpeedId>(DEFAULT_SIMULATION_SPEED);
+  const throughputRef = useRef(new ThroughputMeter());
+  const lastVisualUpdateRef = useRef(0);
 
   useEffect(() => {
     busyRef.current = busy;
@@ -118,6 +137,20 @@ export function MissionControl() {
   }, [lastTrace]);
 
   useEffect(() => {
+    simulationSpeedRef.current = simulationSpeed;
+  }, [simulationSpeed]);
+
+  useEffect(() => {
+    const stored = loadStoredSimulationSpeed();
+    setSimulationSpeed(stored);
+    simulationSpeedRef.current = stored;
+    // Reload always remains paused — never auto-start Run.
+    setRunning(false);
+    runningRef.current = false;
+    setPauseReason("None");
+  }, []);
+
+  useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReducedMotion(media.matches);
     update();
@@ -137,6 +170,12 @@ export function MissionControl() {
       }
     };
   }, []);
+
+  function handleSimulationSpeedChange(next: SimulationSpeedId) {
+    setSimulationSpeed(next);
+    simulationSpeedRef.current = next;
+    persistSimulationSpeed(next);
+  }
 
   function showStimulationFeedback(neuronId: string, amountMv: number) {
     if (stimFeedbackTimerRef.current !== null) {
@@ -168,7 +207,8 @@ export function MissionControl() {
     setError(null);
 
     try {
-      await neuralApi.getHealth();
+      const health = await neuralApi.getHealth();
+      setBackendVersion(health.version);
       const [snapshot, backendEvents] = await Promise.all([
         neuralApi.getNetwork(),
         neuralApi.getEvents(),
@@ -184,6 +224,7 @@ export function MissionControl() {
       setStatus("unavailable");
       setNetwork(null);
       setEvents([]);
+      setBackendVersion(null);
       setError(err instanceof Error ? err.message : "Backend unavailable");
     }
   }
@@ -193,26 +234,45 @@ export function MissionControl() {
   }, []);
 
   function applyTrace(trace: NetworkStepTrace) {
-    setNetwork(trace.network);
+    // Always keep the authoritative ref current — biology never depends on animation frames.
+    networkRef.current = trace.network;
+    lastTraceRef.current = trace;
     setLastTrace(trace);
 
-    const freshPropagations = trace.propagations.filter(
-      (propagation) => !seenEventIds.has(propagation.eventId),
-    );
-    setActivePropagations(freshPropagations);
+    const renderMode = presetForSpeed(simulationSpeedRef.current).renderMode;
+    const showTravel = shouldShowTravelAnimations(renderMode) && !reducedMotion;
+    const refreshMs = visualRefreshIntervalMs(renderMode);
+    const now = performance.now();
+    const shouldPaintVisual =
+      refreshMs <= 0 || now - lastVisualUpdateRef.current >= refreshMs;
 
+    if (shouldPaintVisual) {
+      lastVisualUpdateRef.current = now;
+      setNetwork(trace.network);
+    }
+
+    const freshPropagations = showTravel
+      ? trace.propagations.filter((propagation) => !seenEventIds.has(propagation.eventId))
+      : [];
     const sensoryDeliveries = trace.environmentTrace?.sensoryDeliveries ?? [];
-    const freshSensory = sensoryDeliveries.filter(
-      (delivery) => !seenEventIds.has(delivery.eventId),
-    );
-    setActiveSensoryDeliveries(freshSensory);
+    const freshSensory = showTravel
+      ? sensoryDeliveries.filter((delivery) => !seenEventIds.has(delivery.eventId))
+      : [];
+
+    if (showTravel) {
+      setActivePropagations(freshPropagations);
+      setActiveSensoryDeliveries(freshSensory);
+    } else {
+      setActivePropagations([]);
+      setActiveSensoryDeliveries([]);
+    }
 
     setSeenEventIds((current) => {
       const next = new Set(current);
-      for (const propagation of freshPropagations) {
+      for (const propagation of trace.propagations) {
         next.add(propagation.eventId);
       }
-      for (const delivery of freshSensory) {
+      for (const delivery of sensoryDeliveries) {
         next.add(delivery.eventId);
       }
       for (const eventId of trace.eventIds) {
@@ -221,6 +281,7 @@ export function MissionControl() {
       return next;
     });
 
+    // Timeline always records confirmed steps — high-speed sampling must not drop science events.
     const entry: TimelineEntry = {
       tick: trace.tick,
       firedNeuronIds: trace.firedNeuronIds,
@@ -291,7 +352,9 @@ export function MissionControl() {
     setEvents(backendEvents);
   }
 
-  async function runStepRequest(): Promise<NetworkStepTrace | null> {
+  async function runStepRequest(
+    options: { measureLatency?: boolean; runGeneration?: number } = {},
+  ): Promise<{ trace: NetworkStepTrace; latencyMs: number } | null> {
     if (busyRef.current || status !== "connected") {
       return null;
     }
@@ -299,12 +362,27 @@ export function MissionControl() {
     setBusy(true);
     busyRef.current = true;
     setError(null);
+    const started = performance.now();
 
     try {
       const trace = await neuralApi.stepNetwork();
+      const latencyMs = performance.now() - started;
+      // Drop stale responses after Reset / a newer run session.
+      if (
+        options.runGeneration != null &&
+        options.runGeneration !== runGenerationRef.current
+      ) {
+        return null;
+      }
+      if (resetRequestedRef.current) {
+        return null;
+      }
       applyTrace(trace);
       await refreshEvents();
-      return trace;
+      if (options.measureLatency !== false) {
+        setBackendLatencyMs(latencyMs);
+      }
+      return { trace, latencyMs };
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Request failed";
@@ -412,7 +490,11 @@ export function MissionControl() {
 
     resetRequestedRef.current = true;
     userPausedRef.current = false;
+    runGenerationRef.current += 1;
     stopRun("Reset");
+    throughputRef.current.reset();
+    setActualTicksPerSecond(0);
+    setBackendLatencyMs(null);
     setBusy(true);
     busyRef.current = true;
     setError(null);
@@ -420,6 +502,7 @@ export function MissionControl() {
     try {
       const snapshot = await neuralApi.resetNetwork();
       setNetwork(snapshot);
+      networkRef.current = snapshot;
       setLastTrace(null);
       setTimeline([]);
       setActivePropagations([]);
@@ -450,9 +533,13 @@ export function MissionControl() {
     runAbortRef.current?.abort();
     const controller = new AbortController();
     runAbortRef.current = controller;
+    const generation = runGenerationRef.current + 1;
+    runGenerationRef.current = generation;
 
     userPausedRef.current = false;
     resetRequestedRef.current = false;
+    throughputRef.current.reset();
+    setActualTicksPerSecond(0);
     setRunMode(mode);
     setPauseReason("None");
     setRunning(true);
@@ -462,7 +549,7 @@ export function MissionControl() {
     void runAutonomousLoop({
       mode,
       observationLimit,
-      stepDelayMs: DEFAULT_STEP_DELAY_MS,
+      getStepDelayMs: () => presetForSpeed(simulationSpeedRef.current).stepDelayMs,
       signal: controller.signal,
       isUserPaused: () => userPausedRef.current,
       isResetRequested: () => resetRequestedRef.current,
@@ -472,19 +559,29 @@ export function MissionControl() {
           return { ok: false, backendFailed: false };
         }
         try {
-          const trace = await runStepRequest();
-          if (!trace) {
+          const stepped = await runStepRequest({ runGeneration: generation });
+          if (!stepped) {
+            if (resetRequestedRef.current || generation !== runGenerationRef.current) {
+              return { ok: false, backendFailed: false };
+            }
             const failed = statusRef.current !== "connected";
             return { ok: false, backendFailed: failed };
           }
           // Empty / quiet StepTrace is valid — continue.
-          return { ok: true, trace };
+          return {
+            ok: true,
+            trace: stepped.trace,
+            latencyMs: stepped.latencyMs,
+          };
         } catch {
           return { ok: false, backendFailed: true };
         }
       },
-      onStepComplete: (_trace, stepsCompleted) => {
+      onStepComplete: (_trace, stepsCompleted, latencyMs) => {
         setAutoStep(stepsCompleted);
+        setBackendLatencyMs(latencyMs);
+        throughputRef.current.record();
+        setActualTicksPerSecond(throughputRef.current.ticksPerSecond());
       },
       onStop: (reason) => {
         if (unmountedRef.current) {
@@ -651,7 +748,7 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.8.1"
+          version="0.8.2"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
@@ -661,7 +758,10 @@ export function MissionControl() {
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Autonomous Observation Stabilization · Version 0.8.1
+          Adjustable Simulation Speed · Version 0.8.2
+        </p>
+        <p className="backend-version-note" data-testid="backend-version-note">
+          Frontend 0.8.2 · Backend {backendVersion ?? "—"}
         </p>
       </header>
 
@@ -761,6 +861,8 @@ export function MissionControl() {
           disabled={status !== "connected"}
           busy={busy}
           running={running}
+          simulationSpeed={simulationSpeed}
+          onSimulationSpeedChange={handleSimulationSpeedChange}
           onStep={() => void runStepRequest()}
           onRun={handleRunSequence}
           onPause={handlePauseSequence}
@@ -823,6 +925,10 @@ export function MissionControl() {
                 runMode={runMode}
                 observationLimit={observationLimit}
                 stepsThisRun={autoStep}
+                simulationSpeed={simulationSpeed}
+                actualTicksPerSecond={actualTicksPerSecond}
+                backendLatencyMs={backendLatencyMs}
+                backendVersion={backendVersion}
                 environment={network?.environment ?? null}
                 structural={network?.structural ?? null}
               />
@@ -836,6 +942,8 @@ export function MissionControl() {
                 pauseReason={pauseReason}
                 observationLimit={observationLimit}
                 onObservationLimitChange={setObservationLimit}
+                simulationSpeed={simulationSpeed}
+                onSimulationSpeedChange={handleSimulationSpeedChange}
                 structural={network?.structural ?? null}
                 development={network?.development ?? null}
                 environment={network?.environment ?? null}

@@ -3,6 +3,12 @@ import type {
   StructuralSnapshot,
 } from "../../types/neural";
 import type { PauseReason, RunMode } from "./runLoop";
+import {
+  presetForSpeed,
+  renderModeLabel,
+  shortSpeedLabel,
+  type SimulationSpeedId,
+} from "./simulationSpeed";
 
 interface ObserverStatusPanelProps {
   running: boolean;
@@ -11,6 +17,10 @@ interface ObserverStatusPanelProps {
   runMode: RunMode;
   observationLimit: number;
   stepsThisRun: number;
+  simulationSpeed: SimulationSpeedId;
+  actualTicksPerSecond: number;
+  backendLatencyMs: number | null;
+  backendVersion: string | null;
   environment: EnvironmentSnapshot | null;
   structural: StructuralSnapshot | null;
 }
@@ -26,10 +36,15 @@ export function ObserverStatusPanel({
   runMode,
   observationLimit,
   stepsThisRun,
+  simulationSpeed,
+  actualTicksPerSecond,
+  backendLatencyMs,
+  backendVersion,
   environment,
   structural,
 }: ObserverStatusPanelProps) {
   const metrics = structural?.metrics;
+  const renderMode = presetForSpeed(simulationSpeed).renderMode;
   const activePattern =
     environment?.activePatterns?.[0] ??
     (environment?.patterns.find((p) => p.active)?.id ?? "None");
@@ -68,6 +83,32 @@ export function ObserverStatusPanel({
               : stepsThisRun > 0
                 ? ` · ${stepsThisRun} steps`
                 : ""}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Selected speed</dt>
+          <dd data-testid="observer-selected-speed">{shortSpeedLabel(simulationSpeed)}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Actual ticks/s</dt>
+          <dd data-testid="observer-actual-tps">
+            {actualTicksPerSecond > 0 ? actualTicksPerSecond.toFixed(1) : "—"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Backend latency</dt>
+          <dd data-testid="observer-backend-latency">
+            {backendLatencyMs != null ? `${Math.round(backendLatencyMs)} ms` : "—"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Render mode</dt>
+          <dd data-testid="observer-render-mode">{renderModeLabel(renderMode)}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Frontend / backend</dt>
+          <dd data-testid="observer-versions">
+            0.8.2 / {backendVersion ?? "—"}
           </dd>
         </div>
       </dl>
