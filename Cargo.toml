@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["core"]
+
+[package]
+name = "neuronet"
+version = "0.1.0"
+edition = "2021"
+description = "NEURONET — decentralized society of autonomous computational cells"
+license = "MIT"
+authors = ["Project NEURONET"]
+readme = "README.md"
+
+[[bin]]
+name = "neuronet"
+path = "src/main.rs"
+
+[dependencies]
+neuronet-core = { path = "core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+anyhow = "1"
+
+[dev-dependencies]
+neuronet-core = { path = "core" }
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+serde_json = "1"
