@@ -8,6 +8,8 @@
   --accent-press: #2b7fc9;
   --sleeping: #8b9aab;
   --awake: #4caf82;
+  --fired: #e2b34a;
+  --quiet: #8b9aab;
   --energy: #3d9cf0;
   --radius: 12px;
   --space: 16px;
@@ -141,6 +143,16 @@ body {
   color: var(--awake);
 }
 
+.state-fired {
+  background: rgba(226, 179, 74, 0.22);
+  color: var(--fired);
+}
+
+.state-quiet {
+  background: rgba(139, 154, 171, 0.2);
+  color: var(--quiet);
+}
+
 .energy-block {
   margin-top: 20px;
 }
@@ -167,6 +179,10 @@ body {
   background: var(--energy);
   border-radius: inherit;
   transition: width 160ms ease-out;
+}
+
+.energy-fill-fired {
+  background: var(--fired);
 }
 
 .activity-list {

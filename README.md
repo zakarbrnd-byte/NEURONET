@@ -1,43 +1,62 @@
 # NEURONET
 
-**Version 0.2 — Basic Digital Node**
+**Version 0.3 — Biological Neuron**
 
-NEURONET is a beginner-friendly Chrome Debug Board for one Digital Node. This milestone moves node rules out of the React UI and into a simple `DigitalNode` class. There is still no backend, networking, or AI.
+NEURONET is an experimental project exploring whether cognition can emerge from biologically-inspired computational principles.
+
+It is **not** a chatbot, **not** an LLM, and **not** trying to imitate ChatGPT.
+
+This milestone introduces one biological principle: a single simplified neuron that can receive signals, accumulate activation, fire, rest, and recover.
 
 ## What it does right now
 
-The **NEURONET Debug Board** displays one local node:
+The Chrome **Debug Board** lets you observe one local `BiologicalNode`:
 
-- Project name, version `0.2`, and mode `Local DigitalNode`
-- Node fields: ID, state, energy, tick, last message
-- An energy progress bar
-- An activity feed
-- Buttons: **Send Hello**, **Wake**, **Sleep**, **Reset**
+- Version `0.3`, mode `Biological Neuron`
+- Neuron ID, Activation, Threshold, Energy, Fatigue, Refractory, Tick, Fired
+- Activity feed (newest first)
+- Buttons: **Inject Signal**, **Strong Signal**, **Next Tick**, **Reset**
 
-## What DigitalNode is
+The neuron exists only in browser memory. Refreshing the page resets it. There is no backend.
 
-`src/models/DigitalNode.ts` is a plain TypeScript class that owns:
+## What a Biological Neuron is
 
-- `id`, `state`, `energy`, `tick`, `lastMessage`
-- Methods: `receiveMessage`, `wake`, `sleep`, `reset`, `getData`
+`src/models/BiologicalNode.ts` is a beginner-friendly educational model of one neuron.
 
-Node logic (energy, state changes, ticks, message storage) lives in that class, not in the React components.
+It owns its own values and behavior. The React UI only displays snapshots from `getData()`.
 
-The UI calls a method, then reads a snapshot with `getData()` and shows it.
+### Activation
 
-## Why node logic is separate from the UI
+Current accumulated electrical potential. Signals raise activation. Each tick, unused activation decays slightly toward zero.
 
-Keeping rules inside `DigitalNode` makes the project easier to understand:
+### Threshold
 
-- The Debug Board draws the current values.
-- The DigitalNode decides how values change.
-- Later milestones can grow the node without rewriting the whole page.
+The activation level required to fire. Starts at `1.0`.
 
-## Browser-only memory
+### Fatigue
 
-- The node exists only in browser memory.
-- There is no backend and no persistence.
-- Refreshing the browser resets the node.
+Temporary exhaustion after firing. Fatigue recovers gradually during resting and recovery steps.
+
+### Refractory
+
+After firing, the neuron enters a short refractory period (`2` ticks). It cannot fire again until that countdown reaches zero.
+
+### Energy
+
+A simple visual indicator. Firing reduces energy by `1`. Energy never goes below `0`.
+
+## Important educational note
+
+This is only an **educational approximation** of a biological neuron.
+
+It is **not** intended to simulate all neuron biology. It is the minimum model that makes firing, resting, and recovery understandable in Chrome.
+
+## Try this sequence
+
+1. **Inject Signal** → activation becomes `0.35`
+2. **Next Tick** → activation decays; neuron does not fire
+3. **Strong Signal** → activation becomes `1.25`
+4. **Next Tick** → neuron fires; activation returns to `0`, energy `99`, fatigue `0.2`, refractory `2`
 
 ## Folder structure
 
@@ -51,9 +70,10 @@ NEURONET/
 │   ├── data/
 │   │   └── initialActivity.ts
 │   ├── models/
-│   │   └── DigitalNode.ts
+│   │   ├── BiologicalNode.ts
+│   │   └── BiologicalNode.test.ts
 │   ├── types/
-│   │   └── node.ts
+│   │   └── neuron.ts
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── styles.css
@@ -69,13 +89,13 @@ NEURONET/
 └── CLAUDE.md
 ```
 
-## Install dependencies
+## Install
 
 ```bash
 npm install
 ```
 
-## Run the app
+## Run locally
 
 ```bash
 npm run dev
@@ -87,19 +107,23 @@ Open:
 http://localhost:5173/NEURONET/
 ```
 
-## GitHub Pages
+## Test
 
-Live Debug Board:
+```bash
+npm test
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+## GitHub Pages
 
 ```text
 https://zakarbrnd-byte.github.io/NEURONET/
 ```
 
 Deployed from `main` by `.github/workflows/deploy-pages.yml`.  
-Vite `base` is `/NEURONET/`.
-
-## Build check
-
-```bash
-npm run build
-```
+Vite `base` remains `/NEURONET/`.

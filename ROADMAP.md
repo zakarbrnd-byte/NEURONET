@@ -4,13 +4,13 @@
 
 Create the folder structure and Chrome debugging screen.
 
-## 0.2 Basic Digital Node ← Current
+## 0.2 Basic Digital Node ✅ Complete
 
 Replace mock data with a basic node model.
 
-## 0.3 Node Input
+## 0.3 Biological Neuron ← Current
 
-Allow custom text input.
+Replace the Digital Node with a simplified biological neuron that can receive signals, accumulate activation, fire, rest, and recover.
 
 ## 0.4 Node Lifecycle
 
