@@ -1,9 +1,15 @@
-import type { NeuronSnapshot } from "../../types/neural";
+import type {
+  ConnectionSnapshot,
+  NetworkEvent,
+  NeuronSnapshot,
+} from "../../types/neural";
 import { distanceToThresholdMv, electricalState } from "../../types/neural";
 
 interface NeuronStatusProps {
   neuron: NeuronSnapshot | null;
   networkTick: number;
+  connections: ConnectionSnapshot[];
+  events: NetworkEvent[];
 }
 
 function formatMv(value: number): string {
@@ -14,11 +20,16 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
+export function NeuronStatus({
+  neuron,
+  networkTick,
+  connections,
+  events,
+}: NeuronStatusProps) {
   if (!neuron) {
     return (
       <section className="card">
-        <h2 className="card-title">Neuron Status</h2>
+        <h2 className="card-title">Neuron Inspector</h2>
         <p className="hint">Select a backend neuron to inspect its electrical state.</p>
       </section>
     );
@@ -26,6 +37,17 @@ export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
 
   const state = electricalState(neuron);
   const distance = distanceToThresholdMv(neuron);
+  const incoming = connections.filter((c) => c.targetNeuronId === neuron.id).length;
+  const outgoing = connections.filter((c) => c.sourceNeuronId === neuron.id).length;
+
+  const latestReceived = events.find(
+    (event) =>
+      event.type === "signal_propagated" && event.targetNeuronId === neuron.id,
+  );
+  const latestFire = events.find(
+    (event) => event.type === "neuron_fired" && event.neuronId === neuron.id,
+  );
+
   const towardThresholdPercent = Math.max(
     0,
     Math.min(
@@ -39,11 +61,10 @@ export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
   return (
     <section className="card" aria-labelledby="status-heading">
       <h2 id="status-heading" className="card-title">
-        Neuron Status
+        Neuron Inspector
       </h2>
       <p className="hint">
-        Values come from the Rust backend. This is an educational millivolt approximation, not a
-        full biophysical simulation.
+        Values come from the Rust backend. Educational millivolt approximation only.
       </p>
 
       <dl className="status-list">
@@ -62,7 +83,7 @@ export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
             <dt>Resting Potential</dt>
             <dd>{formatMv(neuron.restingPotentialMv)}</dd>
           </div>
-          <p className="field-note">The quiet baseline of this neuron.</p>
+          <p className="field-note">Quiet baseline of this neuron.</p>
         </div>
         <div className="status-block">
           <div className="status-row">
@@ -75,12 +96,9 @@ export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
               : "The membrane is at or above the fire threshold."}
           </p>
         </div>
-        <div className="status-block">
-          <div className="status-row">
-            <dt>Fire Threshold</dt>
-            <dd>{formatMv(neuron.thresholdMv)}</dd>
-          </div>
-          <p className="field-note">Crossing this level causes a spike.</p>
+        <div className="status-row">
+          <dt>Fire Threshold</dt>
+          <dd>{formatMv(neuron.thresholdMv)}</dd>
         </div>
         <div className="status-row">
           <dt>Distance to Threshold</dt>
@@ -99,8 +117,28 @@ export function NeuronStatus({ neuron, networkTick }: NeuronStatusProps) {
           <dd>{neuron.refractoryTicks}</dd>
         </div>
         <div className="status-row">
-          <dt>Fired During Last Tick</dt>
+          <dt>Fired During Latest Tick</dt>
           <dd>{neuron.fired ? "true" : "false"}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Incoming Connections</dt>
+          <dd>{incoming}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Outgoing Connections</dt>
+          <dd>{outgoing}</dd>
+        </div>
+        <div className="status-row">
+          <dt>Latest Received Signal</dt>
+          <dd>
+            {latestReceived?.amountMv != null
+              ? `+${latestReceived.amountMv} mV`
+              : "None"}
+          </dd>
+        </div>
+        <div className="status-row">
+          <dt>Latest Firing Tick</dt>
+          <dd>{latestFire ? latestFire.networkTick : "None"}</dd>
         </div>
         <div className="status-row">
           <dt>Neuron Tick</dt>

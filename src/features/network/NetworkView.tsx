@@ -1,11 +1,16 @@
-import type { ConnectionSnapshot, NetworkEvent, NeuronSnapshot } from "../../types/neural";
-import { electricalState } from "../../types/neural";
+import type {
+  ConnectionSnapshot,
+  NeuronSnapshot,
+  PropagationTrace,
+} from "../../types/neural";
+import { electricalState, shortNeuronId } from "../../types/neural";
 
 interface NetworkViewProps {
   neurons: NeuronSnapshot[];
   connections: ConnectionSnapshot[];
   selectedNeuronId: string;
-  events: NetworkEvent[];
+  activePropagations: PropagationTrace[];
+  reducedMotion: boolean;
   onSelectNeuron: (neuronId: string) => void;
 }
 
@@ -14,42 +19,58 @@ interface Point {
   y: number;
 }
 
-function layoutPositions(count: number, width: number, height: number): Point[] {
-  if (count <= 0) {
-    return [];
+const CANONICAL_LAYOUT: Record<string, Point> = {
+  "NEURON-001": { x: 36, y: 120 },
+  "NEURON-002": { x: 120, y: 120 },
+  "NEURON-003": { x: 204, y: 48 },
+  "NEURON-004": { x: 204, y: 192 },
+  "NEURON-005": { x: 288, y: 120 },
+};
+
+function layoutFor(neurons: NeuronSnapshot[], width: number, height: number): Map<string, Point> {
+  const map = new Map<string, Point>();
+  const known = neurons.filter((neuron) => CANONICAL_LAYOUT[neuron.id]);
+  const unknown = neurons.filter((neuron) => !CANONICAL_LAYOUT[neuron.id]);
+
+  for (const neuron of known) {
+    map.set(neuron.id, CANONICAL_LAYOUT[neuron.id]);
   }
 
-  if (count === 1) {
-    return [{ x: width / 2, y: height / 2 }];
-  }
-
-  return Array.from({ length: count }, (_, index) => {
-    const t = index / (count - 1);
-    return {
-      x: 48 + t * (width - 96),
-      y: height / 2 + Math.sin(t * Math.PI) * -28,
-    };
+  unknown.forEach((neuron, index) => {
+    const t = unknown.length === 1 ? 0.5 : index / (unknown.length - 1);
+    map.set(neuron.id, {
+      x: 40 + t * (width - 80),
+      y: height - 28,
+    });
   });
+
+  return map;
+}
+
+function stateLabel(state: ReturnType<typeof electricalState>): string {
+  if (state === "Fired") return "★";
+  if (state === "Refractory") return "R";
+  if (state === "Depolarized") return "↑";
+  return "•";
 }
 
 export function NetworkView({
   neurons,
   connections,
   selectedNeuronId,
-  events,
+  activePropagations,
+  reducedMotion,
   onSelectNeuron,
 }: NetworkViewProps) {
-  const width = 320;
-  const height = 200;
-  const sorted = [...neurons].sort((a, b) => a.id.localeCompare(b.id));
-  const positions = layoutPositions(sorted.length, width, height);
-  const byId = new Map(sorted.map((neuron, index) => [neuron.id, { neuron, point: positions[index] }]));
+  const width = 324;
+  const height = 240;
+  const positions = layoutFor(neurons, width, height);
 
-  const activePropagation = new Set(
-    events
-      .filter((event) => event.type === "signal_propagated")
-      .slice(0, 8)
-      .map((event) => `${event.sourceNeuronId}->${event.targetNeuronId}`),
+  const pulseByEdge = new Map(
+    activePropagations.map((propagation) => [
+      `${propagation.sourceNeuronId}->${propagation.targetNeuronId}`,
+      propagation,
+    ]),
   );
 
   return (
@@ -58,7 +79,7 @@ export function NetworkView({
         Network View
       </h2>
       <p className="hint">
-        Drawn only from backend neurons and connections. Tap a neuron to inspect it.
+        Branching and convergence from backend neurons only. Tap a neuron to inspect it.
       </p>
 
       <div className="network-svg-wrap">
@@ -82,44 +103,59 @@ export function NetworkView({
           </defs>
 
           {connections.map((connection) => {
-            const source = byId.get(connection.sourceNeuronId);
-            const target = byId.get(connection.targetNeuronId);
+            const source = positions.get(connection.sourceNeuronId);
+            const target = positions.get(connection.targetNeuronId);
             if (!source || !target) {
               return null;
             }
 
-            const dx = target.point.x - source.point.x;
-            const dy = target.point.y - source.point.y;
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
             const length = Math.hypot(dx, dy) || 1;
-            const inset = 28;
-            const x1 = source.point.x + (dx / length) * inset;
-            let y1 = source.point.y + (dy / length) * inset;
-            const x2 = target.point.x - (dx / length) * inset;
-            let y2 = target.point.y - (dy / length) * inset;
-
-            // Slight curve offset for readability.
-            y1 -= 4;
-            y2 -= 4;
-
+            const inset = 26;
+            const x1 = source.x + (dx / length) * inset;
+            const y1 = source.y + (dy / length) * inset;
+            const x2 = target.x - (dx / length) * inset;
+            const y2 = target.y - (dy / length) * inset;
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2;
             const key = `${connection.sourceNeuronId}->${connection.targetNeuronId}`;
-            const pulse = activePropagation.has(key);
+            const pulse = pulseByEdge.get(key);
 
             return (
-              <line
-                key={connection.id}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                className={`network-link ${pulse ? "network-link-pulse" : ""}`}
-                strokeWidth={Math.max(2, Math.min(6, connection.weight))}
-                markerEnd="url(#arrowhead)"
-              />
+              <g key={connection.id}>
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  className={`network-link ${pulse ? "network-link-pulse" : ""}`}
+                  strokeWidth={Math.max(2, Math.min(5, connection.weight / 4))}
+                  markerEnd="url(#arrowhead)"
+                  strokeDasharray={pulse && reducedMotion ? "4 3" : undefined}
+                />
+                {pulse ? (
+                  <>
+                    {!reducedMotion ? (
+                      <circle r="5" className="network-pulse-dot">
+                        <animateMotion
+                          dur="0.7s"
+                          repeatCount="1"
+                          path={`M ${x1} ${y1} L ${x2} ${y2}`}
+                        />
+                      </circle>
+                    ) : null}
+                    <text x={midX} y={midY - 8} className="network-pulse-label">
+                      +{pulse.amountMv} mV
+                    </text>
+                  </>
+                ) : null}
+              </g>
             );
           })}
 
-          {sorted.map((neuron) => {
-            const point = byId.get(neuron.id)?.point;
+          {neurons.map((neuron) => {
+            const point = positions.get(neuron.id);
             if (!point) {
               return null;
             }
@@ -136,7 +172,7 @@ export function NetworkView({
                   className={`network-node state-${state.toLowerCase()} ${selected ? "selected" : ""}`}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Select ${neuron.id}`}
+                  aria-label={`Select ${neuron.id}, ${state}, ${neuron.membranePotentialMv.toFixed(0)} mV`}
                   onClick={() => onSelectNeuron(neuron.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -145,8 +181,14 @@ export function NetworkView({
                     }
                   }}
                 />
-                <text x={point.x} y={point.y + 40} className="network-label">
-                  {neuron.id.replace("NEURON-", "N-")}
+                <text x={point.x} y={point.y - 2} className="network-node-id">
+                  {shortNeuronId(neuron.id)}
+                </text>
+                <text x={point.x} y={point.y + 11} className="network-node-mv">
+                  {neuron.membranePotentialMv.toFixed(0)}
+                </text>
+                <text x={point.x + 18} y={point.y - 14} className="network-state-mark">
+                  {stateLabel(state)}
                 </text>
               </g>
             );

@@ -44,7 +44,7 @@ async fn main() {
     let router = app(state, cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("NEURONET backend 0.4 listening on http://{addr}");
+    tracing::info!("NEURONET backend 0.5 listening on http://{addr}");
     tracing::info!("CORS origins: {:?}", origins);
 
     let listener = tokio::net::TcpListener::bind(addr)

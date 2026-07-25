@@ -1,4 +1,4 @@
-/** Backend network snapshot types. Frontend never invents these values. */
+/** Backend network snapshot and step-trace types. Frontend never invents these values. */
 
 export interface NeuronSnapshot {
   id: string;
@@ -26,6 +26,21 @@ export interface NetworkSnapshot {
   connections: ConnectionSnapshot[];
 }
 
+export interface PropagationTrace {
+  eventId: string;
+  sourceNeuronId: string;
+  targetNeuronId: string;
+  amountMv: number;
+}
+
+export interface NetworkStepTrace {
+  tick: number;
+  firedNeuronIds: string[];
+  propagations: PropagationTrace[];
+  eventIds: string[];
+  network: NetworkSnapshot;
+}
+
 export interface NetworkEvent {
   id: string;
   timestamp: string;
@@ -34,6 +49,7 @@ export interface NetworkEvent {
   neuronId?: string;
   sourceNeuronId?: string;
   targetNeuronId?: string;
+  amountMv?: number;
   message: string;
 }
 
@@ -44,7 +60,15 @@ export interface HealthResponse {
 
 export type ConnectionStatus = "connected" | "connecting" | "unavailable";
 
-export type ElectricalState = "Resting" | "Depolarizing" | "Fired" | "Refractory";
+export type ElectricalState = "Resting" | "Depolarized" | "Fired" | "Refractory";
+
+export interface TimelineEntry {
+  tick: number;
+  firedNeuronIds: string[];
+  propagations: PropagationTrace[];
+  depolarizedCount: number;
+  summary: string;
+}
 
 export function electricalState(neuron: NeuronSnapshot): ElectricalState {
   if (neuron.fired) {
@@ -53,12 +77,70 @@ export function electricalState(neuron: NeuronSnapshot): ElectricalState {
   if (neuron.refractoryTicks > 0) {
     return "Refractory";
   }
-  if (neuron.membranePotentialMv > neuron.restingPotentialMv) {
-    return "Depolarizing";
+  if (neuron.membranePotentialMv > neuron.restingPotentialMv + 0.01) {
+    return "Depolarized";
   }
   return "Resting";
 }
 
 export function distanceToThresholdMv(neuron: NeuronSnapshot): number {
   return neuron.thresholdMv - neuron.membranePotentialMv;
+}
+
+export function shortNeuronId(id: string): string {
+  return id.replace("NEURON-", "N-");
+}
+
+export function explainStep(trace: NetworkStepTrace): string[] {
+  const lines: string[] = [];
+
+  if (trace.firedNeuronIds.length === 0 && trace.propagations.length === 0) {
+    lines.push("No neuron reached threshold. Membranes moved toward resting potential.");
+    return lines;
+  }
+
+  for (const id of trace.firedNeuronIds) {
+    lines.push(`${id} reached its firing threshold and fired.`);
+    lines.push(`${id} entered refractory state.`);
+  }
+
+  for (const prop of trace.propagations) {
+    lines.push(
+      `${prop.sourceNeuronId} delivered +${prop.amountMv} mV to ${prop.targetNeuronId}.`,
+    );
+  }
+
+  return lines;
+}
+
+export function timelineSummary(trace: NetworkStepTrace): string {
+  const fired = trace.firedNeuronIds.map(shortNeuronId);
+  if (fired.length === 0 && trace.propagations.length === 0) {
+    return "Quiet recovery tick";
+  }
+  const parts: string[] = [];
+  if (fired.length > 0) {
+    parts.push(`${fired.join(" and ")} fired`);
+  }
+  if (trace.propagations.length > 0) {
+    parts.push(`${trace.propagations.length} signal(s) delivered`);
+  }
+  return parts.join("; ");
+}
+
+export function countDepolarized(neurons: NeuronSnapshot[]): number {
+  return neurons.filter((neuron) => electricalState(neuron) === "Depolarized").length;
+}
+
+export function countRefractory(neurons: NeuronSnapshot[]): number {
+  return neurons.filter((neuron) => electricalState(neuron) === "Refractory").length;
+}
+
+export function networkIsQuiet(snapshot: NetworkSnapshot, lastTrace: NetworkStepTrace | null): boolean {
+  const active = snapshot.neurons.some((neuron) => {
+    const state = electricalState(neuron);
+    return state === "Depolarized" || state === "Fired";
+  });
+  const pending = (lastTrace?.propagations.length ?? 0) > 0;
+  return !active && !pending;
 }

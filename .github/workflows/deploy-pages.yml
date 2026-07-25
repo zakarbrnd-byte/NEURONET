@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -34,12 +34,11 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Set this repository variable after the backend is publicly deployed.
-          # GitHub → Settings → Secrets and variables → Actions → Variables
+          # Repository variable set to the public Render backend URL.
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -52,4 +51,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

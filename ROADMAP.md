@@ -10,12 +10,16 @@ Replace mock data with a basic node model.
 
 ## 0.3 Biological Neuron ✅ Complete
 
-Replace the Digital Node with a simplified biological neuron that can receive signals, accumulate activation, fire, rest, and recover.
+Replace the Digital Node with a simplified biological neuron.
 
-## 0.4 Backend Neural Core and Network View ← Current
+## 0.4 Backend Neural Core and Network View ✅ Complete
 
-Move simulation ownership to a Rust backend and visualize the real backend network in Chrome.
+Move simulation ownership to a Rust backend and visualize the real backend network.
 
-## 1.0 Working Digital Node
+## 0.5 Network Dynamics Observatory ← Current
 
-A single understandable node/network that can be controlled and observed in Chrome.
+Make backend firing and signal propagation observable tick by tick across a small deterministic network.
+
+## 0.6 Excitation and Inhibition
+
+Add inhibitory connections so networks can suppress as well as excite.

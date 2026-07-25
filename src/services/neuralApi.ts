@@ -2,6 +2,7 @@ import type {
   HealthResponse,
   NetworkEvent,
   NetworkSnapshot,
+  NetworkStepTrace,
 } from "../types/neural";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
@@ -72,8 +73,8 @@ export const neuralApi = {
     });
   },
 
-  stepNetwork(): Promise<NetworkSnapshot> {
-    return request<NetworkSnapshot>("/api/network/step", { method: "POST" });
+  stepNetwork(): Promise<NetworkStepTrace> {
+    return request<NetworkStepTrace>("/api/network/step", { method: "POST" });
   },
 
   resetNetwork(): Promise<NetworkSnapshot> {

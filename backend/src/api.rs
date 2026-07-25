@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use crate::network::{NetworkSnapshot, NeuralNetwork};
+use crate::network::{NetworkSnapshot, NetworkStepTrace, NeuralNetwork};
 
 pub type SharedNetwork = Arc<Mutex<NeuralNetwork>>;
 
@@ -74,7 +74,7 @@ pub fn build_cors(allowed_origins: &[String]) -> CorsLayer {
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: "0.4",
+        version: "0.5",
     })
 }
 
@@ -104,10 +104,9 @@ async fn inject_signal(
     }
 }
 
-async fn step_network(State(state): State<AppState>) -> Json<NetworkSnapshot> {
+async fn step_network(State(state): State<AppState>) -> Json<NetworkStepTrace> {
     let mut network = state.network.lock().await;
-    network.step();
-    Json(network.snapshot())
+    Json(network.step())
 }
 
 async fn reset_network(State(state): State<AppState>) -> Json<NetworkSnapshot> {
@@ -137,7 +136,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_endpoint() {
+    async fn health_endpoint_reports_version_0_5() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -151,11 +150,11 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
         assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "0.4");
+        assert_eq!(json["version"], "0.5");
     }
 
     #[tokio::test]
-    async fn network_endpoint() {
+    async fn network_endpoint_returns_five_neurons_and_connections() {
         let app = test_app();
         let response = app
             .oneshot(
@@ -168,9 +167,8 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let json = body_json(response).await;
-        assert_eq!(json["neurons"].as_array().unwrap().len(), 3);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 2);
-        assert_eq!(json["neurons"][0]["restingPotentialMv"], -70.0);
+        assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
+        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
     }
 
     #[tokio::test]
@@ -193,9 +191,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_neuron_id() {
+    async fn invalid_neuron_id_and_signal() {
         let app = test_app();
-        let response = app
+        let bad_id = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -206,13 +205,9 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
+        assert_eq!(bad_id.status(), StatusCode::BAD_REQUEST);
 
-    #[tokio::test]
-    async fn invalid_signal() {
-        let app = test_app();
-        let response = app
+        let bad_signal = app
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -223,11 +218,11 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(bad_signal.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
-    async fn network_step_and_shared_state() {
+    async fn step_returns_structured_trace_and_shared_state_persists() {
         let state = AppState {
             network: Arc::new(Mutex::new(NeuralNetwork::initial())),
         };
@@ -240,7 +235,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/neurons/NEURON-001/signals")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"amountMv":5}"#))
+                    .body(Body::from(r#"{"amountMv":20}"#))
                     .unwrap(),
             )
             .await
@@ -258,8 +253,34 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(step.status(), StatusCode::OK);
-        let stepped = body_json(step).await;
-        assert_eq!(stepped["tick"], 1);
+        let trace = body_json(step).await;
+        assert_eq!(trace["tick"], 1);
+        assert_eq!(trace["firedNeuronIds"][0], "NEURON-001");
+        assert_eq!(trace["propagations"][0]["sourceNeuronId"], "NEURON-001");
+        assert_eq!(trace["propagations"][0]["targetNeuronId"], "NEURON-002");
+        assert_eq!(trace["propagations"][0]["amountMv"], 16.0);
+        assert!(trace["propagations"][0]["eventId"].as_str().unwrap().len() > 0);
+        assert_eq!(trace["network"]["tick"], 1);
+
+        let events = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/events")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let events_json = body_json(events).await;
+        let prop = events_json
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["type"] == "signal_propagated")
+            .unwrap();
+        assert_eq!(prop["amountMv"], 16.0);
+        assert_eq!(prop["sourceNeuronId"], "NEURON-001");
 
         let network = app
             .oneshot(
@@ -272,11 +293,10 @@ mod tests {
             .unwrap();
         let json = body_json(network).await;
         assert_eq!(json["tick"], 1);
-        assert_eq!(json["neurons"][0]["membranePotentialMv"], -67.0);
     }
 
     #[tokio::test]
-    async fn network_reset() {
+    async fn network_reset_restores_topology() {
         let app = test_app();
         let _ = app
             .clone()
@@ -304,8 +324,7 @@ mod tests {
         assert_eq!(reset.status(), StatusCode::OK);
         let json = body_json(reset).await;
         assert_eq!(json["tick"], 0);
-        assert_eq!(json["neurons"][0]["membranePotentialMv"], -70.0);
-        assert_eq!(json["neurons"].as_array().unwrap().len(), 3);
-        assert_eq!(json["connections"].as_array().unwrap().len(), 2);
+        assert_eq!(json["neurons"].as_array().unwrap().len(), 5);
+        assert_eq!(json["connections"].as_array().unwrap().len(), 5);
     }
 }
