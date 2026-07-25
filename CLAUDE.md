@@ -30,11 +30,11 @@ We are cultivating the conditions from which intelligence may emerge.
 
 ## Current milestone
 
-**Shipped:** 0.5 Network Dynamics + Mission Control  
+**Shipped:** 0.6A Artificial Neural Tissue  
 
-**Current development target: 0.6 Artificial Neural Tissue**
+**Next development target: 0.6B Synaptic Plasticity**
 
-Do not implement 0.6 application logic unless the user explicitly requests that engineering work.
+Do not implement learning, memory, growth, body, or cognition unless that milestone is explicitly requested.
 
 ## Canonical docs
 

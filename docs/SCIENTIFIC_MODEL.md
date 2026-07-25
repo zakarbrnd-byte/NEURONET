@@ -28,12 +28,13 @@ Always distinguish:
 | Threshold firing | Implemented (approximation) |
 | Refractory recovery | Implemented (approximation) |
 | Discrete-time propagation | Implemented (approximation) |
-| Deterministic excitatory tissue | Implemented (educational topology) |
+| Deterministic tissue positions | Implemented (0.6A) |
+| Region / layer / DNA id / morphology | Implemented (0.6A, educational) |
+| Excitatory + inhibitory cell types | Implemented (0.6A) |
+| Inhibitory synapses (signed mV) | Implemented (0.6A) |
 | Fatigue / energy fields | Implemented (coarse educational indicators) |
-| Inhibition | Future work (0.6) |
-| Spatial tissue / layers / cell types | Future work (0.6) |
-| Synaptic plasticity | Future work (0.7) |
-| Structural plasticity | Future work (0.8) |
+| Synaptic plasticity | Future work (0.6B) |
+| Structural plasticity / growth | Future work (0.6C) |
 | Body / sensors | Future work (0.9+) |
 | Prediction / memory / learning / cognition | Future work (1.1–1.4) |
 
@@ -91,19 +92,20 @@ There is no continuous axonal delay model, no probabilistic vesicle release, and
 
 ## Tissue model
 
-**Implemented (educational) / Approximation**
+**Implemented (0.6A) / Approximation**
 
-Shipped tissue is a **deterministic five-neuron** excitatory graph with branching and convergence:
+Shipped tissue is a **deterministic five-neuron** graph with fixed normalized positions,
+region/layer labels, morphology radii, and mixed E/I synapses:
 
 ```text
-NEURON-001 → NEURON-002 → {NEURON-003, NEURON-004} → NEURON-005
+NEURON-001 → NEURON-002 → {NEURON-003 (E), NEURON-004 (I)} → NEURON-005
 ```
 
-Weights are fixed (16 mV / 16 mV / 8 mV as documented in the README).  
-NEURON-005 requires convergent drive from both upstream branches under the standard cascade protocol.
+NEURON-004 is inhibitory; CONNECTION-005 delivers −8 mV when N-004 fires.
+Positions never move. Reset restores the identical geometry.
 
-This demonstrates accumulation, threshold, refractory recovery, and directed propagation.  
-It is **not** cortical tissue, **not** a microcircuit atlas, and **not** developmental morphogenesis.
+This demonstrates physical organization plus excitation/inhibition.
+It is **not** cortical tissue and **not** developmental morphogenesis.
 
 ---
 

@@ -5,6 +5,7 @@ import { QuickActions } from "../components/QuickActions";
 import { SelectedNeuronStrip } from "../components/SelectedNeuronStrip";
 import { ContextPanel } from "../components/ContextPanel";
 import { NetworkView } from "../features/network/NetworkView";
+import { TissueView } from "../features/network/TissueView";
 import { NodePanel } from "../features/mission/NodePanel";
 import { TimelinePanel } from "../features/mission/TimelinePanel";
 import { ControlsPanel } from "../features/mission/ControlsPanel";
@@ -23,7 +24,7 @@ import {
   shortNeuronId,
   timelineSummary,
 } from "../types/neural";
-import type { MissionPanel } from "../types/ui";
+import type { MainView, MissionPanel } from "../types/ui";
 
 const WEAK_SIGNAL_MV = 5;
 const STRONG_SIGNAL_MV = 20;
@@ -45,6 +46,7 @@ export function MissionControl() {
   const [events, setEvents] = useState<NetworkEvent[]>([]);
   const [selectedNeuronId, setSelectedNeuronId] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<MissionPanel>("network");
+  const [mainView, setMainView] = useState<MainView>("network");
   const [pressingNeuronId, setPressingNeuronId] = useState<string | null>(null);
   const [flashedNeuronId, setFlashedNeuronId] = useState<string | null>(null);
   const [stimToast, setStimToast] = useState<string | null>(null);
@@ -367,12 +369,17 @@ export function MissionControl() {
     setActivePanel("node");
   }
 
-  function handleNavChange(panel: MissionPanel) {
+  function handleNavChange(panel: "network" | "tissue" | "timeline" | "controls") {
+    if (panel === "network" || panel === "tissue") {
+      setMainView(panel);
+      setActivePanel(panel);
+      return;
+    }
     setActivePanel(panel);
   }
 
-  function closeToNetwork() {
-    setActivePanel("network");
+  function closeOverlay() {
+    setActivePanel(mainView);
   }
 
   const selectedNeuron =
@@ -380,7 +387,8 @@ export function MissionControl() {
       ? network?.neurons.find((neuron) => neuron.id === selectedNeuronId)
       : null) ?? null;
 
-  const panelOpen = activePanel !== "network";
+  const panelOpen =
+    activePanel === "node" || activePanel === "timeline" || activePanel === "controls";
   const panelTitle =
     activePanel === "node"
       ? "Node"
@@ -388,7 +396,11 @@ export function MissionControl() {
         ? "Timeline"
         : activePanel === "controls"
           ? "Controls"
-          : "Network";
+          : mainView === "tissue"
+            ? "Tissue"
+            : "Network";
+  const navActive =
+    activePanel === "timeline" || activePanel === "controls" ? activePanel : mainView;
 
   const uiRevision =
     typeof window !== "undefined" &&
@@ -407,36 +419,60 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.5"
+          version="0.6A"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
           error={error}
+          tissue={network?.tissue ?? null}
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Mission Control UI · Layout Revision 1
+          Mission Control UI · Layout Revision 1 · Tissue 0.6A
         </p>
       </header>
 
       <div className="mission-control-main" data-testid="mission-control-main">
-        <section className="network-viewport" data-testid="network-viewport" aria-label="Network graph">
-          <p className="network-gesture-hint">Tap: Inspect · Hold: Stimulate +5 mV</p>
+        <section
+          className="network-viewport"
+          data-testid="network-viewport"
+          data-main-view={mainView}
+          aria-label={mainView === "tissue" ? "Tissue view" : "Network graph"}
+        >
+          {mainView === "network" ? (
+            <p className="network-gesture-hint">Tap: Inspect · Hold: Stimulate +5 mV</p>
+          ) : null}
           {network ? (
-            <NetworkView
-              compact
-              neurons={network.neurons}
-              connections={network.connections}
-              selectedNeuronId={selectedNeuronId}
-              activePropagations={activePropagations}
-              reducedMotion={reducedMotion}
-              interactionDisabled={status !== "connected" || busy || running}
-              pressingNeuronId={pressingNeuronId}
-              flashedNeuronId={flashedNeuronId}
-              onSelectNeuron={handleSelectNeuron}
-              onLongPressStimulate={handleLongPressStimulate}
-              onPressVisualChange={setPressingNeuronId}
-            />
+            mainView === "tissue" ? (
+              <TissueView
+                neurons={network.neurons}
+                connections={network.connections}
+                selectedNeuronId={selectedNeuronId}
+                activePropagations={activePropagations}
+                reducedMotion={reducedMotion}
+                interactionDisabled={status !== "connected" || busy || running}
+                pressingNeuronId={pressingNeuronId}
+                flashedNeuronId={flashedNeuronId}
+                onSelectNeuron={handleSelectNeuron}
+                onLongPressStimulate={handleLongPressStimulate}
+                onPressVisualChange={setPressingNeuronId}
+              />
+            ) : (
+              <NetworkView
+                compact
+                neurons={network.neurons}
+                connections={network.connections}
+                selectedNeuronId={selectedNeuronId}
+                activePropagations={activePropagations}
+                reducedMotion={reducedMotion}
+                interactionDisabled={status !== "connected" || busy || running}
+                pressingNeuronId={pressingNeuronId}
+                flashedNeuronId={flashedNeuronId}
+                onSelectNeuron={handleSelectNeuron}
+                onLongPressStimulate={handleLongPressStimulate}
+                onPressVisualChange={setPressingNeuronId}
+              />
+            )
           ) : (
             <div className="network-canvas network-canvas-empty" role="status">
               <p>
@@ -481,11 +517,11 @@ export function MissionControl() {
       </div>
 
       <div className="bottom-navigation" data-testid="bottom-navigation">
-        <BottomNav active={activePanel} onChange={handleNavChange} />
+        <BottomNav active={navActive} onChange={handleNavChange} />
       </div>
 
       <div className="overlay-panel-layer" data-testid="overlay-panel-layer">
-        <ContextPanel open={panelOpen} title={panelTitle} onClose={closeToNetwork}>
+        <ContextPanel open={panelOpen} title={panelTitle} onClose={closeOverlay}>
           {activePanel === "node" ? (
             <NodePanel
               neuron={selectedNeuron}

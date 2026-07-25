@@ -21,6 +21,14 @@ export const METRIC_EXPLANATIONS = {
   neuronTick: "The number of times this neuron has been updated by the backend.",
   networkTick:
     "One complete backend simulation step. It is not equal to one real-world second.",
+  region: "Named tissue region this neuron belongs to (backend tissue organization).",
+  layer: "Tissue layer index. Higher layers are farther along the observatory pathway.",
+  cellType: "Whether this cell is excitatory or inhibitory.",
+  dnaId: "Deterministic developmental identity label for this cell (not genomic DNA).",
+  position: "Fixed normalized tissue coordinates owned by the backend. Neurons do not move.",
+  somaRadius: "Relative size of the cell body used for Tissue View rendering.",
+  dendriteRadius: "Relative radius of the transparent dendrite field around the soma.",
+  axonLength: "Relative axon extent used for morphology display in Tissue View.",
 } as const;
 
 export type MetricExplanationKey = keyof typeof METRIC_EXPLANATIONS;

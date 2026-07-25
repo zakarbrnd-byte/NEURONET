@@ -5,8 +5,7 @@
 | | |
 | --- | --- |
 | **Project type** | Experimental Artificial Nervous System |
-| **Shipped observatory** | Version **0.5** — Network Dynamics + Mission Control |
-| **Current development target** | Version **0.6** — Artificial Neural Tissue |
+| **Current version** | **0.6A — Artificial Neural Tissue** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 NEURONET constructs a biologically-inspired digital nervous system and scientifically observes whether cognition can emerge through development.
@@ -17,193 +16,107 @@ It is not a chatbot. It is not an LLM. It is not a text prediction product.
 
 ## Project Philosophy
 
-NEURONET is an experimental **Artificial Nervous System** project.
-
 The goal is not to directly program intelligence.
 
 The goal is to build tissue, embodiment, interaction, memory, structural adaptation, and learning as biological conditions — then observe what, if anything, emerges.
 
-Intelligence, if it appears, should emerge from the system. It should never be hardcoded as a central reasoning service.
-
-Read the constitution first: [`NEURONET.md`](NEURONET.md).  
-Extended discussion: [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md).
+Read [`NEURONET.md`](NEURONET.md) and [`docs/PROJECT_PHILOSOPHY.md`](docs/PROJECT_PHILOSOPHY.md).
 
 ---
 
-## Current Version
+## Current Version — 0.6A Artificial Neural Tissue
 
-**Implemented runtime:** `0.5`
+Physical organization of a deterministic observatory tissue:
 
-- Rust neural core owns neurons, connections, membrane potentials, firing, propagation, ticks, and events.
-- React Mission Control observes backend snapshots and step traces.
-- Public deployment: GitHub Pages frontend + Render backend.
+- fixed neuron positions (backend-owned)
+- region / layer / cell type / DNA id
+- soma, dendrite field, axon length
+- excitatory and inhibitory cells and synapses
+- Mission Control **Network** and **Tissue** views
 
-**Planning target:** `0.6 Artificial Neural Tissue`
+**Not included in 0.6A:** learning, memory, growth, pruning, moving neurons, body, prediction, cognition.
 
-Do not treat planning versions as implemented until the corresponding milestone ships.
+---
+
+## Network View vs Tissue View
+
+| View | Role |
+| --- | --- |
+| **Network View** | Schematic graph for dynamics. Educational layout. Arrow links. |
+| **Tissue View** | Physical organization. Backend positions never move. Solid soma + transparent dendrite field. Smooth axons. Excitatory **arrow** `────►` vs inhibitory **bar** `────⊣`. |
 
 ---
 
 ## Current Scientific Stage
 
-The project currently models:
+**Implemented**
 
-- neurons
-- membrane potentials
-- firing
-- propagation
-- refractory recovery
-- deterministic neural tissue (fixed excitatory topology)
+- neurons, membrane potentials, firing, propagation, refractory recovery
+- deterministic tissue with fixed positions
+- one inhibitory cell (NEURON-004) and one inhibitory synapse (004 → 005)
 
----
+**Not yet**
 
-## Current Scientific Limitations
-
-The project does **not** yet model:
-
-- memory
-- learning
-- synaptic or structural plasticity
-- embodiment / body
-- prediction
-- cognition
-
-Fatigue and energy fields exist as simplified educational indicators. They are not biophysical accounts of metabolism.
-
-Inhibition is not yet implemented (planned under 0.6 tissue).
-
-See [`docs/SCIENTIFIC_MODEL.md`](docs/SCIENTIFIC_MODEL.md).
+- memory, learning, structural plasticity / growth, embodiment, cognition
 
 ---
 
-## Project Principles
+## Architecture
 
-1. **Backend owns reality. Frontend only observes.**  
-   Mission Control may inspect and send commands. It must never invent neural state.
+- The **Rust backend** owns neurons, connections, membrane potentials, tissue geometry, firing, propagation, ticks, and events.
+- The **React Mission Control** observes snapshots and step traces.
+- The frontend never invents neural state, signal paths, or firings.
 
-2. **Increase biological realism.**  
-   Prefer tissue, receptors, and adaptation over app-like “smart” features.
-
-3. **Everything must be observable.**  
-   If it cannot be visualized or inspected, it is not complete.
-
-4. **Follow biological development order.**  
-   Cell → neuron → tissue → plasticity → body → sensorimotor loop → prediction → memory → learning → cognition.
-
-5. **Never program intelligence directly.**  
-   No central mind service. No hardcoded cognition theater.
-
-Design gate:
-
-> Does this make NEURONET behave more like a living nervous system?
-
-If no, do not implement it.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
-## Long-Term Vision
-
-Study whether cognition can emerge from a digital nervous system that develops through biological stages.
-
-Success is not benchmark leaderboards or conversational fluency.  
-Success is a coherent, testable artificial nervous system that can be observed honestly.
-
----
-
-## Development Strategy
-
-Milestones follow biological development, not conventional AI feature lists.
+## Observatory tissue (0.6A)
 
 ```text
-Digital Cell → Neuron → Neural Tissue → Plasticity → Body
-→ Sensorimotor Loop → Prediction → Memory → Learning → Emergent Cognition
-```
-
-Roadmap: [`ROADMAP.md`](ROADMAP.md).  
-Contributor / agent rules: [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md).  
-Ownership boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
----
-
-## Architecture (summary)
-
-| Layer | Role |
-| --- | --- |
-| **Rust backend** | Source of truth: neurons, connections, simulation |
-| **Mission Control (React)** | Observatory: visualization, inspection, commands |
-| **API** | REST snapshots, signals, step traces, reset |
-
-The frontend never invents membrane potentials, firings, or signal paths.
-
----
-
-## Version 0.5 network (shipped)
-
-Deterministic five-neuron topology with branching and convergence:
-
-```text
-                  NEURON-003
-                ↗            ↘
+                  NEURON-003 (E)
+                ↗            ↘ +8
 NEURON-001 → NEURON-002       NEURON-005
-                ↘            ↗
-                  NEURON-004
+                ↘            ↗ −8
+                  NEURON-004 (I)
 ```
 
-Fixed excitatory weights:
+Fixed positions (normalized):
 
-| Connection | Weight |
-| --- | --- |
-| 001 → 002 | 16 mV |
-| 002 → 003 | 16 mV |
-| 002 → 004 | 16 mV |
-| 003 → 005 | 8 mV |
-| 004 → 005 | 8 mV |
+| Neuron | x | y | Type |
+| --- | --- | --- | --- |
+| N-001 | 0.12 | 0.50 | Excitatory |
+| N-002 | 0.32 | 0.50 | Excitatory |
+| N-003 | 0.60 | 0.28 | Excitatory |
+| N-004 | 0.60 | 0.72 | Inhibitory |
+| N-005 | 0.88 | 0.50 | Excitatory |
 
-NEURON-005 needs converging input from both 003 and 004.
-
----
+Reset recreates the identical tissue. Age counts seconds since the backend process started.
 
 ## Mission Control
 
-One-screen observatory shell:
+One-screen observatory:
 
-- compact status bar
-- network graph (largest region)
-- selected-neuron summary strip
+- tissue status header (Alive · Cells · Synapses · Region · Age)
+- Network or Tissue viewport
+- selected-neuron strip → Node sheet (includes **Biology**)
 - quick Step / Run·Pause / Reset
-- bottom navigation → Node, Timeline, and Controls sheets
+- bottom nav: Network · Tissue · Timeline · Controls
 
-Direct node interaction:
+Direct node interaction (both views):
 
-- **Tap** a neuron to open the inspector (no signal).
-- **Long-press** (~500 ms) a neuron to inject **+5 mV** through the backend.
-- In Controls / Node sheets: **Stimulate +5 mV**, **Strong Stimulus +20 mV**.
+- **Tap** — inspect (no signal)
+- **Long-press** (~500 ms) — inject **+5 mV** via backend
 
-This is **direct electrode-style stimulation**. It is not natural touch perception. Future versions may route input through sensory receptor nodes.
-
----
-
-## Reproduce the cascade
+## Reproduce dynamics
 
 1. Reset Network
-2. Tap NEURON-001 to open the inspector
-3. Strong Stimulus +20 mV
-4. Step One Tick repeatedly
+2. Strong Stimulus +20 mV on NEURON-001
+3. Step One Tick repeatedly
 
-Expected discrete progression:
+N-001 → N-002 → {N-003, N-004}. On the convergent tick, N-003 delivers **+8 mV** while inhibitory N-004 delivers **−8 mV**, so net drive on N-005 cancels in this tissue.
 
-| Tick | Fired | Propagations |
-| --- | --- | --- |
-| 1 | N-001 | N-001 → N-002 (+16 mV) |
-| 2 | N-002 | N-002 → N-003 (+16), N-002 → N-004 (+16) |
-| 3 | N-003, N-004 | both → N-005 (+8 each) |
-| 4 | N-005 | none |
-
-Or use **Run Sequence** (800 ms between backend steps, max 12). Pause stops future requests only.
-
-Every visual pulse comes from a structured backend propagation in `POST /api/network/step`.
-
----
+Or use **Run Sequence** (800 ms between backend steps, max 12).
 
 ## Run locally
 
@@ -224,8 +137,6 @@ npm run dev
 
 Open `http://localhost:5173/NEURONET/`
 
----
-
 ## Tests and builds
 
 ```bash
@@ -234,28 +145,20 @@ npm run build
 cd backend && cargo test && cargo build --release
 ```
 
----
-
 ## Public deployment
 
 - Frontend (GitHub Pages): https://zakarbrnd-byte.github.io/NEURONET/
 - Backend (Render): https://neuronet-backend-qphx.onrender.com
 
-GitHub Actions builds the frontend with repository variable `VITE_API_BASE_URL`.
+GitHub Actions builds with repository variable `VITE_API_BASE_URL`.
 
-Render free services may cold-start after idle time. The first request can be slow; backend memory resets on restart.
-
-Verify Mission Control layout:
-
-https://zakarbrnd-byte.github.io/NEURONET/?ui=mission-control-1
-
----
+Render free services may cold-start; backend memory resets on restart.
 
 ## API
 
-- `GET /api/health` → version `0.5`
-- `GET /api/network`
+- `GET /api/health` → version `0.6A`, `ageSeconds`
+- `GET /api/network` → snapshot including `tissue` + neuron biology fields
 - `GET /api/events`
 - `POST /api/neurons/:id/signals`
-- `POST /api/network/step` → structured step trace
+- `POST /api/network/step` → structured step trace (signed `amountMv`)
 - `POST /api/network/reset`

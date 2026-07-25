@@ -1,8 +1,10 @@
 /** Frontend-only Mission Control UI state (not backend simulation state). */
 
-export type MissionPanel = "network" | "node" | "timeline" | "controls";
+export type MissionPanel = "network" | "tissue" | "node" | "timeline" | "controls";
 
-export type NodeCategory = "electrical" | "recovery" | "connections" | "history";
+export type MainView = "network" | "tissue";
+
+export type NodeCategory = "electrical" | "recovery" | "connections" | "history" | "biology";
 
 export type TimelineFilter = "all" | "fired" | "signals" | "recovery";
 

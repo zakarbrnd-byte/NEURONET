@@ -140,6 +140,22 @@ export function ControlsPanel({
               </h3>
               <dl className="help-list">
                 <div>
+                  <dt>What is Tissue View?</dt>
+                  <dd>
+                    This view shows the physical organization of the artificial nervous system.
+                    Neuron positions are fixed. Signals travel along axons. Future versions will
+                    allow tissue growth.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Network View vs Tissue View</dt>
+                  <dd>
+                    Network View is a schematic graph for dynamics. Tissue View uses backend cell
+                    positions, soma/dendrite morphology, and excitatory (arrow) vs inhibitory (bar)
+                    synapses.
+                  </dd>
+                </div>
+                <div>
                   <dt>Tick</dt>
                   <dd>One complete backend simulation step. It is not one real-world second.</dd>
                 </div>
@@ -170,7 +186,7 @@ export function ControlsPanel({
               </dl>
               <p className="hint">
                 Tap a neuron to inspect. Hold ~0.5s to stimulate +5 mV. Mission Control UI · Layout
-                Revision 1
+                Revision 1 · Tissue 0.6A
               </p>
             </section>
           </>

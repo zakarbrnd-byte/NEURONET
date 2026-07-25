@@ -2,12 +2,11 @@
 
 **NEURONET — A Digital Nervous System.**
 
-Milestones follow biological development. They are not a conventional AI feature checklist.
+Milestones follow biological development.
 
 | | |
 | --- | --- |
-| **Shipped runtime** | 0.5 Mission Control observatory |
-| **Current target** | **0.6 Artificial Neural Tissue** |
+| **Current version** | **0.6A Artificial Neural Tissue** |
 | **Constitution** | [`NEURONET.md`](NEURONET.md) |
 
 Before implementing any item, answer:
@@ -25,8 +24,8 @@ If the answer is no, do not implement it.
 | | |
 | --- | --- |
 | **Purpose** | Establish the first autonomous computational unit and repository foundation. |
-| **Scientific objective** | Show that a discrete digital “cell-like” unit can exist as a stable, inspectable object. |
-| **Observable outcome** | Project shell and early debug surface capable of hosting later neural objects. |
+| **Scientific objective** | Show that a discrete digital unit can exist as a stable, inspectable object. |
+| **Observable outcome** | Project shell capable of hosting later neural objects. |
 
 ### 0.2 Biological Neuron ✅
 
@@ -34,14 +33,14 @@ If the answer is no, do not implement it.
 | --- | --- |
 | **Purpose** | Replace a generic digital node with a simplified biological neuron. |
 | **Scientific objective** | Make resting potential, depolarization, threshold firing, and refractory recovery explicit. |
-| **Observable outcome** | A neuron whose membrane potential, threshold distance, refractory state, and fired flag can be inspected. |
+| **Observable outcome** | Inspectable membrane, threshold, refractory, and fired state. |
 
 ### 0.3 Neural Core ✅
 
 | | |
 | --- | --- |
 | **Purpose** | Centralize electrical dynamics in a dedicated neural simulation core. |
-| **Scientific objective** | Ensure firing and recovery rules are consistent, testable, and not UI-local. |
+| **Scientific objective** | Keep firing and recovery rules consistent, testable, and not UI-local. |
 | **Observable outcome** | Deterministic neuron stepping with documented educational parameters. |
 
 ### 0.4 Backend Network ✅
@@ -49,100 +48,86 @@ If the answer is no, do not implement it.
 | | |
 | --- | --- |
 | **Purpose** | Move network ownership to a Rust backend and render the real backend graph. |
-| **Scientific objective** | Prove that multi-neuron topology and connections live in one authoritative simulator. |
-| **Observable outcome** | Frontend displays backend neurons and connections; browser does not invent tissue state. |
+| **Scientific objective** | Prove multi-neuron topology lives in one authoritative simulator. |
+| **Observable outcome** | Frontend displays backend neurons and connections only. |
 
 ### 0.5 Mission Control ✅
 
 | | |
 | --- | --- |
-| **Purpose** | Make firing and propagation observable tick by tick through a one-screen observatory. |
-| **Scientific objective** | Validate discrete-time excitatory propagation (branching and convergence) with structured step traces. |
-| **Observable outcome** | Mission Control shows graph, selected-neuron strip, timeline events, and electrode-style stimulation; every visual pulse maps to a backend propagation. |
+| **Purpose** | Make firing and propagation observable tick by tick in a one-screen observatory. |
+| **Scientific objective** | Validate discrete-time propagation with structured step traces. |
+| **Observable outcome** | Mission Control shell with Network graph, sheets, and electrode-style stimulation. |
 
 ---
 
 ## Current
 
-### 0.6 Artificial Neural Tissue ← CURRENT
+### 0.6A Artificial Neural Tissue ← CURRENT
 
 | | |
 | --- | --- |
-| **Purpose** | Organize many neurons as tissue, not only as a flat educational graph. |
-| **Scientific objective** | Introduce physical/organizational structure: positions, regions, layers, cell types, developmental identity parameters, excitatory and inhibitory neurons. |
-| **Observable outcome** | Mission Control can inspect tissue organization and E/I dynamics without inventing state in the browser. |
+| **Purpose** | Give the network a physical tissue organization. |
+| **Scientific objective** | Fixed positions, regions, layers, cell types, morphology, and E/I synapses — without growth or learning. |
+| **Observable outcome** | Tissue View (soma/dendrite/axons), Biology panel fields, tissue header (Alive / Cells / Synapses / Region / Age), deterministic reset of geometry. |
 
-**Out of scope for 0.6:** memory, learning, body, prediction, cognition.
+**Out of scope:** learning, memory, growth, pruning, moving neurons, body, prediction, cognition.
 
 ---
 
-## Future
+## Next within 0.6
 
-### 0.7 Synaptic Plasticity
+### 0.6B Synaptic Plasticity
 
 | | |
 | --- | --- |
-| **Purpose** | Allow existing connections to strengthen and weaken through activity. |
-| **Scientific objective** | Study Hebbian-style adaptation and connection history as tissue change over time. |
-| **Observable outcome** | Weight changes and adaptation events are visible in Mission Control and logged by the backend. |
+| **Purpose** | Allow existing synapses to strengthen and weaken. |
+| **Scientific objective** | Study Hebbian-style adaptation and connection history. |
+| **Observable outcome** | Weight changes visible in Mission Control and logged by the backend. |
 
-### 0.8 Structural Plasticity
+### 0.6C Structural Plasticity
 
 | | |
 | --- | --- |
 | **Purpose** | Allow the wiring diagram itself to change. |
-| **Scientific objective** | Model axon/dendrite growth metaphors, pruning, and birth of new synapses as inspectable processes. |
-| **Observable outcome** | New, removed, or remodeled connections appear in snapshots and traces — not as silent UI edits. |
+| **Scientific objective** | Growth/pruning metaphors and birth of new synapses as inspectable processes. |
+| **Observable outcome** | New or removed connections appear in snapshots and traces. |
+
+---
+
+## Later
+
+### 0.7 Synaptic Plasticity (alias path)
+
+Retained as the broader plasticity chapter if 0.6B is expanded beyond the tissue track.
+
+### 0.8 Structural Plasticity
+
+See 0.6C / continued structural work.
 
 ### 0.9 Artificial Body
 
-| | |
-| --- | --- |
-| **Purpose** | Give the nervous system a body, beginning with a smartphone. |
-| **Scientific objective** | Route real sensors (touch, camera, microphone, device sensors) and actuators (speaker, haptics) toward receptor/effector pathways. |
-| **Observable outcome** | Sensory events and effector commands are visible as structured inputs/outputs into backend tissue — not as hardcoded app behaviors labeled “perception.” |
+Smartphone as first body: sensors and actuators as typed pathways into tissue.
 
 ### 1.0 Closed Sensorimotor Loop
 
-| | |
-| --- | --- |
-| **Purpose** | Close perception → action → feedback. |
-| **Scientific objective** | Study activity patterns that persist because the system acts on an environment that acts back. |
-| **Observable outcome** | Loop traces show sensory intake, tissue activity, and action consequences without a central scripted “agent brain.” |
+Perception → action → feedback without a scripted central agent brain.
 
 ### 1.1 Prediction
 
-| | |
-| --- | --- |
-| **Purpose** | Introduce prediction and prediction error as tissue dynamics. |
-| **Scientific objective** | Ask whether predictive structure can arise without a hardcoded reasoning engine. |
-| **Observable outcome** | Prediction-related signals/errors are inspectable fields or events, not hidden model weights claimed as “understanding.” |
+Prediction and prediction error as inspectable dynamics.
 
 ### 1.2 Memory
 
-| | |
-| --- | --- |
-| **Purpose** | Persist useful organization beyond immediate ticks. |
-| **Scientific objective** | Distinguish working vs longer-term retention as mechanisms that can be measured. |
-| **Observable outcome** | Memory-related state is backend-owned and Mission Control–inspectable. |
+Working and longer-term retention as backend-owned mechanisms.
 
 ### 1.3 Learning
 
-| | |
-| --- | --- |
-| **Purpose** | Allow experience to change future behavior through tissue mechanisms. |
-| **Scientific objective** | Study generalization as an outcome of plasticity + embodiment + loops — not as a bolted-on ML trainer. |
-| **Observable outcome** | Learning effects are reproducible from logged experience and observable parameter/structure change. |
+Experience-driven change through tissue mechanisms — not a bolted-on ML trainer.
 
 ### 1.4 Emergent Cognition
 
-| | |
-| --- | --- |
-| **Purpose** | Observe whether cognition-like organization appears. |
-| **Scientific objective** | Test the project’s central question without hardcoding intelligence. |
-| **Observable outcome** | Claims, if any, are tied to measurable patterns and criteria — never to marketing demos that fake a mind. |
-
-**Do not hard-code intelligence at any milestone.**
+Observe whether cognition-like organization appears. Do not hard-code intelligence.
 
 ---
 

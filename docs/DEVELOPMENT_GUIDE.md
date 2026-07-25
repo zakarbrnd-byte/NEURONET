@@ -122,8 +122,6 @@ A change is done only when all applicable items hold:
 
 ## Current milestone reminder
 
-**Do not implement Version 0.6 Artificial Neural Tissue unless explicitly asked.**
+**Shipped runtime:** **0.6A Artificial Neural Tissue**
 
-Documentation foundation commits establish philosophy only.
-
-Shipped runtime remains **0.5** until 0.6 is engineered, tested, and documented as Implemented.
+Do not implement 0.6B+ plasticity, body, or cognition unless explicitly asked.

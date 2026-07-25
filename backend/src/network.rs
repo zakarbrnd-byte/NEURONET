@@ -5,9 +5,11 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::connection::{Connection, ConnectionType};
-use crate::neuron::{Neuron, NeuronStepResult};
+use crate::neuron::{CellType, Neuron, NeuronStepResult, Position, TissueSeed};
 
 const MAX_EVENTS: usize = 200;
+const TISSUE_REGION: &str = "Observatory Cortex";
+const TISSUE_LABEL: &str = "Artificial Neural Tissue";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -30,10 +32,22 @@ pub struct NetworkEvent {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct TissueInfo {
+    pub label: String,
+    pub region: String,
+    pub alive: bool,
+    pub cell_count: usize,
+    pub synapse_count: usize,
+    pub age_seconds: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct NetworkSnapshot {
     pub tick: u64,
     pub neurons: Vec<Neuron>,
     pub connections: Vec<Connection>,
+    pub tissue: TissueInfo,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -61,37 +75,109 @@ pub struct NeuralNetwork {
     connections: Vec<Connection>,
     tick: u64,
     events: Vec<NetworkEvent>,
+    /// Seconds since the backend process started this tissue clock.
+    /// Reset recreates cells but does not rewind process age.
+    age_seconds: u64,
 }
 
 impl NeuralNetwork {
-    /// Deterministic five-neuron observatory network with branching and convergence.
+    /// Deterministic five-neuron Artificial Neural Tissue (0.6A).
+    ///
+    /// Fixed positions, one inhibitory cell (NEURON-004), and fixed morphology.
+    /// Reset rebuilds the identical tissue layout.
     pub fn initial() -> Self {
+        Self::initial_with_age(0)
+    }
+
+    pub fn initial_with_age(age_seconds: u64) -> Self {
         let mut network = Self {
             neurons: Vec::new(),
             connections: Vec::new(),
             tick: 0,
             events: Vec::new(),
+            age_seconds,
         };
 
-        for id in [
-            "NEURON-001",
-            "NEURON-002",
-            "NEURON-003",
-            "NEURON-004",
-            "NEURON-005",
-        ] {
-            network.neurons.push(Neuron::new(id));
+        let seeds = [
+            (
+                "NEURON-001",
+                TissueSeed {
+                    position: Position { x: 0.12, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 1,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-001",
+                    soma_radius: 0.036,
+                    dendrite_radius: 0.092,
+                    axon_length: 0.22,
+                },
+            ),
+            (
+                "NEURON-002",
+                TissueSeed {
+                    position: Position { x: 0.32, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 1,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-002",
+                    soma_radius: 0.038,
+                    dendrite_radius: 0.095,
+                    axon_length: 0.30,
+                },
+            ),
+            (
+                "NEURON-003",
+                TissueSeed {
+                    position: Position { x: 0.60, y: 0.28 },
+                    region: TISSUE_REGION,
+                    layer: 2,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-003",
+                    soma_radius: 0.034,
+                    dendrite_radius: 0.088,
+                    axon_length: 0.28,
+                },
+            ),
+            (
+                "NEURON-004",
+                TissueSeed {
+                    position: Position { x: 0.60, y: 0.72 },
+                    region: TISSUE_REGION,
+                    layer: 2,
+                    cell_type: CellType::Inhibitory,
+                    dna_id: "DNA-004",
+                    soma_radius: 0.032,
+                    dendrite_radius: 0.084,
+                    axon_length: 0.28,
+                },
+            ),
+            (
+                "NEURON-005",
+                TissueSeed {
+                    position: Position { x: 0.88, y: 0.50 },
+                    region: TISSUE_REGION,
+                    layer: 3,
+                    cell_type: CellType::Excitatory,
+                    dna_id: "DNA-005",
+                    soma_radius: 0.037,
+                    dendrite_radius: 0.090,
+                    axon_length: 0.12,
+                },
+            ),
+        ];
+
+        for (id, seed) in seeds {
+            network.neurons.push(Neuron::with_tissue(id, seed));
         }
 
-        let edges = [
+        let excitatory = [
             ("CONNECTION-001", "NEURON-001", "NEURON-002", 16.0),
             ("CONNECTION-002", "NEURON-002", "NEURON-003", 16.0),
             ("CONNECTION-003", "NEURON-002", "NEURON-004", 16.0),
             ("CONNECTION-004", "NEURON-003", "NEURON-005", 8.0),
-            ("CONNECTION-005", "NEURON-004", "NEURON-005", 8.0),
         ];
 
-        for (id, source, target, weight) in edges {
+        for (id, source, target, weight) in excitatory {
             network
                 .add_connection_unchecked(
                     Connection::excitatory(id, source, target, weight)
@@ -100,20 +186,36 @@ impl NeuralNetwork {
                 .expect("valid initial connection");
         }
 
+        network
+            .add_connection_unchecked(
+                Connection::inhibitory("CONNECTION-005", "NEURON-004", "NEURON-005", 8.0)
+                    .expect("valid inhibitory connection"),
+            )
+            .expect("valid inhibitory connection");
+
         network.push_event(
             "network_ready",
             None,
             None,
             None,
             None,
-            "Deterministic five-neuron network ready",
+            "Deterministic artificial neural tissue ready",
         );
 
         network
     }
 
+    pub fn set_age_seconds(&mut self, age_seconds: u64) {
+        self.age_seconds = age_seconds;
+    }
+
+    pub fn age_seconds(&self) -> u64 {
+        self.age_seconds
+    }
+
     pub fn reset(&mut self) {
-        *self = Self::initial();
+        let age = self.age_seconds;
+        *self = Self::initial_with_age(age);
         self.events.clear();
         self.push_event(
             "network_reset",
@@ -121,7 +223,7 @@ impl NeuralNetwork {
             None,
             None,
             None,
-            "Network reset to deterministic initial state",
+            "Tissue reset to deterministic initial state",
         );
     }
 
@@ -132,8 +234,21 @@ impl NeuralNetwork {
         let mut connections = self.connections.clone();
         connections.sort_by(|a, b| a.id.cmp(&b.id));
 
+        let region = neurons
+            .first()
+            .map(|n| n.region.clone())
+            .unwrap_or_else(|| TISSUE_REGION.to_string());
+
         NetworkSnapshot {
             tick: self.tick,
+            tissue: TissueInfo {
+                label: TISSUE_LABEL.to_string(),
+                region,
+                alive: true,
+                cell_count: neurons.len(),
+                synapse_count: connections.len(),
+                age_seconds: self.age_seconds,
+            },
             neurons,
             connections,
         }
@@ -240,7 +355,7 @@ impl NeuralNetwork {
                         (
                             c.source_neuron_id.clone(),
                             c.target_neuron_id.clone(),
-                            c.weight,
+                            c.signed_amount_mv(),
                         )
                     })
                     .collect();
@@ -251,23 +366,24 @@ impl NeuralNetwork {
 
         let mut propagations: Vec<PropagationTrace> = Vec::new();
 
-        for (source_id, target_id, weight) in deliveries {
+        for (source_id, target_id, amount_mv) in deliveries {
             if let Some(target) = self.neurons.iter_mut().find(|n| n.id == target_id) {
-                target.receive_signal(weight);
+                target.receive_signal(amount_mv);
+                let sign = if amount_mv >= 0.0 { "+" } else { "" };
                 let event_id = self.push_event(
                     "signal_propagated",
                     Some(target_id.clone()),
                     Some(source_id.clone()),
                     Some(target_id.clone()),
-                    Some(weight),
-                    format!("{source_id} → {target_id} (+{weight} mV)"),
+                    Some(amount_mv),
+                    format!("{source_id} → {target_id} ({sign}{amount_mv} mV)"),
                 );
                 event_ids.push(event_id.clone());
                 propagations.push(PropagationTrace {
                     event_id,
                     source_neuron_id: source_id,
                     target_neuron_id: target_id,
-                    amount_mv: weight,
+                    amount_mv,
                 });
             }
         }
@@ -300,8 +416,11 @@ impl NeuralNetwork {
             return Err("connection weight must be positive".to_string());
         }
 
-        if !matches!(connection.connection_type, ConnectionType::Excitatory) {
-            return Err("only excitatory connections are supported".to_string());
+        if !matches!(
+            connection.connection_type,
+            ConnectionType::Excitatory | ConnectionType::Inhibitory
+        ) {
+            return Err("unsupported connection type".to_string());
         }
 
         if !self
@@ -422,6 +541,64 @@ mod tests {
         assert_eq!(snap.connections[0].source_neuron_id, "NEURON-001");
         assert_eq!(snap.connections[0].target_neuron_id, "NEURON-002");
         assert_eq!(snap.connections[0].weight, 16.0);
+        assert_eq!(
+            snap.neurons
+                .iter()
+                .find(|n| n.id == "NEURON-001")
+                .unwrap()
+                .position
+                .x,
+            0.12
+        );
+        assert_eq!(
+            snap.neurons
+                .iter()
+                .find(|n| n.id == "NEURON-004")
+                .unwrap()
+                .cell_type,
+            CellType::Inhibitory
+        );
+        assert_eq!(
+            snap.connections
+                .iter()
+                .find(|c| c.id == "CONNECTION-005")
+                .unwrap()
+                .connection_type,
+            ConnectionType::Inhibitory
+        );
+    }
+
+    #[test]
+    fn tissue_positions_are_deterministic() {
+        let a = NeuralNetwork::initial().snapshot();
+        let b = NeuralNetwork::initial().snapshot();
+        for (na, nb) in a.neurons.iter().zip(b.neurons.iter()) {
+            assert_eq!(na.position, nb.position);
+            assert_eq!(na.cell_type, nb.cell_type);
+            assert_eq!(na.dna_id, nb.dna_id);
+            assert_eq!(na.soma_radius, nb.soma_radius);
+        }
+        assert_eq!(a.tissue.region, "Observatory Cortex");
+        assert_eq!(a.tissue.cell_count, 5);
+        assert_eq!(a.tissue.synapse_count, 5);
+        assert!(a.tissue.alive);
+    }
+
+    #[test]
+    fn reset_preserves_process_age_and_restores_positions() {
+        let mut network = NeuralNetwork::initial_with_age(42);
+        network.inject_signal("NEURON-001", 20.0).unwrap();
+        network.step();
+        network.reset();
+        assert_eq!(network.age_seconds(), 42);
+        let n1 = network
+            .snapshot()
+            .neurons
+            .into_iter()
+            .find(|n| n.id == "NEURON-001")
+            .unwrap();
+        assert_eq!(n1.position.x, 0.12);
+        assert_eq!(n1.position.y, 0.50);
     }
 
     #[test]
@@ -464,21 +641,25 @@ mod tests {
         assert_eq!(membrane_of(&network, "NEURON-004"), -54.0);
         assert!(!t2.fired_neuron_ids.contains(&"NEURON-005".to_string()));
 
-        // Tick 3: N-003 and N-004 fire and converge on N-005
+        // Tick 3: N-003 (excitatory +8) and N-004 (inhibitory -8) converge on N-005
         let t3 = network.step();
         assert_eq!(t3.fired_neuron_ids, vec!["NEURON-003", "NEURON-004"]);
         assert_eq!(t3.propagations.len(), 2);
-        assert!(t3
+        let to_005: Vec<_> = t3
             .propagations
             .iter()
-            .all(|p| p.target_neuron_id == "NEURON-005" && p.amount_mv == 8.0));
-        assert_eq!(membrane_of(&network, "NEURON-005"), -54.0);
+            .filter(|p| p.target_neuron_id == "NEURON-005")
+            .collect();
+        assert_eq!(to_005.len(), 2);
+        assert!(to_005.iter().any(|p| p.source_neuron_id == "NEURON-003" && p.amount_mv == 8.0));
+        assert!(to_005.iter().any(|p| p.source_neuron_id == "NEURON-004" && p.amount_mv == -8.0));
+        // Excitation and inhibition cancel — N-005 stays at rest
+        assert_eq!(membrane_of(&network, "NEURON-005"), -70.0);
         assert!(!t3.fired_neuron_ids.contains(&"NEURON-005".to_string()));
 
-        // Tick 4: N-005 fires only after converging input
+        // Tick 4: N-005 does not fire without net excitatory drive
         let t4 = network.step();
-        assert_eq!(t4.fired_neuron_ids, vec!["NEURON-005"]);
-        assert!(t4.propagations.is_empty());
+        assert!(!t4.fired_neuron_ids.contains(&"NEURON-005".to_string()));
     }
 
     #[test]

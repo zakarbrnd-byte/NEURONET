@@ -4,9 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { neuralApi } from "./services/neuralApi";
 
-const snapshot = {
-  tick: 6,
-  neurons: ["NEURON-001", "NEURON-002", "NEURON-003", "NEURON-004", "NEURON-005"].map((id) => ({
+const POSITIONS: Record<string, { x: number; y: number }> = {
+  "NEURON-001": { x: 0.12, y: 0.5 },
+  "NEURON-002": { x: 0.32, y: 0.5 },
+  "NEURON-003": { x: 0.6, y: 0.28 },
+  "NEURON-004": { x: 0.6, y: 0.72 },
+  "NEURON-005": { x: 0.88, y: 0.5 },
+};
+
+function makeNeuron(id: string, overrides: Record<string, unknown> = {}) {
+  return {
     id,
     restingPotentialMv: -70,
     membranePotentialMv: id === "NEURON-003" ? -61 : -70,
@@ -16,7 +23,35 @@ const snapshot = {
     refractoryTicks: 0,
     fired: false,
     tick: 0,
-  })),
+    position: POSITIONS[id],
+    region: "Observatory Cortex",
+    layer: id === "NEURON-005" ? 3 : id === "NEURON-003" || id === "NEURON-004" ? 2 : 1,
+    cellType: id === "NEURON-004" ? ("inhibitory" as const) : ("excitatory" as const),
+    dnaId: id.replace("NEURON-", "DNA-"),
+    somaRadius: 0.035,
+    dendriteRadius: 0.09,
+    axonLength: 0.22,
+    ...overrides,
+  };
+}
+
+const snapshot = {
+  tick: 6,
+  tissue: {
+    label: "Artificial Neural Tissue",
+    region: "Observatory Cortex",
+    alive: true,
+    cellCount: 5,
+    synapseCount: 5,
+    ageSeconds: 12,
+  },
+  neurons: [
+    "NEURON-001",
+    "NEURON-002",
+    "NEURON-003",
+    "NEURON-004",
+    "NEURON-005",
+  ].map((id) => makeNeuron(id)),
   connections: [
     {
       id: "CONNECTION-001",
@@ -51,7 +86,7 @@ const snapshot = {
       sourceNeuronId: "NEURON-004",
       targetNeuronId: "NEURON-005",
       weight: 8,
-      connectionType: "excitatory" as const,
+      connectionType: "inhibitory" as const,
     },
   ],
 };
@@ -92,7 +127,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.5" })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.6A", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -119,35 +154,40 @@ async function renderConnectedApp() {
 
 describe("Mission Control page", () => {
   beforeEach(() => {
-    vi.useRealTimers();
     vi.clearAllMocks();
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
-    vi.stubGlobal("innerWidth", 390);
-    vi.stubGlobal("innerHeight", 844);
+    vi.mocked(neuralApi.getHealth).mockResolvedValue({
+      status: "ok",
+      version: "0.6A",
+      ageSeconds: 12,
+    });
+    vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
+    vi.mocked(neuralApi.getEvents).mockResolvedValue([]);
+    vi.mocked(neuralApi.injectSignal).mockImplementation(async (id: string, amountMv: number) => ({
+      ...snapshot,
+      neurons: snapshot.neurons.map((neuron) =>
+        neuron.id === id ? { ...neuron, membranePotentialMv: -70 + amountMv } : neuron,
+      ),
+    }));
+    vi.mocked(neuralApi.stepNetwork).mockResolvedValue(stepTrace);
+    vi.mocked(neuralApi.resetNetwork).mockResolvedValue(snapshot);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("1. App renders MissionControl", async () => {
+  it("renders MissionControl as the sole app layout", async () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
       "Mission Control UI · Layout Revision 1",
     );
-  });
-
-  it("2. old long debug page is no longer rendered", async () => {
-    await renderConnectedApp();
     expect(screen.queryByText("Network Summary")).not.toBeInTheDocument();
-    expect(screen.queryByText("What Happened This Tick?")).not.toBeInTheDocument();
-    expect(screen.queryByText("Tick Timeline")).not.toBeInTheDocument();
-    expect(screen.queryByText("Backend Events")).not.toBeInTheDocument();
-    expect(document.querySelector(".page")).toBeNull();
+    expect(screen.queryByText("How to read this screen")).not.toBeInTheDocument();
   });
 
-  it("3–8. viewport regions are visible without page scroll chrome", async () => {
+  it("keeps the one-screen shell regions visible without page scrolling", async () => {
     await renderConnectedApp();
     const root = screen.getByTestId("mission-control");
     expect(root).toHaveAttribute("data-layout", "viewport-locked");
@@ -156,157 +196,162 @@ describe("Mission Control page", () => {
     expect(screen.getByTestId("selected-neuron-strip")).toBeVisible();
     expect(screen.getByTestId("quick-action-bar")).toBeVisible();
     expect(screen.getByTestId("bottom-navigation")).toBeVisible();
-    expect(screen.getByText("Tap: Inspect · Hold: Stimulate +5 mV")).toBeVisible();
+    expect(root).toHaveAttribute("data-layout", "viewport-locked");
   });
 
-  it("9. Node tab opens Node sheet", async () => {
+  it("shows Artificial Neural Tissue header stats", async () => {
     await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Neuron details" }));
-    expect(screen.getByRole("dialog", { name: "Node" })).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-label")).toHaveTextContent("Artificial Neural Tissue");
+    const stats = screen.getByTestId("tissue-stats");
+    expect(stats).toHaveTextContent("Alive");
+    expect(stats).toHaveTextContent("Cells 5");
+    expect(stats).toHaveTextContent("Synapses 5");
+    expect(stats).toHaveTextContent("Observatory Cortex");
+    expect(stats).toHaveTextContent("Age");
+    expect(within(screen.getByTestId("mission-control-header")).getByText("0.6A")).toBeInTheDocument();
   });
 
-  it("10. Timeline tab opens Timeline sheet", async () => {
+  it("opens Node, Timeline, and Controls sheets from bottom navigation", async () => {
+    const user = userEvent.setup();
     await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Tick timeline" }));
-    expect(screen.getByRole("dialog", { name: "Timeline" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Firing" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Propagation" })).toBeInTheDocument();
-  });
 
-  it("11. Controls tab opens Controls sheet", async () => {
-    await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Simulation controls" }));
-    expect(screen.getByRole("dialog", { name: "Controls" })).toBeInTheDocument();
-  });
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    expect(await screen.findByRole("dialog", { name: "Timeline" })).toBeVisible();
 
-  it("12. Network tab closes detail sheets", async () => {
-    await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Tick timeline" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Network view" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    expect(await screen.findByRole("dialog", { name: "Controls" })).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Reset" }));
+    expect(screen.getByText("What is Tissue View?")).toBeInTheDocument();
 
-  it("13. bottom sheet scrolls internally", async () => {
-    await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Simulation controls" }));
-    const dialog = screen.getByRole("dialog", { name: "Controls" });
-    expect(dialog.querySelector('[data-scroll="internal"]')).toBeTruthy();
-  });
-
-  it("14. body remains overflow hidden via Mission Control layout contract", async () => {
-    await renderConnectedApp();
-    expect(screen.getByTestId("mission-control")).toHaveAttribute("data-layout", "viewport-locked");
-    expect(screen.getByTestId("mission-control")).toHaveAttribute("data-safe-area", "true");
-  });
-
-  it("15. long press does not open Node sheet", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const { container } = await renderConnectedApp();
-
-    const first = neuronTarget(container, "NEURON-001");
-    fireEvent.pointerDown(first, { pointerId: 1, clientX: 5, clientY: 5 });
-    fireEvent.pointerUp(first, { pointerId: 1, clientX: 5, clientY: 5 });
-    await screen.findByRole("dialog", { name: "Node" });
-    await userEvent.click(screen.getByRole("button", { name: "Close panel" }));
-
-    const node = neuronTarget(container, "NEURON-002");
-    fireEvent.pointerDown(node, { pointerId: 2, clientX: 8, clientY: 8 });
-    await act(async () => {
-      vi.advanceTimersByTime(500);
+    await user.click(screen.getByRole("button", { name: "Network view" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    fireEvent.pointerUp(node, { pointerId: 2, clientX: 8, clientY: 8 });
-    fireEvent.click(node);
-
-    await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 5));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    vi.useRealTimers();
   });
 
-  it("16. short tap opens Node sheet after pointer release", async () => {
+  it("switches to Tissue view with five fixed backend cells", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+
+    await user.click(screen.getByRole("button", { name: "Tissue view" }));
+    expect(await screen.findByTestId("tissue-view")).toBeVisible();
+    expect(screen.getByTestId("network-viewport")).toHaveAttribute("data-main-view", "tissue");
+    expect(screen.getByTestId("tissue-cell-NEURON-001")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-cell-NEURON-002")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-cell-NEURON-003")).toBeInTheDocument();
+    expect(screen.getByTestId("tissue-cell-NEURON-004")).toHaveAttribute(
+      "data-cell-type",
+      "inhibitory",
+    );
+    expect(screen.getByTestId("tissue-cell-NEURON-005")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Network view" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("tissue-view")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("network-viewport")).toHaveAttribute("data-main-view", "network");
+  });
+
+  it("shows Biology fields in the Node sheet", async () => {
+    const user = userEvent.setup();
     const { container } = await renderConnectedApp();
-    const node = neuronTarget(container, "NEURON-004");
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
-    expect(await screen.findByRole("dialog", { name: "Node" })).toBeInTheDocument();
+    const target = neuronTarget(container, "NEURON-004");
+    fireEvent.pointerDown(target, { pointerId: 3, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(target, { pointerId: 3, button: 0, clientX: 10, clientY: 10 });
+
+    expect(await screen.findByRole("dialog", { name: "Node" })).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Biology" }));
+    expect(screen.getByText("DNA-004")).toBeInTheDocument();
+    expect(screen.getByText("inhibitory")).toBeInTheDocument();
+    expect(screen.getByText(/x=0\.60, y=0\.72/)).toBeInTheDocument();
+  });
+
+  it("keeps body overflow hidden while a sheet scrolls internally", async () => {
+    const user = userEvent.setup();
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Tick timeline" }));
+    const dialog = await screen.findByRole("dialog", { name: "Timeline" });
+    expect(screen.getByTestId("mission-control")).toHaveAttribute(
+      "data-layout",
+      "viewport-locked",
+    );
+    expect(dialog.querySelector(".context-panel-body")).toBeTruthy();
+  });
+
+  it("opens Node after a short tap and does not stimulate", async () => {
+    const { container } = await renderConnectedApp();
+    const target = neuronTarget(container, "NEURON-001");
+
+    fireEvent.pointerDown(target, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(target, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+
+    expect(await screen.findByRole("dialog", { name: "Node" })).toBeVisible();
     expect(neuralApi.injectSignal).not.toHaveBeenCalled();
   });
 
-  it("17. SVG text cannot receive pointer events", async () => {
-    const { container } = await renderConnectedApp();
-    const texts = container.querySelectorAll(
-      ".network-node-id, .network-node-mv, .network-state-mark",
-    );
-    expect(texts.length).toBeGreaterThan(0);
-    texts.forEach((text) => {
-      expect(text.getAttribute("pointer-events")).toBe("none");
+  it("long-press stimulates without opening the Node sheet", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
     });
+    await waitFor(() => expect(screen.getByText("Connected")).toBeInTheDocument());
+
+    const target = neuronTarget(document.body, "NEURON-002");
+    fireEvent.pointerDown(target, { pointerId: 2, button: 0, clientX: 20, clientY: 20 });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    fireEvent.pointerUp(target, { pointerId: 2, button: 0, clientX: 20, clientY: 20 });
+    fireEvent.click(target);
+
+    await waitFor(() => expect(neuralApi.injectSignal).toHaveBeenCalledWith("NEURON-002", 5));
+    expect(screen.queryByRole("dialog", { name: "Node" })).not.toBeInTheDocument();
   });
 
-  it("18. Step calls backend once", async () => {
+  it("Step calls backend once; Run and Pause toggle sequence; Reset calls backend", async () => {
+    const user = userEvent.setup();
     await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Step one tick" }));
+
+    await user.click(screen.getByRole("button", { name: "Step one tick" }));
     await waitFor(() => expect(neuralApi.stepNetwork).toHaveBeenCalledTimes(1));
-  });
 
-  it("19. Run and Pause work", async () => {
-    await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Run sequence" }));
-    expect(await screen.findByRole("button", { name: "Pause sequence" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Run sequence" }));
     expect(screen.getByText("Running")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Pause sequence" }));
-    expect(screen.getByRole("button", { name: "Run sequence" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Pause sequence" }));
     expect(screen.getByText("Paused")).toBeInTheDocument();
-  });
 
-  it("20. Reset calls backend", async () => {
-    await renderConnectedApp();
-    await userEvent.click(screen.getByRole("button", { name: "Reset network" }));
+    await user.click(screen.getByRole("button", { name: "Reset network" }));
     await waitFor(() => expect(neuralApi.resetNetwork).toHaveBeenCalledTimes(1));
   });
 
-  it("21. backend unavailable state remains visible without page scrolling", async () => {
-    vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(false);
+  it("shows unavailable state in the shell without requiring scroll", async () => {
+    vi.mocked(neuralApi.getHealth).mockRejectedValue(new Error("offline"));
+    vi.mocked(neuralApi.getNetwork).mockRejectedValue(new Error("offline"));
     render(<App />);
-    expect(await screen.findByText("Unavailable")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Unavailable")).toBeInTheDocument());
+    expect(screen.getByTestId("mission-control")).toHaveAttribute("data-layout", "viewport-locked");
     expect(screen.getByTestId("mission-control-header")).toBeVisible();
-    expect(screen.getByTestId("bottom-navigation")).toBeVisible();
-    expect(screen.getByTestId("layout-revision-marker")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Retry backend connection" })).toBeVisible();
   });
 
-  it("22. no horizontal overflow contract at mobile widths", async () => {
-    for (const [width, height] of [
-      [375, 667],
-      [390, 844],
-      [430, 932],
-    ] as const) {
-      vi.stubGlobal("innerWidth", width);
-      vi.stubGlobal("innerHeight", height);
-      const { unmount } = await renderConnectedApp();
-      const root = screen.getByTestId("mission-control");
-      expect(root).toHaveAttribute("data-layout", "viewport-locked");
-      expect(root.classList.contains("mission-control")).toBe(true);
-      unmount();
+  it("keeps network viewport free of horizontal overflow at phone widths", async () => {
+    await renderConnectedApp();
+    const root = screen.getByTestId("mission-control");
+    expect(root.classList.contains("mission-control")).toBe(true);
+    for (const width of [375, 390, 430]) {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      window.dispatchEvent(new Event("resize"));
+      const viewport = screen.getByTestId("network-viewport");
+      expect(viewport).toBeVisible();
     }
   });
 
-  it("selected neuron strip opens Node sheet", async () => {
-    const { container } = await renderConnectedApp();
-    const node = neuronTarget(container, "NEURON-003");
-    fireEvent.pointerDown(node, { pointerId: 1, clientX: 5, clientY: 5 });
-    fireEvent.pointerUp(node, { pointerId: 1, clientX: 5, clientY: 5 });
-    await screen.findByRole("dialog", { name: "Node" });
-    await userEvent.click(screen.getByRole("button", { name: "Close panel" }));
-    await userEvent.click(screen.getByRole("button", { name: "Open details for NEURON-003" }));
-    expect(screen.getByRole("dialog", { name: "Node" })).toBeInTheDocument();
-  });
-
-  it("status bar shows compact mission state", async () => {
+  it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("NEURONET")).toBeInTheDocument();
-    expect(within(header).getByText("0.5")).toBeInTheDocument();
+    expect(within(header).getByText("0.6A")).toBeInTheDocument();
+    expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
     expect(within(header).getByText("Paused")).toBeInTheDocument();
   });

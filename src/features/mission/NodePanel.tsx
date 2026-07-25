@@ -24,6 +24,7 @@ const CATEGORIES: Array<{ id: NodeCategory; label: string }> = [
   { id: "recovery", label: "Recovery" },
   { id: "connections", label: "Connections" },
   { id: "history", label: "History" },
+  { id: "biology", label: "Biology" },
 ];
 
 function formatMv(value: number): string {
@@ -156,9 +157,64 @@ export function NodePanel({ neuron, networkTick, connections, events }: NodePane
               </dt>
               <dd>
                 {latestReceived?.amountMv != null
-                  ? `+${latestReceived.amountMv} mV`
+                  ? `${latestReceived.amountMv >= 0 ? "+" : ""}${latestReceived.amountMv} mV`
                   : "None"}
               </dd>
+            </div>
+          </>
+        ) : null}
+
+        {category === "biology" ? (
+          <>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="region" label="Region" />
+              </dt>
+              <dd>{neuron.region}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="layer" label="Layer" />
+              </dt>
+              <dd>{neuron.layer}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="cellType" label="Cell Type" />
+              </dt>
+              <dd className="capitalize">{neuron.cellType}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="dnaId" label="DNA ID" />
+              </dt>
+              <dd>{neuron.dnaId}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="position" label="Position" />
+              </dt>
+              <dd>
+                x={neuron.position.x.toFixed(2)}, y={neuron.position.y.toFixed(2)}
+              </dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="somaRadius" label="Soma Radius" />
+              </dt>
+              <dd>{neuron.somaRadius.toFixed(3)}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="dendriteRadius" label="Dendrite Radius" />
+              </dt>
+              <dd>{neuron.dendriteRadius.toFixed(3)}</dd>
+            </div>
+            <div className="status-row">
+              <dt>
+                <MetricHint metric="axonLength" label="Axon Length" />
+              </dt>
+              <dd>{neuron.axonLength.toFixed(3)}</dd>
             </div>
           </>
         ) : null}

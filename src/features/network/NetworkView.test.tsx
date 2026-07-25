@@ -24,6 +24,14 @@ const neurons: NeuronSnapshot[] = [
   refractoryTicks: 0,
   fired: false,
   tick: 0,
+  position: { x: 0.5, y: 0.5 },
+  region: "Observatory Cortex",
+  layer: 1,
+  cellType: id === "NEURON-004" ? "inhibitory" : "excitatory",
+  dnaId: id.replace("NEURON-", "DNA-"),
+  somaRadius: 0.035,
+  dendriteRadius: 0.09,
+  axonLength: 0.2,
 }));
 
 const connections: ConnectionSnapshot[] = [
@@ -60,7 +68,7 @@ const connections: ConnectionSnapshot[] = [
     sourceNeuronId: "NEURON-004",
     targetNeuronId: "NEURON-005",
     weight: 8,
-    connectionType: "excitatory",
+    connectionType: "inhibitory",
   },
 ];
 

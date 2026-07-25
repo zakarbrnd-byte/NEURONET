@@ -1,5 +1,13 @@
 /** Backend network snapshot and step-trace types. Frontend never invents these values. */
 
+export interface NeuronPosition {
+  x: number;
+  y: number;
+}
+
+export type CellType = "excitatory" | "inhibitory";
+export type ConnectionKind = "excitatory" | "inhibitory";
+
 export interface NeuronSnapshot {
   id: string;
   restingPotentialMv: number;
@@ -10,6 +18,14 @@ export interface NeuronSnapshot {
   refractoryTicks: number;
   fired: boolean;
   tick: number;
+  position: NeuronPosition;
+  region: string;
+  layer: number;
+  cellType: CellType;
+  dnaId: string;
+  somaRadius: number;
+  dendriteRadius: number;
+  axonLength: number;
 }
 
 export interface ConnectionSnapshot {
@@ -17,13 +33,23 @@ export interface ConnectionSnapshot {
   sourceNeuronId: string;
   targetNeuronId: string;
   weight: number;
-  connectionType: "excitatory";
+  connectionType: ConnectionKind;
+}
+
+export interface TissueInfo {
+  label: string;
+  region: string;
+  alive: boolean;
+  cellCount: number;
+  synapseCount: number;
+  ageSeconds: number;
 }
 
 export interface NetworkSnapshot {
   tick: number;
   neurons: NeuronSnapshot[];
   connections: ConnectionSnapshot[];
+  tissue: TissueInfo;
 }
 
 export interface PropagationTrace {
@@ -56,6 +82,7 @@ export interface NetworkEvent {
 export interface HealthResponse {
   status: string;
   version: string;
+  ageSeconds?: number;
 }
 
 export type ConnectionStatus = "connected" | "connecting" | "unavailable";
@@ -91,6 +118,16 @@ export function shortNeuronId(id: string): string {
   return id.replace("NEURON-", "N-");
 }
 
+export function formatAge(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rem = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${rem}s`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins}m`;
+}
+
 export function explainStep(trace: NetworkStepTrace): string[] {
   const lines: string[] = [];
 
@@ -105,8 +142,9 @@ export function explainStep(trace: NetworkStepTrace): string[] {
   }
 
   for (const prop of trace.propagations) {
+    const sign = prop.amountMv >= 0 ? "+" : "";
     lines.push(
-      `${prop.sourceNeuronId} delivered +${prop.amountMv} mV to ${prop.targetNeuronId}.`,
+      `${prop.sourceNeuronId} delivered ${sign}${prop.amountMv} mV to ${prop.targetNeuronId}.`,
     );
   }
 

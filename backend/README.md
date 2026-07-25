@@ -1,15 +1,10 @@
-# NEURONET Backend (0.5 shipped)
+# NEURONET Backend (0.6A)
 
 **NEURONET — A Digital Nervous System.**
 
-Rust neural core. Source of truth for neurons, connections, stepping, and events.
+Rust neural core. Source of truth for neurons, connections, tissue geometry, stepping, and events.
 
 Read first: [`../NEURONET.md`](../NEURONET.md).
-
-Architecture and model: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), [`../docs/SCIENTIFIC_MODEL.md`](../docs/SCIENTIFIC_MODEL.md).
-
-**Current development target (planning):** Version 0.6 — Artificial Neural Tissue.  
-This package still exposes health version `0.5` until that milestone is implemented.
 
 ## Local
 
@@ -26,17 +21,15 @@ Port resolution:
 2. `NEURONET_PORT` (optional local override)
 3. default `3000`
 
-## Observatory network
+## Artificial Neural Tissue
 
-Five deterministic neurons with branching and convergence.
+Five deterministic neurons with fixed positions, morphology, and one inhibitory cell (NEURON-004).
 
-`POST /api/network/step` returns a structured step trace:
+`GET /api/network` includes `tissue` metadata and per-neuron biology fields.
 
-- `tick`
-- `firedNeuronIds`
-- `propagations` (`eventId`, `sourceNeuronId`, `targetNeuronId`, `amountMv`)
-- `eventIds`
-- `network`
+`POST /api/network/step` returns a structured step trace with signed `amountMv` (inhibitory deliveries are negative).
+
+Health version: `0.6A`.
 
 ## Public host
 
@@ -48,4 +41,4 @@ CORS allow-list should include:
 https://zakarbrnd-byte.github.io
 ```
 
-In-memory state resets when the host restarts.
+In-memory state resets when the host restarts. Tissue **Age** is process uptime.
