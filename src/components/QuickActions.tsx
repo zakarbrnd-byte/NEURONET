@@ -50,7 +50,7 @@ export function QuickActions({
           className="quick-action-btn quick-action-primary"
           disabled={disabled || busy}
           onClick={onRun}
-          aria-label="Run sequence"
+          aria-label="Continuous run"
         >
           <span className="quick-action-icon" aria-hidden="true">
             ▶

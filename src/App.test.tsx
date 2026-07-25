@@ -387,6 +387,21 @@ const snapshot = {
         maturationTicks: 1,
         supportingReasons: ["repeated_coactivation", "within_structural_reach"],
         blockingReasons: [],
+        maxReadiness: 0.61,
+        readinessDelta: 0.05,
+        consecutiveEligibleEvals: 1,
+        consecutiveBelowExitEvals: 0,
+        lastEvidenceTick: 15,
+        creationThreshold: 0.65,
+        requiredMaturationEvals: 3,
+        withinStructuralReach: true,
+        sourceOutgoingCount: 2,
+        targetIncomingCount: 0,
+        totalSynapseCount: 5,
+        maxOutgoingLimit: 3,
+        maxIncomingLimit: 3,
+        maxTotalSynapsesLimit: 12,
+        whyNotCreated: ["insufficient_maturation", "below_creation_threshold"],
       },
     ],
     latestEvaluationTick: 15,
@@ -403,6 +418,20 @@ const snapshot = {
       minSynapseFloor: 3,
     },
     history: [],
+    metrics: {
+      synapsesCreatedTotal: 0,
+      synapsesPrunedTotal: 0,
+      candidatesObserved: 1,
+      candidatesMaturing: 0,
+      birthBlockedTotal: 0,
+      pruningBlockedTotal: 0,
+      lastSynapseCreatedTick: null,
+      lastSynapsePrunedTick: null,
+      structuralBalance: "stable" as const,
+      recentBirths: 0,
+      recentPrunes: 0,
+      balanceWindowTicks: 80,
+    },
   },
   development: defaultDevelopment,
   environment: defaultEnvironment,
@@ -467,7 +496,7 @@ vi.mock("./services/neuralApi", () => {
     },
     neuralApi: {
       hasConfiguredBackend: vi.fn(() => true),
-      getHealth: vi.fn(async () => ({ status: "ok", version: "0.8", ageSeconds: 12 })),
+      getHealth: vi.fn(async () => ({ status: "ok", version: "0.8.1", ageSeconds: 12 })),
       getNetwork: vi.fn(async () => snapshot),
       getEvents: vi.fn(async () => []),
       injectSignal: vi.fn(async (id: string, amountMv: number) => ({
@@ -499,7 +528,7 @@ describe("Mission Control page", () => {
     vi.mocked(neuralApi.hasConfiguredBackend).mockReturnValue(true);
     vi.mocked(neuralApi.getHealth).mockResolvedValue({
       status: "ok",
-      version: "0.8",
+      version: "0.8.1",
       ageSeconds: 12,
     });
     vi.mocked(neuralApi.getNetwork).mockResolvedValue(snapshot);
@@ -523,7 +552,7 @@ describe("Mission Control page", () => {
     await renderConnectedApp();
     expect(screen.getByTestId("mission-control")).toHaveAttribute("data-page", "mission-control");
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Autonomous Sensory Environment · Version 0.8",
+      "Autonomous Observation Stabilization · Version 0.8.1",
     );
   });
 
@@ -565,10 +594,11 @@ describe("Mission Control page", () => {
     await renderConnectedApp();
     await user.click(screen.getByRole("button", { name: "Step one tick" }));
     await waitFor(() => expect(neuralApi.stepNetwork).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole("button", { name: "Run sequence" }));
+    await user.click(screen.getByRole("button", { name: "Continuous run" }));
     expect(screen.getByText("Running")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Pause sequence" }));
     expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused");
     await user.click(screen.getByRole("button", { name: "Reset network" }));
     await waitFor(() => expect(neuralApi.resetNetwork).toHaveBeenCalledTimes(1));
   });
@@ -594,7 +624,7 @@ describe("Mission Control page", () => {
   it("shows connection and tick in the compact header", async () => {
     await renderConnectedApp();
     const header = screen.getByTestId("mission-control-header");
-    expect(within(header).getByText("0.8")).toBeInTheDocument();
+    expect(within(header).getByText("0.8.1")).toBeInTheDocument();
     expect(within(header).getByText("Connected")).toBeInTheDocument();
     expect(within(header).getByText("Tick 6")).toBeInTheDocument();
   });
@@ -633,6 +663,9 @@ describe("Mission Control page", () => {
     expect(await screen.findByRole("dialog", { name: "Growth Candidate" })).toBeVisible();
     expect(screen.getByTestId("growth-candidate-panel")).toHaveTextContent("Readiness");
     expect(screen.getByTestId("candidate-readiness")).toHaveTextContent("61%");
+    expect(screen.getByTestId("candidate-why-not-created")).toHaveTextContent(
+      "insufficient maturation",
+    );
     expect(screen.getByTestId("candidate-supporting-reasons")).toHaveTextContent(
       "repeated coactivation",
     );
@@ -730,11 +763,11 @@ describe("Mission Control page", () => {
   });
 
 
-  it("shows Version 0.8 sensory marker and topology counters from backend", async () => {
+  it("shows Version 0.8.1 sensory marker and topology counters from backend", async () => {
     const user = userEvent.setup();
     await renderConnectedApp();
     expect(screen.getByTestId("layout-revision-marker")).toHaveTextContent(
-      "Autonomous Sensory Environment · Version 0.8",
+      "Autonomous Observation Stabilization · Version 0.8.1",
     );
     await user.click(screen.getByRole("button", { name: "Tissue view" }));
     await user.click(screen.getByTestId("tissue-mode-development"));
@@ -1090,15 +1123,54 @@ describe("Mission Control page", () => {
   it("pause keeps sequence paused so development does not advance without ticks", async () => {
     const user = userEvent.setup();
     await renderConnectedApp();
-    await user.click(screen.getByRole("button", { name: "Run sequence" }));
+    await user.click(screen.getByRole("button", { name: "Continuous run" }));
     expect(screen.getByText("Running")).toBeInTheDocument();
     const stepsWhileRunning = vi.mocked(neuralApi.stepNetwork).mock.calls.length;
     await user.click(screen.getByRole("button", { name: "Pause sequence" }));
     expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused");
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     expect(vi.mocked(neuralApi.stepNetwork).mock.calls.length).toBe(stepsWhileRunning);
+  });
+
+  it("Continuous Run continues through quiet empty StepTrace ticks", async () => {
+    const user = userEvent.setup();
+    const quietTrace = {
+      ...stepTrace,
+      firedNeuronIds: [] as string[],
+      propagations: [] as typeof stepTrace.propagations,
+      environmentTrace: {
+        eventsGenerated: [] as string[],
+        receptorsActivated: [] as string[],
+        sensoryDeliveries: [] as typeof stepTrace.environmentTrace.sensoryDeliveries,
+        activePatterns: [] as string[],
+      },
+      network: {
+        ...snapshot,
+        tick: snapshot.tick + 1,
+        neurons: snapshot.neurons.map((n) => ({ ...n, fired: false, membranePotentialMv: -70 })),
+      },
+    };
+    let calls = 0;
+    vi.mocked(neuralApi.stepNetwork).mockImplementation(async () => {
+      calls += 1;
+      return {
+        ...quietTrace,
+        tick: snapshot.tick + calls,
+        network: { ...quietTrace.network, tick: snapshot.tick + calls },
+      };
+    });
+    await renderConnectedApp();
+    await user.click(screen.getByRole("button", { name: "Simulation controls" }));
+    expect(screen.getByTestId("observer-status-panel")).toBeInTheDocument();
+    const quickBar = screen.getByTestId("quick-action-bar");
+    await user.click(within(quickBar).getByRole("button", { name: "Continuous run" }));
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(3), { timeout: 5000 });
+    expect(screen.getByTestId("observer-sim-state")).toHaveTextContent("Running");
+    await user.click(within(quickBar).getByRole("button", { name: "Pause sequence" }));
+    expect(screen.getByTestId("status-pause-reason")).toHaveTextContent("User paused");
   });
 
   it("exposes Sensory display mode with backend receptors and distinct sensory paths", async () => {

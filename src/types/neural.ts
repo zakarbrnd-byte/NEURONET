@@ -152,6 +152,39 @@ export interface GrowthCandidate {
   maturationTicks: number;
   supportingReasons: string[];
   blockingReasons: string[];
+  /** 0.8.1 diagnostics — optional for older backends. */
+  maxReadiness?: number;
+  readinessDelta?: number;
+  consecutiveEligibleEvals?: number;
+  consecutiveBelowExitEvals?: number;
+  lastEvidenceTick?: number | null;
+  creationThreshold?: number;
+  requiredMaturationEvals?: number;
+  withinStructuralReach?: boolean;
+  sourceOutgoingCount?: number;
+  targetIncomingCount?: number;
+  totalSynapseCount?: number;
+  maxOutgoingLimit?: number;
+  maxIncomingLimit?: number;
+  maxTotalSynapsesLimit?: number;
+  whyNotCreated?: string[];
+}
+
+export type StructuralBalance = "growing" | "stable" | "shrinking";
+
+export interface StructuralMetrics {
+  synapsesCreatedTotal: number;
+  synapsesPrunedTotal: number;
+  candidatesObserved: number;
+  candidatesMaturing: number;
+  birthBlockedTotal: number;
+  pruningBlockedTotal: number;
+  lastSynapseCreatedTick: number | null;
+  lastSynapsePrunedTick: number | null;
+  structuralBalance: StructuralBalance;
+  recentBirths: number;
+  recentPrunes: number;
+  balanceWindowTicks: number;
 }
 
 export interface TopologySummary {
@@ -187,6 +220,8 @@ export interface StructuralSnapshot {
   atRiskSynapseCount: number;
   topology: TopologySummary;
   history: StructuralHistoryEntry[];
+  /** Present from Version 0.8.1. */
+  metrics?: StructuralMetrics | null;
 }
 
 export interface DevelopmentConfigSummary {

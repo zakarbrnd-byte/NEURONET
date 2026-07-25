@@ -12,6 +12,14 @@ import { GrowthCandidatePanel } from "../features/mission/GrowthCandidatePanel";
 import { ReceptorPanel } from "../features/mission/ReceptorPanel";
 import { TimelinePanel } from "../features/mission/TimelinePanel";
 import { ControlsPanel } from "../features/mission/ControlsPanel";
+import { ObserverStatusPanel } from "../features/mission/ObserverStatusPanel";
+import {
+  DEFAULT_OBSERVATION_LIMIT,
+  DEFAULT_STEP_DELAY_MS,
+  runAutonomousLoop,
+  type PauseReason,
+  type RunMode,
+} from "../features/mission/runLoop";
 import { ApiError, neuralApi } from "../services/neuralApi";
 import type {
   ConnectionStatus,
@@ -26,7 +34,6 @@ import type {
 import {
   countDepolarized,
   isObservatoryEventType,
-  networkIsQuiet,
   neuronIsElectricallyEligible,
   shortNeuronId,
   timelineSummary,
@@ -35,8 +42,6 @@ import type { MainView, MissionPanel, TissueDisplayMode } from "../types/ui";
 
 const WEAK_SIGNAL_MV = 5;
 const STRONG_SIGNAL_MV = 20;
-const MAX_AUTO_STEPS = 12;
-const STEP_DELAY_MS = 800;
 const MAX_TIMELINE = 20;
 const STIM_FEEDBACK_MS = 1600;
 
@@ -68,6 +73,9 @@ export function MissionControl() {
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [autoStep, setAutoStep] = useState(0);
+  const [runMode, setRunMode] = useState<RunMode>("continuous");
+  const [pauseReason, setPauseReason] = useState<PauseReason>("None");
+  const [observationLimit, setObservationLimit] = useState(DEFAULT_OBSERVATION_LIMIT);
   const [lastTrace, setLastTrace] = useState<NetworkStepTrace | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [activePropagations, setActivePropagations] = useState<PropagationTrace[]>([]);
@@ -79,11 +87,15 @@ export function MissionControl() {
 
   const busyRef = useRef(false);
   const runningRef = useRef(false);
-  const autoStepRef = useRef(0);
+  const statusRef = useRef<ConnectionStatus>("connecting");
+  const userPausedRef = useRef(false);
+  const resetRequestedRef = useRef(false);
+  const unmountedRef = useRef(false);
   const networkRef = useRef<NetworkSnapshot | null>(null);
   const lastTraceRef = useRef<NetworkStepTrace | null>(null);
   const stimInFlightRef = useRef(false);
   const stimFeedbackTimerRef = useRef<number | null>(null);
+  const runAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     busyRef.current = busy;
@@ -94,8 +106,8 @@ export function MissionControl() {
   }, [running]);
 
   useEffect(() => {
-    autoStepRef.current = autoStep;
-  }, [autoStep]);
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     networkRef.current = network;
@@ -114,7 +126,12 @@ export function MissionControl() {
   }, []);
 
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
+      unmountedRef.current = true;
+      runAbortRef.current?.abort();
+      runAbortRef.current = null;
+      runningRef.current = false;
       if (stimFeedbackTimerRef.current !== null) {
         window.clearTimeout(stimFeedbackTimerRef.current);
       }
@@ -295,13 +312,20 @@ export function MissionControl() {
       if (err instanceof ApiError && err.status === 0) {
         setStatus("unavailable");
       }
-      setRunning(false);
-      runningRef.current = false;
+      stopRun("Backend unavailable");
       return null;
     } finally {
       setBusy(false);
       busyRef.current = false;
     }
+  }
+
+  function stopRun(reason: PauseReason) {
+    runAbortRef.current?.abort();
+    runAbortRef.current = null;
+    setRunning(false);
+    runningRef.current = false;
+    setPauseReason(reason);
   }
 
   async function stimulateNeuron(
@@ -386,8 +410,9 @@ export function MissionControl() {
       return;
     }
 
-    setRunning(false);
-    runningRef.current = false;
+    resetRequestedRef.current = true;
+    userPausedRef.current = false;
+    stopRun("Reset");
     setBusy(true);
     busyRef.current = true;
     setError(null);
@@ -401,70 +426,91 @@ export function MissionControl() {
       setActiveSensoryDeliveries([]);
       setSeenEventIds(new Set());
       setAutoStep(0);
-      autoStepRef.current = 0;
       setSelectedReceptorId(null);
+      setBornSynapseIds([]);
+      setPruningSynapseIds([]);
+      setPrunedNotice(null);
       await refreshEvents();
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Request failed";
       setError(message);
     } finally {
+      resetRequestedRef.current = false;
       setBusy(false);
       busyRef.current = false;
     }
   }
 
-  async function runSequenceLoop() {
-    while (runningRef.current) {
-      if (autoStepRef.current >= MAX_AUTO_STEPS) {
-        setRunning(false);
-        runningRef.current = false;
-        break;
-      }
-
-      const currentNetwork = networkRef.current;
-      const currentTrace = lastTraceRef.current;
-      if (
-        autoStepRef.current > 0 &&
-        currentNetwork &&
-        networkIsQuiet(currentNetwork, currentTrace)
-      ) {
-        setRunning(false);
-        runningRef.current = false;
-        break;
-      }
-
-      const trace = await runStepRequest();
-      if (!trace) {
-        break;
-      }
-
-      const next = autoStepRef.current + 1;
-      autoStepRef.current = next;
-      setAutoStep(next);
-
-      if (!runningRef.current) {
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, STEP_DELAY_MS));
-    }
-  }
-
-  function handleRunSequence() {
+  function startRun(mode: RunMode) {
     if (status !== "connected" || busyRef.current || runningRef.current) {
       return;
     }
+
+    runAbortRef.current?.abort();
+    const controller = new AbortController();
+    runAbortRef.current = controller;
+
+    userPausedRef.current = false;
+    resetRequestedRef.current = false;
+    setRunMode(mode);
+    setPauseReason("None");
     setRunning(true);
     runningRef.current = true;
     setAutoStep(0);
-    autoStepRef.current = 0;
-    void runSequenceLoop();
+
+    void runAutonomousLoop({
+      mode,
+      observationLimit,
+      stepDelayMs: DEFAULT_STEP_DELAY_MS,
+      signal: controller.signal,
+      isUserPaused: () => userPausedRef.current,
+      isResetRequested: () => resetRequestedRef.current,
+      isUnmounted: () => unmountedRef.current,
+      stepOnce: async () => {
+        if (controller.signal.aborted || resetRequestedRef.current || userPausedRef.current) {
+          return { ok: false, backendFailed: false };
+        }
+        try {
+          const trace = await runStepRequest();
+          if (!trace) {
+            const failed = statusRef.current !== "connected";
+            return { ok: false, backendFailed: failed };
+          }
+          // Empty / quiet StepTrace is valid — continue.
+          return { ok: true, trace };
+        } catch {
+          return { ok: false, backendFailed: true };
+        }
+      },
+      onStepComplete: (_trace, stepsCompleted) => {
+        setAutoStep(stepsCompleted);
+      },
+      onStop: (reason) => {
+        if (unmountedRef.current) {
+          return;
+        }
+        setRunning(false);
+        runningRef.current = false;
+        setPauseReason(reason);
+        if (runAbortRef.current === controller) {
+          runAbortRef.current = null;
+        }
+      },
+    });
+  }
+
+  function handleRunSequence() {
+    startRun("continuous");
+  }
+
+  function handleObservationRun() {
+    startRun("observation");
   }
 
   function handlePauseSequence() {
-    setRunning(false);
-    runningRef.current = false;
+    userPausedRef.current = true;
+    stopRun("User paused");
   }
 
   function handleSelectNeuron(neuronId: string) {
@@ -605,16 +651,17 @@ export function MissionControl() {
     >
       <header className="mission-control-header" data-testid="mission-control-header">
         <StatusBar
-          version="0.8"
+          version="0.8.1"
           status={status}
           networkTick={network?.tick ?? 0}
           running={running}
+          pauseReason={pauseReason}
           error={error}
           tissue={network?.tissue ?? null}
           onRetry={() => void loadFromBackend()}
         />
         <p className="layout-revision-marker" data-testid="layout-revision-marker">
-          Autonomous Sensory Environment · Version 0.8
+          Autonomous Observation Stabilization · Version 0.8.1
         </p>
       </header>
 
@@ -748,7 +795,10 @@ export function MissionControl() {
             <GrowthCandidatePanel
               candidate={selectedCandidate}
               maturationTicksRequired={
-                network?.structural.config.candidateMaturationTicks ?? 3
+                network?.structural.config.candidateMaturationTicks ?? 2
+              }
+              creationThreshold={
+                network?.structural.config.creationReadinessThreshold ?? 0.65
               }
             />
           ) : null}
@@ -765,51 +815,67 @@ export function MissionControl() {
             />
           ) : null}
           {activePanel === "controls" ? (
-            <ControlsPanel
-              selectedNeuronId={selectedNeuronId}
-              disabled={status !== "connected"}
-              busy={busy}
-              running={running}
-              autoStep={autoStep}
-              maxAutoSteps={MAX_AUTO_STEPS}
-              structural={network?.structural ?? null}
-              development={network?.development ?? null}
-              environment={network?.environment ?? null}
-              stimulateDisabled={
-                selectedNeuron
-                  ? !neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
-                  : false
-              }
-              onStimulateWeak={() => {
-                if (
-                  selectedNeuronId &&
-                  selectedNeuron &&
-                  neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
-                ) {
-                  void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV, {
-                    selectNeuron: false,
-                    openPanel: false,
-                  });
+            <>
+              <ObserverStatusPanel
+                running={running}
+                pauseReason={pauseReason}
+                tick={network?.tick ?? 0}
+                runMode={runMode}
+                observationLimit={observationLimit}
+                stepsThisRun={autoStep}
+                environment={network?.environment ?? null}
+                structural={network?.structural ?? null}
+              />
+              <ControlsPanel
+                selectedNeuronId={selectedNeuronId}
+                disabled={status !== "connected"}
+                busy={busy}
+                running={running}
+                autoStep={autoStep}
+                runMode={runMode}
+                pauseReason={pauseReason}
+                observationLimit={observationLimit}
+                onObservationLimitChange={setObservationLimit}
+                structural={network?.structural ?? null}
+                development={network?.development ?? null}
+                environment={network?.environment ?? null}
+                stimulateDisabled={
+                  selectedNeuron
+                    ? !neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                    : false
                 }
-              }}
-              onStimulateStrong={() => {
-                if (
-                  selectedNeuronId &&
-                  selectedNeuron &&
-                  neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
-                ) {
-                  void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV, {
-                    selectNeuron: false,
-                    openPanel: false,
-                  });
-                }
-              }}
-              onStep={() => void runStepRequest()}
-              onRun={handleRunSequence}
-              onPause={handlePauseSequence}
-              onReset={() => void handleReset()}
-              onEnvironmentControls={(controls) => void handleEnvironmentControls(controls)}
-            />
+                onStimulateWeak={() => {
+                  if (
+                    selectedNeuronId &&
+                    selectedNeuron &&
+                    neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                  ) {
+                    void stimulateNeuron(selectedNeuronId, WEAK_SIGNAL_MV, {
+                      selectNeuron: false,
+                      openPanel: false,
+                    });
+                  }
+                }}
+                onStimulateStrong={() => {
+                  if (
+                    selectedNeuronId &&
+                    selectedNeuron &&
+                    neuronIsElectricallyEligible(selectedNeuron, network?.tick ?? 0)
+                  ) {
+                    void stimulateNeuron(selectedNeuronId, STRONG_SIGNAL_MV, {
+                      selectNeuron: false,
+                      openPanel: false,
+                    });
+                  }
+                }}
+                onStep={() => void runStepRequest()}
+                onContinuousRun={handleRunSequence}
+                onObservationRun={handleObservationRun}
+                onPause={handlePauseSequence}
+                onReset={() => void handleReset()}
+                onEnvironmentControls={(controls) => void handleEnvironmentControls(controls)}
+              />
+            </>
           ) : null}
         </ContextPanel>
       </div>
